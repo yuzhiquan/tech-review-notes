@@ -13,8 +13,9 @@ diagrams/
   llm/            LLM 训练与推理流程
   distributed/    分布式计算框架
 notes/
-  go/             Go 语言与算法模板
+  go/             Go 语言核心特性
   python/         Python 核心特性
+  algorithms/     LeetCode 刷题模板与 Hot 100 题解
 ```
 
 ---
@@ -88,13 +89,22 @@ notes/
 | 文档 / Document | 说明 / Description |
 | --- | --- |
 | [`go-language-review.pdf`](notes/go/go-language-review.pdf) | Go 语言核心特性复习指南（35 页）：语法、类型系统、并发与 GMP 调度、内存与 GC、接口与组合、工程实践，标注易错点与易考点 |
-| [`go-leetcode-templates.pdf`](notes/go/go-leetcode-templates.pdf) | Go 刷题模板速查：双指针、哈希表、栈、二叉树 DFS、二分查找等常用套路，附 Go 刷题易错点 |
 
 ### Python
 
 | 文档 / Document | 说明 / Description |
 | --- | --- |
 | [`python-core-features-review.pdf`](notes/python/python-core-features-review.pdf) | Python 核心特性复习手册（50 页）：从语言语义到 CPython、并发、工程实践与性能优化，面向已有编程经验的工程师 |
+
+### 算法 / Algorithms
+
+以「模式」而非「题目」为单位组织：Hot 100 被压缩为约 14 个可迁移模式（哈希、双指针、滑动窗口、前缀和、链表、树、图、回溯、二分、单调栈、堆、贪心、DP、技巧），并要求能在 Go 与 Python 间快速切换实现。
+
+| 文档 / Document | 说明 / Description |
+| --- | --- |
+| [`leetcode-hot100-quick-review.pdf`](notes/algorithms/leetcode-hot100-quick-review.pdf) | LeetCode Hot 100 Go + Python 双语言快速复习手册（62 页）：模式地图（看到什么信号 → 想到什么算法）、核心思路、易错点、扩展题与 60 天复习路径 |
+| [`leetcode-hot100-full-solutions.pdf`](notes/algorithms/leetcode-hot100-full-solutions.pdf) | LeetCode Hot 100 全量题解手册（207 页）：100 题逐题图解，每题固定结构 —— 题意抽象 → 核心观察 → 不变量/状态 → 手推图 → 算法步骤 → 双语言实现 → 复杂度 → 易错点 → 扩展 |
+| [`go-leetcode-templates.pdf`](notes/algorithms/go-leetcode-templates.pdf) | Go 刷题模板速查：双指针、哈希表、栈、二叉树 DFS、二分查找等常用套路，附 Go 刷题易错点 |
 
 ---
 
