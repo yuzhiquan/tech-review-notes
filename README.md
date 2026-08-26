@@ -51,6 +51,12 @@ rather than Kubernetes itself — see the "Other" section.
 | [`csi-source-flow.png`](csi-source-flow.png) | CSI 控制面 + 节点面协作完成卷生命周期：Create → Attach → Stage/Publish → Unpublish → Detach → Delete，含 sidecar、gRPC 接口分类与源码路径 |
 | [`cni-source-flow.png`](cni-source-flow.png) | 从 Pod 创建到网络就绪的完整流程：kubelet → CRI Sandbox → CNI ADD/DEL、veth/IPAM/路由配置、.conflist 与 STDIN/STDOUT 示例 |
 
+### 服务网格 / Service Mesh
+
+| 图 / Diagram | 说明 / Description |
+| --- | --- |
+| [`istio-components.png`](istio-components.png) | Istio (1.20+) 各组件工作机制与源码流程：控制面 istiod（discovery / push / xds / Citadel / Galley / Sidecar Injector）、数据面 Envoy（iptables 劫持、Listener/RDS/CDS/EDS/SDS）、XDS 与 mTLS 流程，含请求全链路时序图与 `istio/istio` 源码目录结构 |
+
 ### 其他 / Other
 
 | 图 / Diagram | 说明 / Description |
