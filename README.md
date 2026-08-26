@@ -58,6 +58,15 @@ extension points. Meant to be read alongside the `kubernetes/kubernetes` and
 - 图中蓝色文字多为源码路径（如 `pkg/scheduler/framework/plugins/`），可直接在对应版本的源码树中定位。
 - 流程图内容基于特定版本源码整理，不同版本的插件集合、队列实现和扩展点可能有差异，请以实际源码为准。
 
+## 关于准确性 / Accuracy
+
+这些图由 AI 辅助生成，用于快速建立整体认知，**不是权威文档**。图中的源码路径、插件列表、函数名可能与你所用版本存在差异或错误。使用前请对照对应版本的源码树核对。
+
+These diagrams were AI-generated as a fast way to build a mental model — they are
+**not authoritative documentation**. Source paths, plugin lists, and function names
+may be inaccurate or drift from the version you're on. Verify against the actual
+source tree before relying on any detail. Corrections via issues/PRs are welcome.
+
 ## License
 
 图表以 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 授权，可自由使用与修改，请保留署名。
