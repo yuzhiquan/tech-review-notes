@@ -62,7 +62,8 @@ rather than Kubernetes itself — see the "Other" section.
 | 图 / Diagram | 说明 / Description |
 | --- | --- |
 | [`ray-architecture.png`](ray-architecture.png) | Ray (≥ 2.x) 架构、组件与源码级工作流程：GCS、Raylet、Object Manager、Plasma Store、Worker，含任务提交时序与关键数据结构 |
-| [`llm-training-inference-flow.png`](llm-training-inference-flow.png) | LLM 训练与推理的完整流程与核心组件：数据准备 → 模型构建 → 并行策略 (DP/TP/PP/ZeRO) → 训练循环 → 评估与 Checkpoint；推理侧 Serving、Prefill/Decode、KV Cache、PagedAttention、Continuous Batching 与部署形态 |
+| [`llm-training-inference-overview.png`](llm-training-inference-overview.png) | LLM 训练与推理的完整流程与核心组件（总览）：数据准备 → 模型构建 → 并行策略 (DP/TP/PP/ZeRO) → 训练循环 → 评估与 Checkpoint；推理侧 Serving、Prefill/Decode、KV Cache、PagedAttention、Continuous Batching 与部署形态 |
+| [`llm-training-inference-detail.png`](llm-training-inference-detail.png) | 同一主题的详解版：训练侧含 Transformer Block 内部结构（RMSNorm/MHA/FFN/残差）、损失与反向传播细节、LoRA/RLHF 辅助模块、训练监控；推理侧含 Prefill/Decode 两阶段展开、KV Cache 读写、采样策略 (Top-k/Top-p/Temperature)、后处理与可观测性 |
 
 ## 使用建议 / How to use
 
