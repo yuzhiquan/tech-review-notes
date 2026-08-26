@@ -7,6 +7,11 @@ components, annotated with key source files, call chains, data structures, and
 extension points. Meant to be read alongside the `kubernetes/kubernetes` and
 `client-go` source trees. Diagram text is in Chinese.
 
+除 Kubernetes 之外，也收录了少量相关分布式系统与 LLM 基础设施的流程图（见「其他」一节）。
+
+A few diagrams cover adjacent distributed-systems and LLM infrastructure topics
+rather than Kubernetes itself — see the "Other" section.
+
 > 基于 Kubernetes v1.29+ / v1.32+ 源码 · Based on Kubernetes v1.29+ / v1.32+ sources.
 
 ## 目录 / Contents
@@ -51,6 +56,7 @@ extension points. Meant to be read alongside the `kubernetes/kubernetes` and
 | 图 / Diagram | 说明 / Description |
 | --- | --- |
 | [`ray-architecture.png`](ray-architecture.png) | Ray (≥ 2.x) 架构、组件与源码级工作流程：GCS、Raylet、Object Manager、Plasma Store、Worker，含任务提交时序与关键数据结构 |
+| [`llm-training-inference-flow.png`](llm-training-inference-flow.png) | LLM 训练与推理的完整流程与核心组件：数据准备 → 模型构建 → 并行策略 (DP/TP/PP/ZeRO) → 训练循环 → 评估与 Checkpoint；推理侧 Serving、Prefill/Decode、KV Cache、PagedAttention、Continuous Batching 与部署形态 |
 
 ## 使用建议 / How to use
 
