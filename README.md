@@ -9,6 +9,7 @@ algorithm review handbooks** (Go / Python / LeetCode). Mostly in Chinese.
 ```
 diagrams/
   kubernetes/     Kubernetes 核心组件源码级流程图
+  containers/     容器与隔离技术（cgroup、虚拟化/沙箱对比）
   service-mesh/   Istio 控制面 / 数据面
   llm/            LLM 训练与推理流程
   distributed/    分布式计算框架
@@ -60,6 +61,13 @@ notes/
 | --- | --- |
 | [`csi-source-flow.png`](diagrams/kubernetes/csi-source-flow.png) | CSI 控制面 + 节点面协作完成卷生命周期：Create → Attach → Stage/Publish → Unpublish → Detach → Delete，含 sidecar、gRPC 接口分类与源码路径 |
 | [`cni-source-flow.png`](diagrams/kubernetes/cni-source-flow.png) | 从 Pod 创建到网络就绪的完整流程：kubelet → CRI Sandbox → CNI ADD/DEL、veth/IPAM/路由配置、.conflist 与 STDIN/STDOUT 示例 |
+
+### 容器与隔离技术 / Containers & Isolation
+
+| 图 / Diagram | 说明 / Description |
+| --- | --- |
+| [`cgroup-v1-vs-v2.png`](diagrams/containers/cgroup-v1-vs-v2.png) | cgroup v1 与 v2 完整对比：多层次/多挂载点 vs 统一层次、逐控制器的接口文件对照（cpu/memory/io/pids/devices/hugetlb 等）、资源模型与行为差异（PSI、层级继承、memory.high/low/min）、限制同一个 Pod 的 v1/v2 命令示例，以及 Kubernetes 的支持情况 |
+| [`virtualization-isolation-comparison.png`](diagrams/containers/virtualization-isolation-comparison.png) | 主流虚拟化与隔离技术全景对比：Full VM、Container、Rootless Container、MicroVM (Firecracker)、Unikernel、WASM 沙箱、gVisor / Kata —— 按隔离级别、启动速度、资源开销、性能、安全特点与适用场景对照，含各方案自底向上的架构图，以及面向 AI Agent Sandbox 的选型建议 |
 
 ### 服务网格 / Service Mesh
 
