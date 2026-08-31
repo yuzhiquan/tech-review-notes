@@ -125,6 +125,7 @@ notes/
 | [`kubernetes-ai-infra-interview-handbook.pdf`](notes/interview/kubernetes-ai-infra-interview-handbook.pdf) | Kubernetes → AI Infrastructure 面试深度扩展手册（139 页）：Kubernetes Internals、Linux Kernel、GPU & CUDA、NCCL & RDMA、vLLM Internals、Ray & KubeRay、Agent Runtime、System Design、Observability，含 120+ 题与 Staff Level 追问示例 |
 | [`kubernetes-ai-infra-handbook-knowledge-map.png`](notes/interview/kubernetes-ai-infra-handbook-knowledge-map.png) | 上述手册的知识地图总览页：L1 基础能力 → L2 Linux 内核 → L3 容器运行时 → L4 Kubernetes → L5 AI Infra → L6 应用层分层图，Pod 生命周期源码级流程、各组件源码调用链、Scheduler 插件与扩展、DRA 与 GPU 调度、GPU 架构（MIG / Time Slicing）、KV Cache 容量公式 |
 | [`istio-service-mesh-interview-handbook.pdf`](notes/interview/istio-service-mesh-interview-handbook.pdf) | Istio / Service Mesh 面试深度扩展手册（71 页）：控制面与数据面机制、XDS、mTLS、流量治理与可观测性等方向的深度问答 |
+| [`linux-infrastructure-interview-handbook.pdf`](notes/interview/linux-infrastructure-interview-handbook.pdf) | Linux Infrastructure 面试核心手册（15 页）：Process / CPU 调度与 Load Average、Memory / Page Cache / OOM、Filesystem / inode / IO、Network / TCP / conntrack、Namespace / cgroup / Container、K8s request/limit → cgroup、cgroup v1 vs v2、系统调用 / eBPF / 性能工具、故障排查综合题、50 道高频题速查。每章按「原理 → 指标 → 故障现象 → 排查方法 → 面试追问」组织，面向 Kubernetes / SRE / Infrastructure / Cloud Engineer |
 
 ---
 
