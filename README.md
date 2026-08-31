@@ -17,6 +17,7 @@ notes/
   go/             Go 语言核心特性
   python/         Python 核心特性
   algorithms/     LeetCode 刷题模板与 Hot 100 题解
+  interview/      面试深度扩展手册（K8s → AI Infra、Istio）
 ```
 
 ---
@@ -68,6 +69,7 @@ notes/
 | --- | --- |
 | [`cgroup-v1-vs-v2.png`](diagrams/containers/cgroup-v1-vs-v2.png) | cgroup v1 与 v2 完整对比：多层次/多挂载点 vs 统一层次、逐控制器的接口文件对照（cpu/memory/io/pids/devices/hugetlb 等）、资源模型与行为差异（PSI、层级继承、memory.high/low/min）、限制同一个 Pod 的 v1/v2 命令示例，以及 Kubernetes 的支持情况 |
 | [`virtualization-isolation-comparison.png`](diagrams/containers/virtualization-isolation-comparison.png) | 主流虚拟化与隔离技术全景对比：Full VM、Container、Rootless Container、MicroVM (Firecracker)、Unikernel、WASM 沙箱、gVisor / Kata —— 按隔离级别、启动速度、资源开销、性能、安全特点与适用场景对照，含各方案自底向上的架构图，以及面向 AI Agent Sandbox 的选型建议 |
+| [`k8s-requests-limits-cgroup-mapping.png`](diagrams/containers/k8s-requests-limits-cgroup-mapping.png) | Pod `requests` / `limits` 到 cgroup (v1/v2) 控制文件的逐字段映射表（CPU / Memory / IO / PIDs / HugeTLB / Devices / net_cls），以及完整生效链路：Pod YAML → API Server → Scheduler → kubelet (QoS Class) → CRI → containerd → OCI Spec → runc → Linux Kernel，附 kubelet/CRI/OCI 参考源码路径 |
 
 ### 服务网格 / Service Mesh
 
@@ -113,6 +115,16 @@ notes/
 | [`leetcode-hot100-quick-review.pdf`](notes/algorithms/leetcode-hot100-quick-review.pdf) | LeetCode Hot 100 Go + Python 双语言快速复习手册（62 页）：模式地图（看到什么信号 → 想到什么算法）、核心思路、易错点、扩展题与 60 天复习路径 |
 | [`leetcode-hot100-full-solutions.pdf`](notes/algorithms/leetcode-hot100-full-solutions.pdf) | LeetCode Hot 100 全量题解手册（207 页）：100 题逐题图解，每题固定结构 —— 题意抽象 → 核心观察 → 不变量/状态 → 手推图 → 算法步骤 → 双语言实现 → 复杂度 → 易错点 → 扩展 |
 | [`go-leetcode-templates.pdf`](notes/algorithms/go-leetcode-templates.pdf) | Go 刷题模板速查：双指针、哈希表、栈、二叉树 DFS、二分查找等常用套路，附 Go 刷题易错点 |
+
+### 面试手册 / Interview Handbooks
+
+面向资深/Staff 级别的深度扩展手册，按「知识图谱 → 源码调用链 → 题目 → 追问」组织。
+
+| 文档 / Document | 说明 / Description |
+| --- | --- |
+| [`kubernetes-ai-infra-interview-handbook.pdf`](notes/interview/kubernetes-ai-infra-interview-handbook.pdf) | Kubernetes → AI Infrastructure 面试深度扩展手册（139 页）：Kubernetes Internals、Linux Kernel、GPU & CUDA、NCCL & RDMA、vLLM Internals、Ray & KubeRay、Agent Runtime、System Design、Observability，含 120+ 题与 Staff Level 追问示例 |
+| [`kubernetes-ai-infra-handbook-knowledge-map.png`](notes/interview/kubernetes-ai-infra-handbook-knowledge-map.png) | 上述手册的知识地图总览页：L1 基础能力 → L2 Linux 内核 → L3 容器运行时 → L4 Kubernetes → L5 AI Infra → L6 应用层分层图，Pod 生命周期源码级流程、各组件源码调用链、Scheduler 插件与扩展、DRA 与 GPU 调度、GPU 架构（MIG / Time Slicing）、KV Cache 容量公式 |
+| [`istio-service-mesh-interview-handbook.pdf`](notes/interview/istio-service-mesh-interview-handbook.pdf) | Istio / Service Mesh 面试深度扩展手册（71 页）：控制面与数据面机制、XDS、mTLS、流量治理与可观测性等方向的深度问答 |
 
 ---
 
