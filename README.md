@@ -11,6 +11,7 @@ diagrams/
   kubernetes/     Kubernetes 核心组件源码级流程图
   containers/     容器与隔离技术（cgroup、虚拟化/沙箱对比）
   service-mesh/   Istio 控制面 / 数据面
+  gpu/            GPU 硬件、CUDA 栈与 AI Infra 知识体系
   llm/            LLM 训练与推理流程
   distributed/    分布式计算框架
 notes/
@@ -77,6 +78,16 @@ notes/
 | --- | --- |
 | [`istio-components.png`](diagrams/service-mesh/istio-components.png) | Istio (1.20+) 各组件工作机制与源码流程：控制面 istiod（discovery / push / xds / Citadel / Galley / Sidecar Injector）、数据面 Envoy（iptables 劫持、Listener/RDS/CDS/EDS/SDS）、XDS 与 mTLS 流程，含请求全链路时序图与 `istio/istio` 源码目录结构 |
 
+### GPU / AI Infra
+
+三张同主题的知识体系总览图，覆盖范围高度重叠（硬件架构 → CUDA 栈 → 显存模型 → 多卡互联与 NCCL → K8s GPU 管理 → LLM 推理 → 监控排障），侧重点略有不同，可按需取用其一。
+
+| 图 / Diagram | 说明 / Description |
+| --- | --- |
+| [`gpu-full-stack-knowledge-map.png`](diagrams/gpu/gpu-full-stack-knowledge-map.png) | GPU 全栈知识体系（16 个板块，覆盖面最广）：SM / Tensor Core / HBM / NVLink 硬件、CUDA 软件栈、显存组成与估算公式、PCIe/NVLink/NVSwitch 带宽对比、NCCL Collective、TP/PP/DP/EP 并行策略、GPUDirect RDMA、K8s Device Plugin、NVIDIA GPU Operator、MIG 与 Time Slicing、DRA、vLLM 推理、容量规划与估算、常见问题排查 |
+| [`gpu-landscape-with-learning-path.png`](diagrams/gpu/gpu-landscape-with-learning-path.png) | GPU 全景知识体系（含学习路径）：与上图主题相同，额外给出 CUDA / 驱动版本兼容性对照表、典型带宽数值表、KV Cache 与显存碎片的估算示例，底部附 8 步建议学习路径 |
+| [`gpu-ai-infra-landscape.png`](diagrams/gpu/gpu-ai-infra-landscape.png) | GPU 技术全景与 AI Infra（12 个板块）：突出 GPU 内存层次金字塔（Register → Shared → L1 → L2 → HBM）、A100/H100/H200 规格对比、NCCL Ring 数据流、监控指标体系（DCGM / NCCL / 推理 / K8s 四层）与分层排障思路，每节附面试常问问题 |
+
 ### LLM 基础设施 / LLM Infrastructure
 
 | 图 / Diagram | 说明 / Description |
@@ -125,6 +136,8 @@ notes/
 | [`kubernetes-ai-infra-interview-handbook.pdf`](notes/interview/kubernetes-ai-infra-interview-handbook.pdf) | Kubernetes → AI Infrastructure 面试深度扩展手册（139 页）：Kubernetes Internals、Linux Kernel、GPU & CUDA、NCCL & RDMA、vLLM Internals、Ray & KubeRay、Agent Runtime、System Design、Observability，含 120+ 题与 Staff Level 追问示例 |
 | [`kubernetes-ai-infra-handbook-knowledge-map.png`](notes/interview/kubernetes-ai-infra-handbook-knowledge-map.png) | 上述手册的知识地图总览页：L1 基础能力 → L2 Linux 内核 → L3 容器运行时 → L4 Kubernetes → L5 AI Infra → L6 应用层分层图，Pod 生命周期源码级流程、各组件源码调用链、Scheduler 插件与扩展、DRA 与 GPU 调度、GPU 架构（MIG / Time Slicing）、KV Cache 容量公式 |
 | [`istio-service-mesh-interview-handbook.pdf`](notes/interview/istio-service-mesh-interview-handbook.pdf) | Istio / Service Mesh 面试深度扩展手册（71 页）：控制面与数据面机制、XDS、mTLS、流量治理与可观测性等方向的深度问答 |
+| [`gpu-ai-infra-interview-handbook.pdf`](notes/interview/gpu-ai-infra-interview-handbook.pdf) | GPU & AI Infrastructure 面试手册 v2.0 Final（85 页）：GPU 硬件体系结构、显存深入与估算、CUDA 软件栈与执行模型、NCCL 与多卡通信（含 Hang 排查）、RDMA / InfiniBand / RoCE、K8s GPU 管理与 GPU Operator、MIG / Time Slicing / MPS、DRA、LLM 推理与 GPU 利用率、监控可观测性、故障排查 Runbook、60 道高频问题与 30 天学习路径 |
+| [`gpu-ai-infra-handbook-knowledge-map.png`](notes/interview/gpu-ai-infra-handbook-knowledge-map.png) | 上述手册的知识地图总览页（v2.0 Final）：16 个板块一页概览，含 Hopper GH200 架构、显存估算示例、MIG/Time Slicing/MPS 对比、DRA 申请 NVLink 域 GPU 的 YAML 示例、分布式 Platform (TP/PP/DP/EP) 架构与排障 Runbook |
 | [`linux-infrastructure-interview-handbook.pdf`](notes/interview/linux-infrastructure-interview-handbook.pdf) | Linux Infrastructure 面试核心手册（15 页）：Process / CPU 调度与 Load Average、Memory / Page Cache / OOM、Filesystem / inode / IO、Network / TCP / conntrack、Namespace / cgroup / Container、K8s request/limit → cgroup、cgroup v1 vs v2、系统调用 / eBPF / 性能工具、故障排查综合题、50 道高频题速查。每章按「原理 → 指标 → 故障现象 → 排查方法 → 面试追问」组织，面向 Kubernetes / SRE / Infrastructure / Cloud Engineer |
 
 ---
