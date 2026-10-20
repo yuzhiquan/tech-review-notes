@@ -1,0 +1,1875 @@
+<!DOCTYPE html><html data-page-node-id="C2HYROJ6WhdgBv36JqBtZh" lang="zh-CN"><head data-page-node-id="wO6ITAKeuo73KrMGrl0j9l">
+<script data-page-node-id="iBhtEJTnM0Sez8WkTQBLkN" src="/page/page_comm/inject.js"></script><meta data-page-node-id="f7VK0B9YJ16GnvMmXiks6p" charset="utf-8"><meta data-page-node-id="7eoUkh0m5zVknhEfJwoa9S" content="width=device-width, initial-scale=1" name="viewport"><title data-page-node-id="FhF54T6WsZUy5lugoonRgs" data-pnid-children="EH8wjq52cTxJCs6RPyM2ro">Kubernetes Scheduler 面试题全解析</title><style data-page-node-id="ZiJT6QMQuIwiXiVnWw3UU3" data-pnid-children="yf2llkfBZcwtABeQAwwKfp">
+:root{--bg:#0f1115;--fg:#d7dae0;--muted:#8b93a1;--accent:#4aa3ff;--card:#161a21;--line:#242b36;--code:#1c222c;}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f7f8fa;--fg:#1f2329;--muted:#5b6470;--card:#ffffff;--line:#e3e7ec;--code:#f2f4f7;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px;}
+h1{font-size:30px;line-height:1.4;border-bottom:2px solid var(--accent);padding-bottom:14px;margin:0 0 8px;}
+h2{font-size:23px;margin:52px 0 16px;padding-left:12px;border-left:4px solid var(--accent);}
+h3{font-size:18px;margin:32px 0 12px;color:var(--accent);}
+p,li{margin:8px 0;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;}
+blockquote p{margin:4px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+th{background:var(--code);font-weight:600;white-space:nowrap;}
+tr:nth-child(even) td{background:rgba(127,127,127,.05);}
+code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--code);padding:16px 18px;border-radius:10px;overflow-x:auto;border:1px solid var(--line);}
+pre code{background:none;padding:0;font-size:13.5px;line-height:1.6;}
+hr{border:0;border-top:1px solid var(--line);margin:44px 0;}
+a{color:var(--accent);}
+strong{color:#ffffff;font-weight:600;}
+@media (prefers-color-scheme: light){strong{color:#0b2c52;}}
+</style></head><body data-page-node-id="8g4LtVfMpQ7FSvD23cDL1t"><div data-page-node-id="rYlahPw9gmxlgU2dXLMZu3" class="wrap"><h1 data-page-node-id="Z286RyqxmvOKEJuWuomux6" id="kubernetes-scheduler"><!--pnid:uZKjTZJznk4H83JeQBaQFB-->Kubernetes Scheduler 面试题全解析：原理篇 × 大规模集群篇</h1>
+<blockquote data-page-node-id="IO79zc4vhGYsHT22VVSoF9">
+<p data-page-node-id="8XDCvE7Sye2wSKsapq8kWX"><!--pnid:0ZLTggSjYXyBMXoOyBXUuv-->适用角色：SRE / 云原生运维 / 平台工程师面试（社招 3 年起 + 偏高阶）
+文档定位：既能"背答案"，也能直接落地到集群治理
+版本约定：以 <strong data-page-node-id="XnfzAxQC6QVRPSScD23RNu"><!--pnid:4WWcWPLxi9eDTAT78eskWW-->1.28 ~ 1.31 主线</strong><!--pnid:rc9ecpIYV0NZw0R7haMnEg-->为准；涉及具体版本号、源码常量、默认值的地方均标注"以所用版本源码 / Release Notes 为准"，避免版本漂移导致答错。</p>
+</blockquote>
+<hr data-page-node-id="nweYx5NNUFMlxr4yGqJiMZ">
+<h2 data-page-node-id="lyeZPAUdkjQgmctKB5FcZm" id="0"><!--pnid:Fy9umr7JYgD2QqiTJ0m8Ma-->0. 使用说明与答题方法论</h2>
+<h3 data-page-node-id="y3FFwNpdHu5wLY0kDrRsru" id="01"><!--pnid:APcmNP7p1o96drx173BQK2-->0.1 面试官真正在考什么</h3>
+<table data-page-node-id="i7ZsymvFLvfVbvRiszYAsm">
+<thead data-page-node-id="DGkecYGtYYOSJUXYhqDQmM">
+<tr data-page-node-id="XZlcnWSH79FD65A5sBSJtY">
+<th data-page-node-id="hctepPGHnfAxyO4dOwTXdd"><!--pnid:5r9UBQ52PffcwukCmTxSTM-->层级</th>
+<th data-page-node-id="uFGE3E8alowRG3hjPa3isq"><!--pnid:mWELpfrhZQcsBsakI1dSwv-->考点</th>
+<th data-page-node-id="dChkQRlmQrVELNL04PDgXD"><!--pnid:xMZlNLfcEIxJgJR56fDrIj-->表现</th>
+</tr>
+</thead>
+<tbody data-page-node-id="SW6oIoIGAQzXWpDkIgyZ4g">
+<tr data-page-node-id="kzEy4cxzjnpLQxMo7ElM6X">
+<td data-page-node-id="vQMaryV2qO2nrr9R6n1NVT"><!--pnid:L9eGnHISB1qRsAHdOqgCKb-->L1 会用</td>
+<td data-page-node-id="jRmclXbS8EHNnLQRXgtfQW"><!--pnid:rguZ74Pl8AvCfaJHWduv3n-->知道 requests/limits、亲和、污点怎么写</td>
+<td data-page-node-id="ugBYL6Aw0biv0X4AhsRl4m"><!--pnid:TSqnwBFguR0M2DRlbQXjnH-->能背 YAML</td>
+</tr>
+<tr data-page-node-id="le4R7IqLzYCapeL8g1yZRL">
+<td data-page-node-id="zUwddn7a6s5U90I0vdXjVH"><!--pnid:4bOLM480IgKAXi5vVDUpbG-->L2 懂原理</td>
+<td data-page-node-id="EYXKR3fQCD8B88ZpJQrcV9"><!--pnid:sIQMZ91jE49XtJbYy2LxFS-->说得清 Scheduling Framework 12 个扩展点、队列三级结构、抢占流程</td>
+<td data-page-node-id="e25hhpeKDCiYAoj6NCQzGH"><!--pnid:tljJllKairZN3NaKfhelPO-->能画图、能讲为什么这样设计</td>
+</tr>
+<tr data-page-node-id="ENogGr8LOzfERp7ig7Jvx6">
+<td data-page-node-id="SxrnkB9h8op0ZnRn2nQk71"><!--pnid:dRoDD5roJVMWrInVURURDs-->L3 有规模感</td>
+<td data-page-node-id="hFuaYx4KFD6Mxf2qEXdTk0"><!--pnid:KKR9gAFGGLCUxl6Oe9gEsK-->知道 1000/5000 节点下谁先崩、吞吐瓶颈在哪、怎么量化</td>
+<td data-page-node-id="PNkiAHLA2pYDvUsEYv2szO"><!--pnid:n77rjqHtTDy2SXOyRV3VKz-->能报指标名、说得清 trade-off</td>
+</tr>
+<tr data-page-node-id="5QoF1tlqOHD5F7zGPDwR9h">
+<td data-page-node-id="194Rzz7N6Tv4zqmM5iAyaq"><!--pnid:gRCOHfnbVGexVtrAcW5VgC-->L4 有事故经验</td>
+<td data-page-node-id="YfvmAm8hMpfi8cUKacaP53"><!--pnid:3iKBqfG9mBQGPGUhf8lZ3p-->能讲清"现象 → 证据 → 定位路径 → 止血 → 根治 → 防复发"</td>
+<td data-page-node-id="AhlYgsGuDwj9OFuzVv2T88"><!--pnid:pXfOvTCK1eUHuI8VEHM9fV-->有 PromQL、有灰度、有回滚</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="ViPVRK2Npws0Yb1NK4xghq">
+<p data-page-node-id="V0rjC3gzPGEpqqtnxjROy5"><strong data-page-node-id="wnni4T6RfjVTItjYzsAt8H"><!--pnid:jZMfFLMKCmpBy1XrRm37De-->答题模板（强烈建议每道题都套）</strong><!--pnid:le7keXcOfFZHQXbz1M5cOm-->：结论先行 → 讲清机制/数据流 → 给一个可落地证据（配置片段 / 指标名 / 事件字段）→ 补一个坑或边界条件。</p>
+</blockquote>
+<h3 data-page-node-id="Ycs3ulaFLxXSWwHFtEgeGg" id="02"><!--pnid:d5CCYSmniaULYpK3bdxetv-->0.2 本文档的数值约定</h3>
+<p data-page-node-id="BaNzJEpRONCLa0l8FtyAbe"><!--pnid:DVaZvloISSLuBY021MMvYp-->按照 SRE 规范，本文档严格区分三类数字：</p>
+<ul data-page-node-id="VyQtfHpo3YVTjx6v4KVL4I">
+<li data-page-node-id="FawCeWRNwLanC9fHtZgdCo"><strong data-page-node-id="yAznkFhZ4qpiWKINzgsfas"><!--pnid:ROg7Iz2LWjLXLo9anTogdC-->官方/源码值</strong><!--pnid:3am9Xgtm1beNEg4cg4Ynfd-->：标注出处（如 <code data-page-node-id="11CKB9wP8hSgFbY94oRJA3" data-pnid-children="lbZzba7xTjExbKRgw7YYjT">KubeSchedulerConfiguration</code><!--pnid:V5GFrUHYOYwQXhaJ0Fpkcf--> 字段），并提示用 <code data-page-node-id="iQFbm1cHn0T9nDxo4Y3T8j" data-pnid-children="kmKrFCrFjuwSbRBWcJc9WE">kube-scheduler --write-config-to=conf.yaml</code><!--pnid:lpUQj39sXaS6nQHGr2kw9D--> 现场核对；</li>
+<li data-page-node-id="1HBPW4tB99JM6bVIhz4gpz"><strong data-page-node-id="z8PXz2WxzTApoDcBuu3Gv6"><!--pnid:IjasPf8FSA5qET6PD1CSZS-->建议值（推荐初值）</strong><!--pnid:7qtn6mm3lDb4DzCIlnmbD2-->：标注为 <em data-page-node-id="V9wYVbWDWbRgj9VA2v4hzO"><!--pnid:jvLsiFNY7I115hMCb2PWa9-->建议</em><!--pnid:WcOuLUVFjEVHjwZsKcdpHc-->，必须结合业务实测调整；</li>
+<li data-page-node-id="KDtpiCQStL4JYa2BIKCaxJ"><strong data-page-node-id="7uA78s3Z6AFIQcHpYgeFYC"><!--pnid:lhNdUt4hQgwKe6TIccHFmk-->实测值</strong><!--pnid:tFhQkZduCmir0uv7gQ6aW1-->：本文档 <strong data-page-node-id="qJwcjw5x959ISn2OGu2JF0"><!--pnid:L0Fycwqs7cILoe6iCkLZv2-->不提供任何未实测的性能数字</strong><!--pnid:2Q0K1JevAPrXdE7obB7B1n-->，凡涉及吞吐/耗时均给出<strong data-page-node-id="o90fNLrsWU7xvJoYPuPzVQ"><!--pnid:hSCgVAbGcYIjVR4fovbTWn-->测量方法</strong><!--pnid:Ce9htX6uI05iIIXRmP1Bsx-->，避免编造。</li>
+</ul>
+<hr data-page-node-id="C2zuWgGLkSNEjVVnLaxIMG">
+<h1 data-page-node-id="mqAVNqgrBi9vUJpyJQqoXP" id="part-a-22"><!--pnid:qBibuXnjx1vNCQtrOFgsk2-->Part A · 原理篇（22 题）</h1>
+<h2 data-page-node-id="zgtr8aqDOXXzHQFmwkmF50" id="q1-kube-scheduler"><!--pnid:4QFGoigUywA2bxAh8NWRNu-->Q1. kube-scheduler 到底负责什么？职责边界在哪？</h2>
+<p data-page-node-id="Sy2Hggh8LEW0dmQrC1bw8N"><strong data-page-node-id="xZvi4RJqCtK5AZzXTFnpTf"><!--pnid:DIp4nSwfe4yGxDLS41FYPl-->一句话</strong><!--pnid:JuYHedj7MwykUYtgunQRei-->：kube-scheduler 只做一件事——<strong data-page-node-id="zZGMa9gz1JSnsejK7BkACm"><!--pnid:vBYEsxCROdzKSPKni92SUB-->为 <code data-page-node-id="xMXOBfXNNxaSMsoXSykjup" data-pnid-children="ZYBeO22D2HF7olH2uk38LL">.spec.nodeName</code><!--pnid:3xXunGfxrrz71q5jjdixHz--> 为空的 Pod 选一个 Node，并把绑定结果写回 API Server</strong><!--pnid:hjpMsvb8WHsUQsYzIa2qmo-->。它不运行容器，不保证 Pod 真的能跑起来。</p>
+<p data-page-node-id="MjGfs1ktiY1RCIxALf42HY"><strong data-page-node-id="sSeWxkjTBIA70qyFBbwDzI"><!--pnid:unZUjYlSU34B0fyzToNA70-->职责边界（高频送分/送命点）</strong><!--pnid:7mJMgRexzcWv3YiZMr5Fz4-->：</p>
+<table data-page-node-id="um17kmAWw4VMhLs5bZaeLQ">
+<thead data-page-node-id="AdJT4JzgwdyRaz030h5xr1">
+<tr data-page-node-id="8r4GWRaj3IXZHgGHzUFQa3">
+<th data-page-node-id="NJcVum3Fcqlg7mI6qUUlXx"><!--pnid:B2KASFIyDX5RblRIxnPFR3-->事项</th>
+<th data-page-node-id="Ut6RXSvnY2NVoIvbsu6Lri"><!--pnid:koXvZCJ0tUkwmfHmdLabtK-->是否 scheduler 负责</th>
+<th data-page-node-id="01gO9PdIbrnyup6GcG9qSv"><!--pnid:ToIqSnBkF3AcXfTz1BwYoJ-->实际负责人</th>
+</tr>
+</thead>
+<tbody data-page-node-id="dwZCMlCD7DSEVCGN7eEYk3">
+<tr data-page-node-id="eBq64mIymQjQW5f9GRCkL0">
+<td data-page-node-id="a7WkEz9x8baU1j1gmJkCCf"><!--pnid:HAts55JexHoWnmpT4TFqCd-->选节点 + 写绑定</td>
+<td data-page-node-id="kpEDTyH61dtR3atXlNv9Gu"><!--pnid:P1GU7yOv6RLTavbykBlCel-->✅ 是</td>
+<td data-page-node-id="yxZHZDhbppGXo9kZazKphI"><!--pnid:eXV8ATrusCJQ8Y5YYMyAch-->kube-scheduler</td>
+</tr>
+<tr data-page-node-id="qxQZUtLYW3o7R21scPsv72">
+<td data-page-node-id="cy8zF2oqCLDLIoJkj4X2kP"><code data-page-node-id="h444Qiu9nwcnShgqyeRBp0" data-pnid-children="exvI41gujWLIhD1dOtD2Cu">ResourceQuota</code><!--pnid:61qvQ9mFWLwA5lYzSqXrI4--> 校验</td>
+<td data-page-node-id="1gkaxLdC7hKUz8SbfmSA7B"><!--pnid:rZDFPWJTAEWnyPmGysgYuf-->❌ 否</td>
+<td data-page-node-id="pwtE7WEz0GiIZbMpKDOkbo"><!--pnid:cSWnQaoO9TNZlGxosWfFy0-->admission controller（ResourceQuota 插件）</td>
+</tr>
+<tr data-page-node-id="sq81StuxFfQTWYhHIqZJTK">
+<td data-page-node-id="pR8PKk9uldA0quAxbmb65V"><code data-page-node-id="1wczS2qGnl0h38P72Ury7B" data-pnid-children="vRiNTS1anrpTrbaHsE1783">LimitRange</code><!--pnid:kKR0UyJBOmMbtMUM78e1PM--> 注入默认值</td>
+<td data-page-node-id="zmEjgVGffrR5lh62c4LFGy"><!--pnid:T4Y0K7VLwsb9XVgRTdKc66-->❌ 否</td>
+<td data-page-node-id="D6lw1NKpFxGVvZnBMp6r4S"><!--pnid:Xoc1dgs7pxrKzikI87Ifzq-->admission controller</td>
+</tr>
+<tr data-page-node-id="zYHI1FbGXdHYlcoSBGVSNB">
+<td data-page-node-id="U7WUE2pl9ACZSOyybIH8Wr"><!--pnid:gzK7KnH4gkwLgKSn52AbwS-->校验 requests ≤ limits</td>
+<td data-page-node-id="3HWWcBdkDCFqW2nyc1tHp4"><!--pnid:QUvtgVAbquPqMTaoVcEZLu-->❌ 否</td>
+<td data-page-node-id="RGykMrN3Fkw1hXxmA4aCI7"><!--pnid:qG9m7TdKBLG0qMOmXJ0Pt4-->apiserver validation</td>
+</tr>
+<tr data-page-node-id="dVQZMixyiqfVKBGmfLcO3p">
+<td data-page-node-id="hUoDnR3uhL4AZNKNqYfkNz"><!--pnid:QGTwrhmtRFYdKnCuHNjChP-->Node 故障驱逐 Pod</td>
+<td data-page-node-id="8zOjeP925zZZGZkS4WbuYk"><!--pnid:WY9lcydBMLoDuxHt9wLMMT-->❌ 否</td>
+<td data-page-node-id="b9Zjfd5QRL8DuGxAwU38Yz"><!--pnid:NXqPQAWhDkxn29QxWfJCHZ-->NodeLifecycleController（taint-manager）+ kubelet</td>
+</tr>
+<tr data-page-node-id="9OQF4znvNYzTKUssdkOZm6">
+<td data-page-node-id="7Os0Q3gCYbM24hMWLsTpYB"><!--pnid:PCi0XlRprlcOYCMLfYmU5t-->资源不足时驱逐 Pod</td>
+<td data-page-node-id="9Hbg7frcciG3swhOwvdzEQ"><!--pnid:szQuTJVbvbmnAWnQ6XKKdh-->❌ 否</td>
+<td data-page-node-id="9ITVo5IiP5uYoAaeIOGles"><!--pnid:PiEJWBwu18VPiVKpT03eBp-->kubelet eviction manager</td>
+</tr>
+<tr data-page-node-id="L7jKjt46DLNQAN58VgDbbE">
+<td data-page-node-id="If56aiwe4OZukGwU5pEcFX"><!--pnid:LCdJTHJwk2OH5TeCP7sy7V-->抢占低优先级 Pod</td>
+<td data-page-node-id="YmYnIlDjBeJQ3AfZz0jivM"><!--pnid:qeBZHdAVhdG5BEDUwRm9jv-->✅ 是</td>
+<td data-page-node-id="5cy5q3F4szgLjhRBpHJiFp"><!--pnid:GmnvhDcvvF8Yg0aTwbqm5P-->kube-scheduler（PostFilter / DefaultPreemption）</td>
+</tr>
+<tr data-page-node-id="t7THntQV70mGloI4lNqxBx">
+<td data-page-node-id="pNrMWGqayR8oM39VfaFDW6"><!--pnid:6D9KgUUms7tdOzRStCvFmc-->容器层面能否起来</td>
+<td data-page-node-id="tYp9yvjLSN8gp47dg3XPYj"><!--pnid:njrd33VTRCx0E50tDheUqc-->❌ 否</td>
+<td data-page-node-id="ao96Y1gUklIWE83wBvXCEv"><!--pnid:PXNHpAwcwvumFUzLRtZlTt-->kubelet admission + runtime</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="KW5PBRIh16eCIhdt2gXrtQ"><strong data-page-node-id="W8UfzmfNnq4txA6Y0zfWGs"><!--pnid:FH3sXH8aeHx2ME78RuJY70-->加分点</strong><!--pnid:vnatX9BfR78V8WTHklD3iQ-->：正因为 scheduler 不校验 quota，<strong data-page-node-id="ay05KWa3oqSNR0sRwltf6a"><!--pnid:tVRQZVnuLVNTEaGgVZs3H9-->Pod 被 scheduler 成功绑定后，仍可能在 binding 阶段被 admission/Kubelet 拒绝</strong><!--pnid:ojov2BuBRkjKn1t44PIVRz-->（例如 quota 超限、快照卷不满足），这就是 <code data-page-node-id="U2v2a197Goxhd5fKmjIa05" data-pnid-children="eF0BYrhxuhsk5BBvI7wDLX">FailedScheduling</code><!--pnid:0tysFxku1n7RzHtDKJ4IF7--> 之外还能看到奇怪失败的原因。</p>
+<hr data-page-node-id="hbdZe8uimR1hfQhQqR9tlf">
+<h2 data-page-node-id="Rgnj8kt6RMTper7mPFL8vX" id="q2-scheduleone"><!--pnid:W2UZabri7JrRWBHe0EO5ay-->Q2. 讲一次完整调度循环（scheduleOne）的数据流</h2>
+<pre data-page-node-id="3hxPQOwQ3bdZGNyMQMlOdb"><code data-page-node-id="1yHPRPtGzL3S2hkP18WI9k" data-pnid-children="BNQYAYkqksgQJnFZZMBHUp">┌─────────────── 一个 profile = 一个 goroutine 串行跑 scheduleOne ───────────────┐
+NextPod()  ← 阻塞地从 SchedulingQueue pop 一个 Pod
+   │
+   ├─ 若 Pod 已在 assumedPod 集合中（重复入队）→ 跳过
+   │
+   ├─【1】获取 Node 快照 Snapshot（从 scheduler cache 拷贝 NodeInfo 列表，不含已删除 Node）
+   │
+   ├─【2】SchedulingFramework.RunPreFilterPlugins  ← 单个 PreFilter 返回 NonSuccess 即失败
+   │         └─ 典型：PodFitsResources(with PreFilter extenders)、NodePorts、VolumeRestrictions
+   │
+   ├─【3】findNodesThatFitPod
+   │         └─ 并发（默认 parallelism=16）对所有可行节点跑 Filter 插件
+   │         └─ percentageOfNodesToScore 生效：达到节点发现比例即提前停止
+   │
+   ├─【4】若可行节点列表为空 → RunPostFilterPlugins（DefaultPreemption 抢占）
+   │         └─ 抢占成功 → nominatedNodeName，回队列；失败 → requeue（backoff）
+   │
+   ├─【5】若仅 1 个候选节点 → 直接选中（不再打分，快路径）
+   │
+   ├─【6】RunPreScorePlugins → RunScorePlugins（并发 16）→ RunNormalizeScorePlugins
+   │         └─ 加权求和：nodeScore = Σ(pluginScore(plugin, node) * pluginWeight)
+   │
+   ├─【7】SelectHost：在所有&quot;最高分&quot;节点中**随机**取一个（避免总打偏同一个节点）
+   │
+   ├─【8】Reserve 阶段调用 **cache.assumePod()**（乐观假设绑定：先把 Pod 记入 NodeInfo 占用资源，仅写调度器本地 cache，不落 API Server）
+   │
+   ├─【9】RunPermitPlugins（可以让 Pod 进入&quot;等待&quot;状态，如 Gang Scheduling 配额等待、某些流量网关）
+   │
+   └─【10】异步 goroutine：Bind 阶段（PreBind → Bind → PostBind）
+              └─ 调用 API Server 的 binding subresource（或新版直接更新 Pod），
+                 失败则 Unreserve（回滚 assume）+ Pod 重新入队
+</code></pre>
+<p data-page-node-id="u0we008sRe4Ebr2ePzPKWt"><strong data-page-node-id="tS6ne0yVsM0cxqhx2FLKFF"><!--pnid:CSTm0OXUnzA1mtPPXmmjpY-->关键设计点（要说出来才加分）</strong><!--pnid:3l3eoo47tFa8lf7sanlWuQ-->：</p>
+<ol data-page-node-id="jhJwKTGcPFN7lEuMZhBxOd">
+<li data-page-node-id="9hFDSRc4Nu9xdbcNBDRWPm"><strong data-page-node-id="Hxt5wkPPNcxQm9nGZ2SK64"><!--pnid:gOw1k5LvFkEGlWke2V1k39-->每个 profile 是单 goroutine 串行的</strong><!--pnid:N2qlM3rgBrVxgZYZmE31yR-->。不是"所有 Pod 并发调度"，而是"一次调度周期内部的<strong data-page-node-id="AWShz5xZ7yXKackicfsBiX"><!--pnid:78gHLNQECuvaju9X4ELEct-->节点遍历</strong><!--pnid:zAgNmHdHJwHGudfqXI3BxT-->是并发的"。这是单机吞吐上限讨论的根。</li>
+<li data-page-node-id="beLBUGG9jcYQf4TXdm3zPV"><strong data-page-node-id="IttLtCKzGgnMdOQzjBeDbC"><!--pnid:KM12AETMn8Z9ZqAPFff5hu-->Assume/乐观绑定</strong><!--pnid:hILzaUU0nNWjHnOhvPWev8-->：Reserve 之后到真正 Bind 成功之间有一段时间窗，此时调度器 cache 已"假装"占用了资源，让<strong data-page-node-id="YrNp7mieeOsWH6NxUzntq1"><!--pnid:8BbwjzQpjeckmuWWHFb6Bw-->下一个 Pod 不必等 API Server 往返</strong><!--pnid:9M0q4NJ36be9h2EN2wGHUk-->即可继续调度 —— 这是吞吐优化的核心手法，代价是短暂的 cache 与真实状态不一致。</li>
+<li data-page-node-id="s1QYG892Liax4nXFFZAKcw"><strong data-page-node-id="EJAIFc9AxlpnVoIFTNItY0"><!--pnid:X4DnRrlYsoOr4Kk7OXcDAV-->CycleState</strong><!--pnid:4ebhFRe7kHmpyDs6r02hPJ-->：每个调度周期一个 pod-scoped 状态对象，插件之间传递中间计算结果；它随周期销毁，不跨 Pod。</li>
+</ol>
+<hr data-page-node-id="A7trjtR1alnJ8ODDf5STo0">
+<h2 data-page-node-id="2bTPXjWl1tNTSDRkundo7j" id="q3-scheduling-framework"><!--pnid:xN7desIJldwHjViCGfgI1e-->Q3. Scheduling Framework 有哪些扩展点？作用与典型插件是什么？</h2>
+<p data-page-node-id="ZzLax8VjMIEUkyJi47sSiY"><strong data-page-node-id="0wJ82cAVSKURyMQchTpldv"><!--pnid:qzjuUqEMkAja0IdHnlCZcP-->这是必考题，表格要能默下来</strong><!--pnid:W9jHb3mXByKuKikbVi8pYf-->：</p>
+<table data-page-node-id="HPBxRNB2yx28xcIk277u3N">
+<thead data-page-node-id="ma0GSB4OLvrStNbY1sgUQm">
+<tr data-page-node-id="SFsGOWEJ4bjmn6qn2MjA9i">
+<th data-page-node-id="w74KxvcAmzRrcVHXM5m7ny"><!--pnid:xPgA3PuCXobhiI1S9pkbBK-->#</th>
+<th data-page-node-id="cbUOidRyL9tyuL2n2TrgYt"><!--pnid:Tul7FNYtNxHV95EwAFQFSg-->扩展点</th>
+<th data-page-node-id="lLLSdQWGAECMUmmxlkbtpF"><!--pnid:ZTTnM8sAEP491uecKM1Ebw-->阶段</th>
+<th data-page-node-id="EupFblfwgLw1uByC4fFZDQ"><!--pnid:3ojby8kp31bQdT5eK1U68p-->作用 / 特点</th>
+<th data-page-node-id="sdelwVXfC8EPIXfN4vdMau"><!--pnid:Rymn7VPGegWJh0RBNhMPnV-->典型内置插件</th>
+</tr>
+</thead>
+<tbody data-page-node-id="6CvkCdVFV268dCeBu4Etf4">
+<tr data-page-node-id="eCf2XqOGwDXplDGAPduT4b">
+<td data-page-node-id="zTna9ZAAe4GoqlfOFhEji8"><!--pnid:a0M7sduEGB59tliLh3JZzA-->1</td>
+<td data-page-node-id="bKzUhqYGY4uC0qMJKTa4so"><code data-page-node-id="ftI7WHQ385M7GCy1yNOUEZ" data-pnid-children="zmaOsNGmI2g7KZpMWPbOP1">PreEnqueue</code></td>
+<td data-page-node-id="15YBhlZH5lSrlv2SLSdSWi"><!--pnid:KwA8jzP7zt6FhDUFjwvANS-->队列</td>
+<td data-page-node-id="GJ5IFHFXyX0Bux99AeKWoF"><!--pnid:UwPIesmQwa19cSKVxGfyAm-->Pod 进 ActiveQ 前的前置门禁</td>
+<td data-page-node-id="WnGH2rFMCcq0T3LVpWLoUb"><!--pnid:rHpvts0RKPj0pY4mM0YMM4-->部分版本结合别的项目用；自定义 gate 常用</td>
+</tr>
+<tr data-page-node-id="tgjkHkJE8xqOXCfM4yQRuW">
+<td data-page-node-id="sYaoBix2LNozdW1NvEo2Nq"><!--pnid:oAYGRRJXuipzgjlbyKNTDm-->2</td>
+<td data-page-node-id="rbjIkZWKKlkhjGUVFSJ4Ck"><code data-page-node-id="CJvwnDfbGS13a2Kvw3vDUC" data-pnid-children="AKPCrkdBbHXYVyxWVVMjcH">QueueSort</code></td>
+<td data-page-node-id="PyEiVcWh32H1W3UeG3gPsO"><!--pnid:cvNHhBulYDGPCh8vfQbL1v-->队列</td>
+<td data-page-node-id="31dTOGyRh5Ouy36Jyn5MK1"><!--pnid:mbknKbmRyhoHP9ieqiUp3z-->决定 pop 顺序</td>
+<td data-page-node-id="9nKRdmxudTF8vhClcYvLes"><code data-page-node-id="wEm2Z4oSEFmDcVxivdRRh8" data-pnid-children="2roIpvSR3kNml66HBKeP6G">PrioritySort</code><!--pnid:QUeKjeavvy0LMa5nbgtJzY-->（按 priority 排）</td>
+</tr>
+<tr data-page-node-id="Cq7i6VrJbOTqcfjeYRtyTh">
+<td data-page-node-id="lUYvYOE3OClJvsynBhgmcB"><!--pnid:XOnRVlHcQ7UTaKi1rpHP5s-->3</td>
+<td data-page-node-id="utuvNMyCjMp5dYpktv5uV8"><code data-page-node-id="HxhjEYsK0LCo3giI43aLhG" data-pnid-children="X4oA7XmIAQ6VFo0JyCxiPH">PreFilter</code></td>
+<td data-page-node-id="CYxhhSOCeBnaq6x8nuGA7p"><!--pnid:yPhmKmaZptAc7ctdSUOTQ8-->调度周期</td>
+<td data-page-node-id="IJEH3c9BfGtHQBZOUgslps"><!--pnid:aa9riVrbdc6YDvGmvVkGvy-->全局预检 &amp; 预计算；<strong data-page-node-id="1OooLNN4Er2nMo7Jskp3oo"><!--pnid:xNQEIulY77pFqy4lNguFLa-->任何一个返回失败就整体失败</strong></td>
+<td data-page-node-id="LVwCxROqxA8znQ0lfCQYzb"><code data-page-node-id="oNJ7Pw1tFLCuJOa718FKKW" data-pnid-children="WicX3xIwq1lNZJeD2F20mp">NodeResourcesFit</code><!--pnid:meDiC35I5MkY5JloitExr4-->、<code data-page-node-id="fT9DwuI1Dx7EI9gQo1G2j9" data-pnid-children="SKvkrrDnenTzNDjnFDE7Po">NodePorts</code><!--pnid:PBK3CMZxXnbLYkrO65WCcZ-->、<code data-page-node-id="KDSY3r4jBbGoYQj6peB8zk" data-pnid-children="ZUvGuDkWheLnsk90QY6meV">VolumeRestrictions</code><!--pnid:3f0wQZcVfl2gC2ykfdAwjX-->、<code data-page-node-id="aoL1LOuQFM9TG9NCd1PgWS" data-pnid-children="610Rb9NhdPA13f6JdHFHqO">PodTopologySpread</code><!--pnid:xeERxQ2KN1gIFqcsMDF9MF-->、<code data-page-node-id="5WNJboTCA5TZ6ueOs6t5rA" data-pnid-children="5egM9aIRcAieW3cGCbeeT4">InterPodAffinity</code></td>
+</tr>
+<tr data-page-node-id="AfFAk6LemjDMbGlacMknEL">
+<td data-page-node-id="fVDKfmIllRZE0ReB6avbcs"><!--pnid:fxAYKLO9H2whdpFsEqUSyV-->4</td>
+<td data-page-node-id="EhIBtfAPKgslANk2XIavfI"><code data-page-node-id="So64WFZJY8Abdyw8k5GAiW" data-pnid-children="2NTNyZKPUQcJTa1NOU8n3v">Filter</code></td>
+<td data-page-node-id="YwttQlQ1FAa14Cz5zRkbqz"><!--pnid:2vNXwm0JZJYxnNdDkiV86T-->调度周期</td>
+<td data-page-node-id="0w7zun0y237MHD2GUL4vpl"><!--pnid:5KUlVpFVsbYYGaFDcfMzmL-->逐节点过滤（可并发）</td>
+<td data-page-node-id="nbl49K12SjcIC56R57ZLLf"><code data-page-node-id="JJ3gdIf9CBBg5ZtQF7q6vr" data-pnid-children="UZkzSBgDcYpAPQSj9Ab6Ty">NodeUnschedulable</code><!--pnid:WRphqLfmFr2334KDxiwoNM-->、<code data-page-node-id="yze0VsNfdWA7rGNLF1BpJT" data-pnid-children="ojq77vGsb77mIGgSvwYmie">TaintToleration</code><!--pnid:DvElKgTboXMTVqnJaQouM1-->、<code data-page-node-id="4wCjEPK7L79DfF5r67fUnj" data-pnid-children="WW8Udjasq2cP4XMBq8dYX5">NodeAffinity</code><!--pnid:peBGlXB8OgtlYZy4pVzjwn-->、<code data-page-node-id="pN68jdLzFAeGsaj3PBHx2k" data-pnid-children="DmSoLmCQqoeXFsFp4UFTM2">NodeResourcesFit</code><!--pnid:GSOpWKx2KFUDcWNZgAaLKQ-->、<code data-page-node-id="rQo1xqCsZBejPM9Ogo7jHK" data-pnid-children="iOygODJISvMMs1tD12UH8u">VolumeBinding</code><!--pnid:2GCb6I9WnW8CHq6zmwOO8j-->、<code data-page-node-id="Oc2Bbc4tGvGq5A4EiaYwgK" data-pnid-children="6F4FdOlLL4tc3jikX8tHCX">VolumeZone</code></td>
+</tr>
+<tr data-page-node-id="ex7QWDXjHiN8rBSyZqDVcP">
+<td data-page-node-id="rDqQPGLSH5ZnKbDMK0ZvaT"><!--pnid:NsaoEcOa6znN8n5sfHDJ21-->5</td>
+<td data-page-node-id="Xs8WaW7oRGlrHGS1HzMJKQ"><code data-page-node-id="Q8GrNYQJb0COLsVcFmLCg6" data-pnid-children="2HeYr8HjVEalLluikCULrV">PostFilter</code></td>
+<td data-page-node-id="2jELnhyjfBkR2Ozg6EiBnG"><!--pnid:l8tVMdR3dj3rfzVg0ubsWp-->调度周期</td>
+<td data-page-node-id="Lwe27avbjwDjpBPzytFo0f"><strong data-page-node-id="CqvKyBRwKYnXePWUd0a1ul"><!--pnid:awDXCIH3CTaVR5IX3r1w1i-->Filter 全失败后才执行</strong><!--pnid:u3tCivEcJeEhoEI6aAuQGA-->，做抢占</td>
+<td data-page-node-id="MmKDN43OZ1CwueAeq8ispb"><code data-page-node-id="hGfSqVnx1SXfrkgz69j1qv" data-pnid-children="8TXIAZYAWxTbxrIR0Q4lDX">DefaultPreemption</code></td>
+</tr>
+<tr data-page-node-id="8l9PoXwjDfiBJkABjm8mW8">
+<td data-page-node-id="EOYRLxjZUKltr2S1NSjG7b"><!--pnid:MglLEgWeS8hnbggXiRoTyv-->6</td>
+<td data-page-node-id="Nd85uMmrQYT4P47Xk4kkJW"><code data-page-node-id="UTj9dfCnDQgY7sZCJYc52a" data-pnid-children="V3tb9U1CSaN1LvwdJEFnjS">PreScore</code></td>
+<td data-page-node-id="9rHl3SE3zJPIZibCv1V1Ti"><!--pnid:THUtXKmaZAyzNkHLstoE0l-->调度周期</td>
+<td data-page-node-id="80FnQErAhOD5x9l2Kr8PPG"><!--pnid:Axwu8P8o8DYsrp6rZtSej5-->打分前预计算</td>
+<td data-page-node-id="XmGN21sUI7i04Zd2RjVL3Q"><code data-page-node-id="wx7SN9e2CQnOmJiwUICPKV" data-pnid-children="wK2KCD5Ri1WHnPJ7kxkrqy">PodTopologySpread</code><!--pnid:2LonHC9WzeJScdF05fVf9C-->、<code data-page-node-id="ADYNAI2TXbG5Tmo3l585Go" data-pnid-children="mpbRwJRKnO5Y2dc2ii70SN">InterPodAffinity</code></td>
+</tr>
+<tr data-page-node-id="laKO7HoDC9BmFZq5k1A7dO">
+<td data-page-node-id="gCDwAaoHkZdeLuLTk40oqn"><!--pnid:RTMwDpBhVXvzjP5AOdqwla-->7</td>
+<td data-page-node-id="vEiwTvTMhrNa8qgP5HZ4Iu"><code data-page-node-id="KVdI2pZ5inQHATpGVlKvhR" data-pnid-children="pSGBLWJZc9upErIbuwPFSR">Score</code></td>
+<td data-page-node-id="tTWNAaYM1D7q13BOCDvU4i"><!--pnid:0xFpXBm96OqPijxnx8YJPj-->调度周期</td>
+<td data-page-node-id="Qht3tTPNLuB5rtZiNOGiur"><!--pnid:X3Tlz8UMwRCBQxe8h6vhpT-->逐节点打分 0~100</td>
+<td data-page-node-id="MbQGQil6VRnkdFjrQNIXfN"><code data-page-node-id="rof01qUfdilg6VTm3KrIpY" data-pnid-children="04R0DQtGQFSkJNEn9VfzzM">NodeResourcesFit</code><!--pnid:g33iYxjX9PS93K9kqnUylU-->、<code data-page-node-id="6FlL2oIuXhFdeKV21LVuhR" data-pnid-children="1emQa2GBNKrIKqXoOp9WaO">NodeResourcesBalancedAllocation</code><!--pnid:s2iQuQRhnkvhttEQwJEvQ5-->、<code data-page-node-id="EVo10TzwzUxFQXdTrTTM2D" data-pnid-children="uHb08bG4ByjUA6uMwjazkF">ImageLocality</code><!--pnid:Pw4sHWLGaBhmA2alvueHHc-->、<code data-page-node-id="HvK4t2xERrbv8lj5A2lUjF" data-pnid-children="f0lxw8Oaob2wTILYfMtJPm">PodTopologySpread</code></td>
+</tr>
+<tr data-page-node-id="NpUBekM2jNOEUdddJBlnno">
+<td data-page-node-id="FB2zRttr3o8vCgfaGPfJGd"><!--pnid:BVW6gOUJv75LN8axEw2RmG-->8</td>
+<td data-page-node-id="E0lVzitwSlQFaO9sHbywoL"><code data-page-node-id="jrBvZpxS0QIudIQCnZOkUQ" data-pnid-children="OrVJFGPfgxKfLU7q34hRQ2">NormalizeScore</code></td>
+<td data-page-node-id="NC6zbbPSRj20NpRTiEqfMc"><!--pnid:8mVQtSnmEx3OMxipqH7vGM-->调度周期</td>
+<td data-page-node-id="sSGiEQcfIay1ab6GNQM5n2"><!--pnid:3TjpGmKARIux21CfEcgCfn-->分数归一化到 0~100</td>
+<td data-page-node-id="GbUL0CEAaf6UiqxvaZ6cFD"><!--pnid:6WdlU6kmUqdKjoDIdhAjLF-->多数 Score 插件自带</td>
+</tr>
+<tr data-page-node-id="rdD5VpwXmr8BWHq1xQq8N6">
+<td data-page-node-id="2xqJpTwnAKOhBB54ShEkgb"><!--pnid:aHttuUv1VbvS28fKmdMoVo-->9</td>
+<td data-page-node-id="ATSvqruD2O0EiXEK5DzUez"><code data-page-node-id="IYXgMI6C6yNWCwFaSNvNAb" data-pnid-children="bUQWbA0Y4TVAZeDdeCov0c">Reserve</code></td>
+<td data-page-node-id="G98kmlnbsLJB2f1c6DPVDn"><!--pnid:fjWK5q5LGOcEJ8ViWXL5iq-->绑定周期</td>
+<td data-page-node-id="YnOvXz2f2HIOJ8FHnA2LvF"><!--pnid:InLqPnx00wl2Ou5ln3b1dK-->预留资源 / assume</td>
+<td data-page-node-id="Yt1skQ4058wBKedaU2ShoH"><code data-page-node-id="bbCkuJtxsj5S2h9KvoE6GI" data-pnid-children="SyBjtnZB8fpiUSSDZHLhPN">VolumeBinding</code></td>
+</tr>
+<tr data-page-node-id="I6ypdcFXkQUbv79lCqfNbu">
+<td data-page-node-id="QGTkKBaqwzpSy2fMRI5Nro"><!--pnid:SPcepq45H0LZBJmlF2eIrM-->10</td>
+<td data-page-node-id="pmyDoUJcuPW7G9JYtF5UBN"><code data-page-node-id="CHajBG10Re3kmdTlGuyFbL" data-pnid-children="lHphXpC64jvFW48GcXnMXT">Permit</code></td>
+<td data-page-node-id="7diTovyd9DeoDQXqN46QUs"><!--pnid:8d3Jfp1HSjdRCQbuWbaCro-->绑定周期</td>
+<td data-page-node-id="DNaUBgL5v0FF7zU9fjw4OR"><!--pnid:jsBrVw9M7HSVWorWqdV7Lx-->批准或延迟绑定（可 <code data-page-node-id="6MNDuq71yBmMHTkCyV9hGq" data-pnid-children="2H7jryyuymVEX0bo1IK4cj">Wait</code><!--pnid:0UzegeXvKi3ggbLYeV1slR-->）</td>
+<td data-page-node-id="mHjE0N4uPBYEckdrLhKqqi"><!--pnid:vj6XVZW9dfiXo523GADJyj-->自研 Gang/Coscheduling 插件</td>
+</tr>
+<tr data-page-node-id="GI10eqqXqImVzwoetCFkJ9">
+<td data-page-node-id="FfECdo1K4cly9aBq0CXCc7"><!--pnid:abhGsZBsLIUqiuYlsIiLSL-->11</td>
+<td data-page-node-id="ezLKcOQepJ0lX6FZ0bQLkY"><code data-page-node-id="mzThkKWeQvQ6EYzEg5vK8F" data-pnid-children="7XOGDOM0K3SgUDPLyF5Qal">PreBind</code></td>
+<td data-page-node-id="Qn7q0TQgny3q4ZrpFk4uG4"><!--pnid:dqMpEzJWGMvN0IT6BmcXGr-->绑定周期</td>
+<td data-page-node-id="4JWk4AUjfv65iMRlVMnU0w"><!--pnid:5a1flz1KFT68GuAZsai6Um-->绑定前准备（如 VolumeBinding 在这里真正下发 PVC/PV 的绑定请求）</td>
+<td data-page-node-id="6bWXbtZAr3Hxpbzztp12Mm"><code data-page-node-id="phWr46BJq7kNSSAxr4tlvu" data-pnid-children="tHQ74pcTzBWUDnMtS9CYD8">VolumeBinding</code></td>
+</tr>
+<tr data-page-node-id="dgS0ZGQXzGx0cblgFmH7Nd">
+<td data-page-node-id="S022UPPe7c1pg6Kgdtp9kT"><!--pnid:d3YLus5hdjQrnfeunlFFQf-->12</td>
+<td data-page-node-id="J8sohAXqCfxZZ4HTHv5W7Q"><code data-page-node-id="rXzNOqPDnXBDCREv4kFP2B" data-pnid-children="5KTzmZn41pZsDUo3xyL7cN">Bind</code></td>
+<td data-page-node-id="mD0OmF2vN13g7DAui2r5fB"><!--pnid:PHKfbEuvWfnYHtFQER08vX-->绑定周期</td>
+<td data-page-node-id="OcimRTmsEFwavlSnr26G0g"><!--pnid:T2kjtZlBGTvrdIHm7QNyHn-->真正写 <code data-page-node-id="42lK1qcGTJJ3aqUIIsJKjt" data-pnid-children="ZP6XHyeasRVwUYHpoBXJo0">nodeName</code></td>
+<td data-page-node-id="blDVGMh7KI2Ex6P9MXCwtH"><code data-page-node-id="rcLMsbUwqcKOVgWDDssgN2" data-pnid-children="jBgGhezqq1bK94RzoSv3VU">DefaultBinder</code></td>
+</tr>
+<tr data-page-node-id="TlnS8PqKqF4Jpo1TvVIUJO">
+<td data-page-node-id="SX8k7QCSrDsZvus9NJlUqd"><!--pnid:lpNM8DOI7RBAoJlid71sgK-->13</td>
+<td data-page-node-id="uIzovwsR4UqdQWgC2bZWjG"><code data-page-node-id="btXnRCmYNcL6C3hDw1mkoU" data-pnid-children="ySlPwqrBiEB6FGjlzEweiu">PostBind</code></td>
+<td data-page-node-id="I7eDumrDh7r5lEIpDkQXJP"><!--pnid:CyGTt8AirOdmmM3Ma1Lx7x-->绑定周期</td>
+<td data-page-node-id="m9P9faebX9qYrMMp67GrE2"><!--pnid:FA1GxhrooHn2YACfJ70wRQ-->绑定后通知（异步、信息性）</td>
+<td data-page-node-id="utAEMsCojMRGCF6TkEjkYt"><!--pnid:fzLtQ7cmmfD31j8H29CrLy-->自研</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="nM0TpPZU9EFYi7SdeGlcwO"><strong data-page-node-id="6Llk4CsqRlTUOBSbXMnwtR"><!--pnid:G55WMmYr1zJ8KOVBreJfiP-->必答的边界</strong><!--pnid:L9inZaFMon8CLACbfEzAms-->：
+- <code data-page-node-id="H9Jh2yquNFBjeJCU1zpqat" data-pnid-children="7bjvdTPH3hAbAQt6xZGDLL">PreFilter</code><!--pnid:zMz20HVWQbhjq5YyHW3kpd--> 是<strong data-page-node-id="PxcMfyQfO6gI9T3xdhZsIJ"><!--pnid:zdQo5C4fzhoiStEg6wPVBr-->全局</strong><!--pnid:Dzzf5i38055cLVf6Z78OF2-->的（一次整个周期只跑一次），<code data-page-node-id="9DoFjFia0KuZ6iq6s431Pn" data-pnid-children="Bzg1sgDbz16LcXJ93xmlrA">Filter</code><!--pnid:ACKs3h1srixL8DOiwmVete--> 是<strong data-page-node-id="oDvK9qbcItUTLfmfQqf8eY"><!--pnid:GCJRS5DppNB7OnDlFr05Ie-->逐节点</strong><!--pnid:eVNRkRvBO2pDEoG5M9aZpb-->的；
+- <code data-page-node-id="oGoRF7crMyBqJjUCzYtZn0" data-pnid-children="PSM4OYvvihFoe3anisnUvb">Reserve</code><!--pnid:WUwJ1WAA983vciiZbWhpaA--> 失败会触发 <code data-page-node-id="m4dsO2i7mnQ0eJDRwaBScR" data-pnid-children="qsSy5N1EDADbyU7aSys1to">Unreserve</code><!--pnid:1ftBNwX0RoLGMeElqJtW4E--> 回滚；
+- <code data-page-node-id="Ncd7gmjAifDOrdz25MJupS" data-pnid-children="iHJs9SJIfx4Xxzp3CdLbSJ">Permit</code><!--pnid:htZeXoVfWv5i7xOEMxsLMX--> 与其他的区别：它可以返回 <code data-page-node-id="WOqnRkHJ1zQ2ZpSu3IgOCe" data-pnid-children="9eYxvyf1cz6uHUOZoMMjDJ">Wait</code><!--pnid:jJwlAayXSrivrROUS0bcWe-->/<code data-page-node-id="iaZM97SqOSmczaJMeZFTD0" data-pnid-children="Im9D15pMPlUTVX72Pcxpea">Timeout</code><!--pnid:afoZnNQrnNyBRgJBjAgXbX-->，把 Pod 挂起而不算失败。</p>
+<p data-page-node-id="0tyGQps0FD9b0a7ZdaujPZ"><strong data-page-node-id="Iz6eNVzL04MaiPmQFzPcpn"><!--pnid:lOOcc046DsgmP3zGPSu3jI-->可直接套用的配置片段</strong><!--pnid:849A9pjvvspJxNWG9lNgNG-->（<code data-page-node-id="6RFKnFlLm4WRJPuu8i7tEy" data-pnid-children="fwKFvrC00rxXsNYsGuUXGx">KubeSchedulerConfiguration</code><!--pnid:urgfhjRyACIU8BBGJJeqlW-->）：</p>
+<pre data-page-node-id="HAd8P5c57HdQUkTXcyBl9K"><code data-page-node-id="eFLyhRqgmdMjNSF80765I5" data-pnid-children="7dpHnmjyg1Hr9GpRUUc7Kh" class="language-yaml">apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+profiles:
+  - schedulerName: default-scheduler
+    plugins:
+      filter:
+        enabled:
+          - name: NodeResourcesFit
+          - name: NodePorts
+          - name: NodeAffinity
+          - name: TaintToleration
+        disabled:
+          - name: &quot;*&quot;      # 先全关再逐个启用，白名单模式更安全
+      score:
+        enabled:
+          - name: NodeResourcesFit
+            weight: 2
+          - name: PodTopologySpread
+            weight: 2
+    pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated     # 装箱更紧，降低碎片；在线业务建议 LeastAllocated
+            resources:
+              - name: cpu
+                weight: 1
+              - name: memory
+                weight: 1
+</code></pre>
+<blockquote data-page-node-id="66CzWyIviU60M5lsmyWYbq">
+<p data-page-node-id="vi36lXEv8cYv0w1JUWd7GI"><strong data-page-node-id="UILxG6clGWJWFogLJt8Mus"><!--pnid:ecatYJdZ9a9VaNfCFcijv4-->验证方式</strong><!--pnid:vu8mxjXCSkYB5Cow1Vd8ua-->：改完配置后，先 <code data-page-node-id="NYLT5BAVJ658YYQrVxlWrY" data-pnid-children="VaHL0tvYC6kFUaToBcZy8A">kube-scheduler --config=conf.yaml --dry-run</code><!--pnid:t9XYxGGACxZvB5chFXy2uG-->（若版本支持）与 <code data-page-node-id="OcFQ66KpvjgrQBEZzpgk5O" data-pnid-children="zUneXJ9AEcivK1OMqapkeT">--write-config-to=dump.yaml</code><!--pnid:iMVb2gulPRoUFn5C6gBrdX--> 对比默认导出，确认插件集合符合预期再上线。</p>
+</blockquote>
+<hr data-page-node-id="UQXdndzGV4yCHw0LXxIjIY">
+<h2 data-page-node-id="OrBxKopmRPmGFZn88DTivK" id="q4-pod"><!--pnid:jSrLR0EBt0Dnu8UBIVfXy7-->Q4. 调度队列为什么是三级的？Pod 什么时候会被搬移？</h2>
+<pre data-page-node-id="YDvW2vr1NekxSWIk2q4X5m"><code data-page-node-id="1z8dBZ9PH5FNKXiRvrzh4A" data-pnid-children="pfiyIkM0SA1SrpnHrTSqYM">                    ┌────────────┐
+   新 Pod / 重排   │  ActiveQ   │  ← heap，按 QueueSort（默认 priority + 时间戳）排序
+                    └─────┬──────┘
+                          │ pop → scheduleOne
+                          ▼
+                    ┌────────────┐
+   调度失败 ───────► │  BackoffQ  │  ← 指数退避：init→max（指数递增，默认 1s→10s，见配置字段）
+                    └─────┬──────┘
+                          │ 退避到期
+                          ▼
+                    ┌──────────────────┐
+  集群事件命不中 ──► │ UnschedulableQ   │  ← 没有正要去野的集群变化时停在这（不消耗 CPU）
+                    └──────────────────┘
+</code></pre>
+<p data-page-node-id="umTDAuDfMOWn8dvy3VBKDU"><strong data-page-node-id="iresh2sJanGsgCJ14vznUe"><!--pnid:MWaieURwPklZUqqmPQ2W9a-->搬移条件（核心考点）</strong><!--pnid:vJkVDH4WWQEoLfqZu5nPPg-->：</p>
+<ol data-page-node-id="aERdPSvAUU6dty4D3vSrZ8">
+<li data-page-node-id="yxPqRQKvFqRVIA1TOP8Xrp"><strong data-page-node-id="H7Hx8JA7OSmbJVDRe3S0An"><!--pnid:4cYLoeFFylfGyGRyHhi5TF-->触发事件类型</strong><!--pnid:CV1sjFHmLz4cg49ty1LwhY-->：Node/PV/PVC/StorageClass/CSINode/Service 等 add/update 时，会调用 <code data-page-node-id="7LogNgnFDQsvthogffofif" data-pnid-children="oCpjnxjtT1dyEjuD93Wa4f">MoveAllToActiveOrBackoffQueue</code><!--pnid:Zr9cmh3s4BNJzuxNK2dUkN-->；</li>
+<li data-page-node-id="4mFn5vp58Bxb5D5dUpQvkZ"><strong data-page-node-id="9mV4HDSUbqFaJQCVV5tbgI"><code data-page-node-id="pTtcMDrOxqPxDpxIdaAMiQ" data-pnid-children="QzEY9ZasDNljLuPRfxZama">schedulingCycle</code><!--pnid:UY7GKlYYhyMHqYKSJIwNV0--> 机制</strong><!--pnid:MfJtIbAARtXIbLtKugC2An-->：记录在队列内的 cycle 计数。某 Pod 是在第 N 周期被判定 unschedulable，只有"周期 N 之后"发生的集群事件才算"新鲜事件"，才会把它搬回 ActiveQ —— 避免老事件反复触发无用调度；</li>
+<li data-page-node-id="HmWYX3rb8FLDEQ1RplpDin"><strong data-page-node-id="TSdLgLEgFQTNu4e8KR29AD"><!--pnid:OAuCYDTcNGHEtVC8GEl0TL-->兜底定时器</strong><!--pnid:lvKghJ4tfHjpFueol2ZQWD-->：即使没有任何事件，也会周期性 flush 回来重排（源码常量 <code data-page-node-id="gHenb9Jzx2OUZHPstkBFvq" data-pnid-children="24rOokF2hLrZrt3DhFL4YM">podMaxInUnschedulablePodsDuration</code><!--pnid:0cADCdq7h4FtR2wHmmOm7c-->，默认 <code data-page-node-id="uX30d0Q7EIPojZqbbvUw4p" data-pnid-children="TULo6rBGELVzBxjhqEk1Ht">5m</code><!--pnid:b6B53hC7k5RFUFduWrZDhG-->，在你的版本里 <code data-page-node-id="JpmzWMuyNU4wAiDQwqQDJi" data-pnid-children="9NtVxfBUayYm9XsIyu2TIf">grep podMaxInUnschedulablePodsDuration pkg/scheduler/internal/queue</code><!--pnid:VzAeRiIamZ7fgnIfNgDOOj--> 核对）；</li>
+<li data-page-node-id="PzuALs7JOmkpnww9RlKzbF"><strong data-page-node-id="cq40KZgXJ0MJTIXf8giFZB"><!--pnid:SogV3SFSH0Pl38fO8hLNle-->QueueingHint（新版本）</strong><!--pnid:i1ExvSI9MU2k0e6fgDgq6M-->：进一步精细化——只有"该 Pod 失败的某个插件认为这个事件可能让它重新可行"时才搬移，大幅减少大规模集群里无意义的 requeue。</li>
+</ol>
+<p data-page-node-id="858MPP5ZfesanBOcXqyfDh"><strong data-page-node-id="dDcbT8LxdSTxmvoKfNxpc7"><!--pnid:eXLFs98rXsqnfzQENPM394-->可直接套用</strong><!--pnid:FZ3WCbjxg7uZ97oTqLZlye-->：</p>
+<pre data-page-node-id="9jDVdMj8ANMa0LCRMGmGrH"><code data-page-node-id="Z4bqU5JRz1pfP3xHULsVuE" data-pnid-children="x3usIfHr4FdTqpMQO4eLML" class="language-yaml">apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+podInitialBackoffSeconds: 1      # 建议初值（源码默认 1）
+podMaxBackoffSeconds: 10         # 建议初值（源码默认 10）
+podMaxInUnschedulablePodsDuration: 5m  # 源码默认 5m
+parallelism: 16                  # 节点遍历并发度，源码默认 16
+</code></pre>
+<blockquote data-page-node-id="NO1pcmVtfvJ4srGtvRarZ4">
+<p data-page-node-id="RsJWyaD7kh0FWh4NLc3yw7"><strong data-page-node-id="xW7WrPTVPbNSJhdPY229CI"><!--pnid:I1XcEnH3SxxWGQQGFwxSBb-->大规模场景的坑</strong><!--pnid:FyiF2j9qKoGyE9gK2biyxG-->：大批 Job Pod pending + 集群频繁节点变更 ⇒ 事件一来就把成千上万 unschedulable pod 全部搬回 ActiveQ，造成<strong data-page-node-id="MnbNwYBjjyFuZN22mpYgxK"><!--pnid:uTx4Ck61SCZFJpY2uGa0LI-->重调度风暴</strong><!--pnid:8y8IltUM2RnlJEKs8XTNri-->。解法：开 QueueingHint（新版本）、pod 拆分 Queue（多 profile）、资源提前预留、以及见 L4。</p>
+</blockquote>
+<hr data-page-node-id="ND6mU6HG2BWVVfoDdaN6a1">
+<h2 data-page-node-id="Ptkg9BPXgp6l2beDJd23DX" id="q5-percentageofnodestoscore"><!--pnid:nF6ubNZs7XN2Rmm1K7nRdH-->Q5. percentageOfNodesToScore 是什么？为什么要有它？</h2>
+<p data-page-node-id="oUSfI1dpmieBZkbC4sSnPF"><strong data-page-node-id="H2YmnkOjIH8uve0va33VrG"><!--pnid:6iA5LLN0nBHXPSGAErdtXt-->问题</strong><!--pnid:QassXVVXKXRB912Py7f8Mh-->：5000 节点的集群，如果每个 Pod 都完整遍历 5000 个节点跑一遍 Filter，一次调度周期的成本与节点数线性相关——节点越多吞吐越低。</p>
+<p data-page-node-id="Kxo2zDfnVzBcLW2uGDUMEr"><strong data-page-node-id="PeKmstrDKBdo1AynECpw1a"><!--pnid:pdWk4JjhFLPCqq9uMPwlkc-->机制</strong><!--pnid:m9fKMqlqX5fjQ7eutVKJOp-->：只遍历一定比例（或一定数量）的节点，<strong data-page-node-id="99sxOzeM8BgXBD2mrJ2hup"><!--pnid:AEgf2ypXaGzXc3woTjpE8c-->找到足够多的可行节点后就停止</strong><!--pnid:33Z0YjEEYZHudwKJm1FFcX-->，从这些里打分选最优。</p>
+<p data-page-node-id="RoNnslAJ70qycsD6uHgHQC"><strong data-page-node-id="H8TX5MWwvncOuL8MJYF9ai"><!--pnid:cDkzfmRioixKIf1gvbAs50-->判定逻辑</strong><!--pnid:ERtSKFkMHp2EHJlqJNWwUB-->：
+- 节点总数 ≤ 100 → <strong data-page-node-id="WzKE4LLqK6SaOO9CDCaVQT"><!--pnid:VhOYlkdizFzWK3JvgfKWI9-->100% 遍历</strong><!--pnid:csVN9FuKoc3a9kLGzPQm0I-->（小规模无意义减小；源码里的 min 阈值 100）；
+- 节点总数 &gt; 100 → 使用 <code data-page-node-id="GGRxyvFGeC2exg4DThS0Nm" data-pnid-children="8Is408BfpcDoQrgO3CHKxr">percentageOfNodesToScore</code><!--pnid:pIjSQWmEbFc4pFwX9TZH19-->；
+- <strong data-page-node-id="HTqVGheixxoJ0GiQbBflDO"><!--pnid:EbNPyXhqngkY9IGMldNrGB-->未显式配置（=0）时的自适应公式</strong><!--pnid:TYpUQLULagi5iZK7QbYipH-->：<code data-page-node-id="tw3YuMd31DLpXryw0RzoWm" data-pnid-children="1l6QJiKWmbBPusWt2TVN2r">50 - numAllNodes / 125</code><!--pnid:OuJL9LEhzIE1lyAQ2x87pG-->，并 clamp 到 <code data-page-node-id="zyJK9Ybr7uATj4XOPNzJhl" data-pnid-children="hGk2q95NgVUeNzKm6BwdVx">[5, 100]</code><!--pnid:X5vb6t60HdsFq1zbcBjqac-->。即 5000 节点时约 10%（<em data-page-node-id="zNVlHjM996eu5FM2thOkee"><!--pnid:hS2dQdpUvmxzDpnwANJtAo-->该公式为社区实现，以源码为准</em><!--pnid:p16qqFagijwkme5Co6cfCx-->）。</p>
+<p data-page-node-id="hZ9a1pAHVAwlkB4va4G14d"><strong data-page-node-id="6WTUmSWFRqjsg18UKJR79a"><!--pnid:l0AOxx7nWSHN6cE26mhfDs-->风险（必答）</strong><!--pnid:wVGQfyuWLpHC9XqQc6wTa6-->：这是<strong data-page-node-id="nFh7dt2ulMZc99A9z8A2sG"><!--pnid:jNVhoBjznOnh0vHs3aDgbU-->牺牲最优性换吞吐</strong><!--pnid:hmvwQlcpMLqdO7TZVnam3S-->的近似算法——可能导致 Pod 落到"次优"节点（碎片、镜像缺失、跨可用区）。
+- <strong data-page-node-id="oXae48pF4aVhGLdxN148bp"><!--pnid:p2vRlWeKCt4jM4EDt9Jy5E-->离线批处理</strong><!--pnid:NhjP0xS0cfKgNwcFKnjA0Q-->：可以设 5~15%，换吞吐；
+- <strong data-page-node-id="plArNMthueL5SM5f0lq9Sm"><!--pnid:qBuMPR030yKWUTw0hiGlqO-->在线低延迟/亲和敏感业务</strong><!--pnid:uo0rjuqSWapwbdN5GVKdVA-->：设 100%（或保证国产/敏感业务量大在为数不多的节点池里，节点基数小本身就不触发近似）。</p>
+<pre data-page-node-id="4FxyVQZNYQCNtAfU9hiJP1"><code data-page-node-id="nuykP6aCMoaHsObimkkVum" data-pnid-children="9vZsjdS6j2knjzhRKHYply" class="language-yaml">apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+percentageOfNodesToScore: 30   # 建议：普通集群 20~30；CPU/GPU 贵资源集群考虑 100
+</code></pre>
+<p data-page-node-id="25bVw4EHkilT9gtAlqnxWF"><strong data-page-node-id="B4MCnuUTQSsTgDx6SXtcFb"><!--pnid:dFh74puiDYG5yOsYw1KJhQ-->验证方式</strong><!--pnid:aN7e0c0IslZ1G1jlHQdFeS-->：改前后对比 <code data-page-node-id="EV4BY7qrCrT7rceOYSw2kX" data-pnid-children="37gQhTMSisguA0raYGyU0G">scheduler_framework_plugin_duration_seconds{...Filter...}</code><!--pnid:vD19iWvVBJwUeOeOfW4hru--> 的 P99 与 <code data-page-node-id="bFteUtFlQUCVUKoQ5ilOfN" data-pnid-children="gXR96PSsU0XBQ2wHmjTaeK">scheduler_pod_scheduling_duration_seconds</code><!--pnid:qAN1eRJMAqcdqya2KmF1mP--> P99。</p>
+<hr data-page-node-id="Ub33FpjseAZgEEHHgGZYMq">
+<h2 data-page-node-id="bJ0uXLr7f00vIC0SKidrMe" id="q6-preemption"><!--pnid:FoQOiA5qVJ8lU0J5n6sVd7-->Q6. 抢占（Preemption）的完整流程是什么？</h2>
+<p data-page-node-id="IsNf8vkMaOZf4lXKDHvCna"><strong data-page-node-id="7oTr2vxC6RXC4LeE481oAA"><!--pnid:5ctfl8O6l3iccvPaGtTAJ4-->触发点</strong><!--pnid:KKc47755S3rtlMNSdEJLjb-->：<code data-page-node-id="ceVjv00qIO0V7puADtZWoF" data-pnid-children="b5kHa9IfrWigdbtx1irm6t">Filter</code><!--pnid:DSxsmwSCSH88fdK6DuB9ky--> 后<strong data-page-node-id="rb9c9chYZKw4hXeFm7FWMK"><!--pnid:eDc5JbjcGHgLpV1xw6LOCX-->一个可行节点都没有</strong><!--pnid:7ZyfEja4sOjBs0mhUGlywA--> → 进入 <code data-page-node-id="4M2KfhbDaiZnzUxUmJg4se" data-pnid-children="x1iNTSu0lXUCWLygkhy0AG">PostFilter</code><!--pnid:jG5htBjH6y5RBt9yoVZePK-->。</p>
+<p data-page-node-id="330qLw51Z5lJiNrFVPsaWU"><strong data-page-node-id="DqrwPGuFMbv5E21hxMQ1Ze"><!--pnid:VzUBXqzZom1MwpFMirzdCx-->流程</strong><!--pnid:6fYrJ3X5Z14QYwlRmzJVRd-->：</p>
+<pre data-page-node-id="eyl0JvLoMpxjfiy96OJ8k2"><code data-page-node-id="g8eGb9G7JmBofTvVOeUCwe" data-pnid-children="f1TAMirnaRZplSGnagKhvF">1. 优先级判定：Pod 必须有更高 PriorityClass；victim 只能来自同/更低优先级
+2. 对所有节点做&quot;假设 + 试删&quot;：
+      └─ 逐步把最低优先级的 Pod 标记为 victim（&quot;把资源挤出来&quot;），直到本 Pod 能放下
+      └─ 受 PodDisruptionBudget 保护：若删除会违反 victim 的 PDB，该候选节点会被**重罚分**（天然排在后面甚至被排除）
+3. 选一个&quot;代价最小&quot;的节点：优先级越低越好、被抢 Pod 越少越好、违反 PDB 越少越好
+4. 通过 Eviction/Delete 删除 victim Pod（victim 会进入优雅退出）
+5. 给抢占者设置 `status.nominatedNodeName = &lt;node&gt;`，Pod 回队列等待
+6. 下一轮调度周期：
+      └─ PreFilter/Filter 前会先&quot;把 victims 从 NodeInfo 里暂借移出&quot;再试算，
+         即 nominated pod 能&quot;看到&quot;即将释放的资源
+7. victim 真的消失后（deletion timestamp → 对象移除），抢占者完成绑定
+</code></pre>
+<p data-page-node-id="DAwzBBp1aSajBBjM6Zj2Ks"><strong data-page-node-id="36BGiFuEz8STAKRTLDFIJK"><!--pnid:csprowdFwty4PqFG11TOxS-->四个必答细节</strong><!--pnid:WSAUj9WSByICPnyFWppea9-->：</p>
+<table data-page-node-id="zSN3WTrFym4IHZUEyuTrok">
+<thead data-page-node-id="PkkxbnVDH3tYoa9wgqlTUT">
+<tr data-page-node-id="grxzrdUlPvJjpyw95bdn9l">
+<th data-page-node-id="HVZPJlzM5FTbBx0PiZ66Cp"><!--pnid:CVia2bzy5ssiTGTyrwvGRy-->细节</th>
+<th data-page-node-id="Orr1caQvMggCfh6irItkmh"><!--pnid:wr0p5djJmhT5gpCg19x9nK-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="1j7SsjUlg1WgETU0T5a5gu">
+<tr data-page-node-id="rnpsp7afzRmecJUVtwp19c">
+<td data-page-node-id="0bjJCwskbhvMVRxfASXNtL"><code data-page-node-id="xkQAzmu9DF3h7LDBjxFGjm" data-pnid-children="DoWckHwIvFMahPRqfsjuQN">nominatedNodeName</code></td>
+<td data-page-node-id="2dUhZSZjKQOGT4GJgv7aMN"><!--pnid:jFdB3rHEw8aGWRGMBVIh87-->只对 Terminating 的 victim 有意义；是"预约席"，不是绑定结果</td>
+</tr>
+<tr data-page-node-id="fcIZQKOXJq7OQir93LFTk4">
+<td data-page-node-id="KHXWQKiYjMpf3GtLdsxkRJ"><strong data-page-node-id="AbSzM013RHhfKauTIaGh4K"><!--pnid:hv1ofSRSE7Gt1QJgkB2ZCo-->抢占失败/虚假抢占</strong></td>
+<td data-page-node-id="EC33Eo4lpREsRur2WCk3nJ"><!--pnid:G4CreY4SrTO23lH8Ig1LV6-->victim 迟迟没消失（优雅退出期长、finalizer 卡住），抢占者会一直等待或按退避重新计算；社区称这种现象为 bogus preemption（虚假抢占），可通过缩短 victim 的优雅退出期、治理 finalizer 来规避</td>
+</tr>
+<tr data-page-node-id="4luuXPTrQXN1OoiH1wZTg5">
+<td data-page-node-id="9LlCIPxELNWyflvRww46K5"><code data-page-node-id="P0UVpQjuZYNj1AgMYlM6Bk" data-pnid-children="e5mXSCt6NPdwBovW1dGexK">preemptionPolicy: Never</code></td>
+<td data-page-node-id="UrDnAapBeIsbzjYQ32yYsf"><!--pnid:cmHXG5I1Gvx0m74LQ2xdsH-->高优先级 Pod 声明"我不抢别人"，只作为 victim 候选外的旁观者</td>
+</tr>
+<tr data-page-node-id="kTjTDHsjt25dAZbs3HyVIt">
+<td data-page-node-id="da4rHcD8zLyRhbhkBj4GmB"><code data-page-node-id="MlBWClZ3JZo7Bm8LAm6F58" data-pnid-children="TLDUkqhbqAxzoP3nlk5RNg">PodDisruptionBudget</code></td>
+<td data-page-node-id="JDQ4NXizE1gy6gCZQME7EB"><!--pnid:xwGvlGFMkTTufW9NL01fJ1-->保护的是 <strong data-page-node-id="7P8vodH3EUSHss90Roe66W"><!--pnid:aEzB1YOVlrUcGrBQWVQ88h-->victim</strong><!--pnid:OAmRop8ydNCGnsMsfJLIMD-->（<code data-page-node-id="9dJ2OrJIS8ODDCanktQNq7" data-pnid-children="t8FiFCbs2FTgtlY3yjfMjO">minAvailable</code><!--pnid:wCL4kyh5WPXuRnP17CiVnS-->），含义是"不会为了抢占而毁掉已有的可用性承诺"</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="btvAB5mkUa6SCJErtlbOAv"><strong data-page-node-id="5UZxV7n6fWoXtH8KFvgjfI"><!--pnid:x61Xe6JFGgVBpaAW998eQB-->可直接套用</strong><!--pnid:dJFN55bRQsWWvrDwWknfR4-->：</p>
+<pre data-page-node-id="lP7yzBxyO7Y20BIMHMpxw2"><code data-page-node-id="TWpeNcipLY97G3q2qjhZQr" data-pnid-children="WBioT2x8RCA2FZZNDDIERo" class="language-yaml">apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: prod-critical
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: &quot;核心在线业务，允许抢占低优离线任务&quot;
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: offline-batch
+value: 1000
+globalDefault: true
+preemptionPolicy: Never     # 关键：批处理永不抢占，避免抢占风暴
+description: &quot;离线批处理，可被抢占，但不抢别人&quot;
+</code></pre>
+<blockquote data-page-node-id="7hQp48tU7wrVTasqk694OJ">
+<p data-page-node-id="1alqQw6NSHCF7hnsjctpMw"><strong data-page-node-id="Xy5pmiW3lE9LDPNVOZsAlT"><!--pnid:Gx6mSJC2gYt9RZNALxNhVN-->注意</strong><!--pnid:7xSemfXjVPX1i6aRlVWizQ-->：<code data-page-node-id="GHxkHGANWfxJJvF6pfKBSj" data-pnid-children="1mvUL8PEWXSOlTfNHFK2JO">globalDefault: true</code><!--pnid:pLuIVyne3iUAMeHI3Jl9bt--> 全局只能有一个。给"默认优先级"设 NEVER 抢占，是防大规模抢占风暴最有效的一招。</p>
+</blockquote>
+<hr data-page-node-id="ZLgBPAGoRR24RBu9vl3nKT">
+<h2 data-page-node-id="OgW9xwFKKbrluvOvr1rfXB" id="q7-vs-vs-pdb-vs-descheduler"><!--pnid:yyWPop8x7y0rmR79YSLIAZ-->Q7. 抢占 vs 驱逐 vs PDB vs Descheduler：别再混为一谈</h2>
+<table data-page-node-id="O2qAWZLXjH26bFYWNrmJgo">
+<thead data-page-node-id="GVy1jvZ84KcuyJwe4KW9ZG">
+<tr data-page-node-id="0HP8rDD5RM0aZqyYvM8Ox6">
+<th data-page-node-id="VxWb3pJCA6oEitAyCLpEWT"><!--pnid:V7zs8NOGFfsw0VRMmKcFMl-->机制</th>
+<th data-page-node-id="QZnqGDAsLPdJ0FEteKcBTL"><!--pnid:7yYI0hJe2mEQOplwILEHtB-->谁触发</th>
+<th data-page-node-id="Z3tqkLqw7vHBzLlwAfMUf7"><!--pnid:gfnopP4LdYsy88kNJvlZpl-->目标</th>
+<th data-page-node-id="Gu7bHaQ2AbVkocDSV2w4Dx"><!--pnid:DRLrLVgjCeiVlk9puX4upw-->是否考虑 PDB</th>
+<th data-page-node-id="NRxxhKS4RdjdV7G0FIoCXE"><!--pnid:M8I5btr0h56xjfYoNn3LRM-->典型场景</th>
+</tr>
+</thead>
+<tbody data-page-node-id="LDDrdmEtQF3t9pHLufQjm1">
+<tr data-page-node-id="StipgQ6IR8hAbxYj3V37Q5">
+<td data-page-node-id="bdRvHq3FSdXrkWANssrtaw"><strong data-page-node-id="kSLzrFTzV6J9I8GacfKyo9"><!--pnid:MJn8nm06dCp6dlAFjVFgoL-->Scheduler Preemption</strong></td>
+<td data-page-node-id="8BZ5QuUREdgcQHRKUEdgPq"><!--pnid:871nXLeMImEhHmPHnC7emj-->kube-scheduler</td>
+<td data-page-node-id="CAJIVahmWaaGbpmFl6fuNn"><!--pnid:YXGcbn8W8sAY3fEbNecppp-->给 Pending 的高优 Pod 腾地方</td>
+<td data-page-node-id="MR5CjFC23k1EVDyVvFiJKK"><!--pnid:2vkdmJXVhk9Btan2VfHeCS-->是</td>
+<td data-page-node-id="WEeeV4LS0FCBgqnPuxODCK"><!--pnid:cMNbPPCa5i3nR6apIc3i1t-->高优在线挤走离线</td>
+</tr>
+<tr data-page-node-id="XJInKZwgmbCVxCuXqmIopm">
+<td data-page-node-id="d8UK1GnWPXH80MCEFJMfpR"><strong data-page-node-id="v5iBd1VJvBIZjjWKuytmDr"><!--pnid:JExpJrG13Sno8tN44KRyMq-->Kubelet Eviction</strong></td>
+<td data-page-node-id="bwJ42LNWinfeETxmowb6c9"><!--pnid:OwTMfIEyrENL3heg0eVyaG-->kubelet</td>
+<td data-page-node-id="JoxRrMX2eo8Uhi6J9iZ6iW"><!--pnid:EQLS52yxGAgAi3r4ReP2mh-->节点本身快不行了（内存/磁盘/inode/PID 不足）</td>
+<td data-page-node-id="vsS0cRYNQS4HIhBme1eoHE"><!--pnid:xctN9IJVn95q2OshySMWBR-->否（节点级自保）</td>
+<td data-page-node-id="EYrynZ9wbv3gH6ErbTw0EG"><!--pnid:j7a2mZZKya133G3lkq68H7-->node-pressure eviction</td>
+</tr>
+<tr data-page-node-id="O1fjz19ETKtpBS7m3Lws9l">
+<td data-page-node-id="MCU7f2dNzFP80JkFTcAbmk"><strong data-page-node-id="Ejl8EMiXcidToWOPgGcW2E"><!--pnid:mYxm10KEUPipgFl4iyiWQX-->Node Lifecycle Eviction</strong></td>
+<td data-page-node-id="OXDNlrl82s3lbvsKqWEu7B"><!--pnid:bkDcUxH0SumLrDPgOytE5G-->taint-manager</td>
+<td data-page-node-id="lBvudQ2BsFQvDYi8Cp3JDu"><!--pnid:gc2yp3mEUJfbgYvcxV5fXd-->节点 NotReady/Unreachable 后被标记</td>
+<td data-page-node-id="bJXTV4a1nAxpnT08z3bzYw"><!--pnid:2TzuoCK44nTA0fF2nIHZWM-->部分版本/路径有限支持</td>
+<td data-page-node-id="CQ61KrvcbxekAkxdd5dlt0"><!--pnid:l70PEj0kREq1VBl45hRj6H-->节点宕机重调度</td>
+</tr>
+<tr data-page-node-id="2bqU1m6oVl9FbDZOsmZcfM">
+<td data-page-node-id="Jvt8YfXuqFhVtum6DHPBLm"><strong data-page-node-id="UCwskHcck20yd14cwStKxD"><!--pnid:BoTpQxFXVMfU7vex5liEyn-->API-Initiated Eviction</strong></td>
+<td data-page-node-id="lDgUiYQI09HrkQqdC06KnX"><!--pnid:YHz4WyAULhOxwCu9yidV7s-->外部调用 Eviction API</td>
+<td data-page-node-id="EcVJGG9WMBpOVYeqJ3vdzU"><!--pnid:Zb4uisdUjM2Cx94cc7dBGe-->运维手动搬迁</td>
+<td data-page-node-id="xELW4p99wjmYOFwPM4TmY1"><strong data-page-node-id="6FtYqTFkkp2zNaLGMfMHOW"><!--pnid:KteklmUTc1t9t5HMHPsqCh-->是</strong></td>
+<td data-page-node-id="WJVv4D1fg96WYeu0kbRlhC"><!--pnid:BEhdRpIoWxn7awBauo3Zlx-->节点排水（drain）/灰度腾空</td>
+</tr>
+<tr data-page-node-id="WbT6B7yOVxOIM9tirqd2zT">
+<td data-page-node-id="ssI52YOx2QdPDx2dKfi5z3"><strong data-page-node-id="XlejX8pdbnBnxuXxo0Cyeo"><!--pnid:tEmA5HIiiTnqxXf3cxsooC-->Descheduler</strong></td>
+<td data-page-node-id="F2qdoZQSCq7ffRw2pr1CNd"><!--pnid:JPOawGXmEqsyjoAg1V2M71-->独立组件</td>
+<td data-page-node-id="HzBAuFuJ37DQFgLrWHvXaY"><!--pnid:6263p53ZfUzjm44M8rIS25-->平衡已经运行起来的集群（去碎片、去重、去违反亲和）</td>
+<td data-page-node-id="rGwbn5lkvVFFrO8khl9nnk"><!--pnid:eoJfPE3f8BkkofjxXI9WsK-->是（按策略）</td>
+<td data-page-node-id="civC3k6Sl34Us1FlxPvrQy"><!--pnid:yL0J4nJQ67omME89CLVbeh-->长期均衡</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="0P3QubWD1xsYIIVLtCayY7"><strong data-page-node-id="6ZQTeWJ4eHuAqsQUgChMD5"><!--pnid:Evv7GBBies1KRIFCrnAada-->必答一句</strong><!--pnid:G4XM1atIHTu6AwDGNlYpMk-->：<strong data-page-node-id="33s7Lx4LvCxUGj6mE9gGbL"><!--pnid:byWckHqTPU0qxscJe5N0r4-->抢占是"为了调度新 Pod"，驱逐是"为了保节点/回收坏节点"，Descheduler 是"为了均衡"</strong><!--pnid:hrLdsksxwxvVfDpvTGLkKf-->，三者目标不同、不可替代。</p>
+<hr data-page-node-id="hkkNtlZDV7mgeGxEo2LWFZ">
+<h2 data-page-node-id="h5u8PwcAC6o0Asx1fOIiFP" id="q8"><!--pnid:FN9UZXM7tom31SdkfxQeTJ-->Q8. 打分是怎么算的？默认插件和权重是多少？</h2>
+<p data-page-node-id="lIPftypQ2L6r0hGxITGoOP"><strong data-page-node-id="osF5LfpYehslcp13BveoM0"><!--pnid:4r8yLJovlR6IR1fwb4f1UU-->公式</strong><!--pnid:obmlhJ0FVLEzmJsrvW2Xbx-->：<code data-page-node-id="QbLrk3g2S5xRfKBbRqJ3UV" data-pnid-children="DRfSCwWBtGZl9mLXa2gnlO">nodeScore = Σ (normalize(pluginScore_i(node)) × weight_i)</code><!--pnid:RmtZk7sdIYqSTzKMp3wSi4-->，每个插件分数先归一化到 <code data-page-node-id="mkMKZHclbA9i3edK2ZVfbB" data-pnid-children="6QOgg3xUfz87atTtZd1kgv">[0, 100]</code><!--pnid:CtoUpgCJABfxglBHK7yB2b-->，再按插件权重加权求和。</p>
+<p data-page-node-id="qh0Egrzs3Lpap4jdGZKHX1"><strong data-page-node-id="daL5eSiqrpsuMOwRUJdARx"><!--pnid:YQHX4F6AtaW6rc2iRzIxsn-->默认 profile 大致如下</strong><!--pnid:wkYYUJY5UHy83a3WsL7yFl-->（<strong data-page-node-id="58V5qFQOf2TUt4iiq6Fmzy"><!--pnid:jGpHEpaPkD6qoJmCMiSdfW-->请用 <code data-page-node-id="1bEQUYtJVyXhGdSx6LOUkW" data-pnid-children="IhuiAIwWBAvhUnnRoLkcwV">kube-scheduler --write-config-to=dump.yaml</code><!--pnid:fJIA0Ayk1781TSVILR4RtL--> 现场核对，官方默认插件集与权重会随版本调整</strong><!--pnid:kuX9vIzLLYkfrP9QNHgKy5-->）：</p>
+<table data-page-node-id="a0QZUzCkKWDYcwwh1WZekg">
+<thead data-page-node-id="fPjx1NL3vXQZ2alxtR8ID0">
+<tr data-page-node-id="3CVpwQRBwlIvc5k1zXPU2v">
+<th data-page-node-id="elhu7Mv13rQG3b1GGtZWd8"><!--pnid:JUW7XOTAo0ZvXrkmytawNa-->插件</th>
+<th data-page-node-id="pFrxIzACQDFZCMxu7dMUDq"><!--pnid:5s7SKVgQx5xz8YharYl0dy-->默认权重</th>
+<th data-page-node-id="7Wz0w8xjccCJWXXhVQyMJN"><!--pnid:4S8ZkgI4vvhlqGUdivdw9k-->作用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="7u8yz22QgBEtJ8UdDgzMK7">
+<tr data-page-node-id="UMHT65t7jNW5JsAyClqj9a">
+<td data-page-node-id="vvq3CjRnXOeIz2fD9xfjQJ"><code data-page-node-id="beZV0r5P1AlPrJLYnWunIt" data-pnid-children="VRZjPmlpI5rEXRupvxYQuS">NodeResourcesFit</code></td>
+<td data-page-node-id="Kq69lyw2HLVwoPKtiWzBF9"><!--pnid:A0u769M5bMUhXFWe8FpIbC-->1</td>
+<td data-page-node-id="awPs3QeHBVPhMHWo2bWyEM"><!--pnid:xs08eyBEvlkUou4mpGjT8H-->默认 <code data-page-node-id="3IFjthyF9hTn6UgjEs7dBS" data-pnid-children="fL5ngx8YYqKK7z2EVmVcjB">LeastAllocated</code><!--pnid:sDs9GKLGRjb6salkSq8vyH-->（越空闲越优）</td>
+</tr>
+<tr data-page-node-id="uq687pBCpAyxTjy1KoodEK">
+<td data-page-node-id="ukUVZMjE3ThReWVVAZmHMV"><code data-page-node-id="jlmM5xuNubzGOTfsTLG0vD" data-pnid-children="7J8vbLHz0rR6Wftp68UG3m">NodeResourcesBalancedAllocation</code></td>
+<td data-page-node-id="U37LbkXjEFu2gXYy8pzp61"><!--pnid:wZfR8otlD6EXdsr74ln8eH-->1</td>
+<td data-page-node-id="DrEpoggmFKwsll9fWfBJrd"><!--pnid:GA5Dl8HzbYtn6YhaTlB7Vk-->CPU/内存/GPU 使用比例是否均衡（避免单一资源打满）</td>
+</tr>
+<tr data-page-node-id="BJGh9xLqDzRmnBsnh1uQlq">
+<td data-page-node-id="hlFzMzZtwdzccUfF7TyKiF"><code data-page-node-id="hcpfqty7MyoOtQPPqs2LUz" data-pnid-children="fKAOk91gvRuwVe0mPtfT5M">ImageLocality</code></td>
+<td data-page-node-id="Qgs1vSIn0sDlals7ZUoZyV"><!--pnid:UAY0kOBzkN4DKgceMnYkt0-->1</td>
+<td data-page-node-id="SWFmwgN9Opz5xImFhqMAUy"><!--pnid:D5NQq8QFHIXcSOFtRTsOQg-->本地已有镜像加分（拉镜像快）</td>
+</tr>
+<tr data-page-node-id="4CGXsKWShCEPi2JthUZr7e">
+<td data-page-node-id="BebiK4QR3YSxrysEnPrUig"><code data-page-node-id="Bgeyu0zPmuK9ToectYUvyo" data-pnid-children="MbcVSJ8VcfmdTyk4ILXFvR">InterPodAffinity</code></td>
+<td data-page-node-id="aNez96c7e9CPnAXgy5ZiQg"><!--pnid:e15LhIfwKpmkWktIChVoij-->1</td>
+<td data-page-node-id="wzttI6o3N4rXnKKY4gEzy9"><!--pnid:XSfcYVIN9sxCzXMf9dObhQ-->满足 Pod 亲和/反亲和程度</td>
+</tr>
+<tr data-page-node-id="vj44O6vIiQikWzJ53yyhx3">
+<td data-page-node-id="I7vHcgHf9mwFK2SK0SgRU6"><code data-page-node-id="RHu9OHxKQUDM3QTlzvhDzU" data-pnid-children="NlpmqIhaKrWlcDrgcFsw4C">NodeAffinity</code></td>
+<td data-page-node-id="A9XdXKRsRwygnL3UvEWTUo"><!--pnid:94prb0H5h0ANzDsLiB5w2l-->1</td>
+<td data-page-node-id="xxKqhoajZ840drjJvTI4eD"><!--pnid:ljjlj3YHkHo10f6fYE5tMi-->节点亲和匹配度</td>
+</tr>
+<tr data-page-node-id="dt62bxL0X5AYvlA38hwn35">
+<td data-page-node-id="VFiQ5GVv22OmElnJZjI670"><code data-page-node-id="9EIa0MCu15W9qW3Nml6oEk" data-pnid-children="FssaGsa06V8A3o9FqmOoqV">PodTopologySpread</code></td>
+<td data-page-node-id="f7td7VbpTTl3yM0DnWqHYo"><!--pnid:bSAryPSmb04FRUmu2fGaIe-->2</td>
+<td data-page-node-id="yOoiJfyWXMVDAgE9jwNGEE"><!--pnid:0Zk3k0r3ql56cFuOayWr3x-->拓扑分布均匀性（默认给的权重较大）</td>
+</tr>
+<tr data-page-node-id="lDC0NVefxscYpVpW23D7ge">
+<td data-page-node-id="BnF4rTxInAJdSJ62uznjiV"><code data-page-node-id="jfzoKp7WoxQiba8AfZNiIp" data-pnid-children="PGOioYosV5nVkGbTS5Fdiw">TaintToleration</code></td>
+<td data-page-node-id="oYwmGAK4PHx1kMj7iwexNl"><!--pnid:UKLs6tJkWKNZLf94mU70JC-->3</td>
+<td data-page-node-id="fhIHrNWlYK18HgSR2TeWwE"><!--pnid:rbjMQN1ZwxdEmybylaHsC4-->节点上污点越少越好；能容忍的污点越多则分数略降</td>
+</tr>
+<tr data-page-node-id="SNtjotNTZuCCnTvRH4HmVs">
+<td data-page-node-id="L7qdA0FnvslBqM9f49F1Ai"><code data-page-node-id="qlELNwVQtezLkY6RPvRntN" data-pnid-children="sxYevnCWPDJK4xYziXv3OA">VolumeBinding</code></td>
+<td data-page-node-id="hV314LfGc8fd68oaj2uuql"><!--pnid:YbEsEs7LJqBIBEtoNcJGGB-->1</td>
+<td data-page-node-id="sg0yT08SVWKkVm22bWjfuC"><!--pnid:0WxIwO1m4AgdooJhhzIF0C-->卷等待节点亲和与否、存储拓扑</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="hfU3XRmvs1NntxKfpPSOT1"><strong data-page-node-id="atIABjq9KQKDaU8nRvWrHo"><!--pnid:7DSVCkBoPUnQ38WuhPEQ0b-->常考追问</strong><!--pnid:MlbVXb52L32OmajmJIKac3-->：怎么让调度"更紧"？→ <code data-page-node-id="BSst7dvCDFAp9ibRuW2x3O" data-pnid-children="F3QR9OYxaIZHmmfh94gqUF">NodeResourcesFit.scoringStrategy.type: MostAllocated</code><!--pnid:qy2EmAWkFAxtZbNZiZsowA--> + <code data-page-node-id="AkEQ6dKNJZud7tXULkwzYB" data-pnid-children="9lO2C6AUsBsPbri71P8QeL">NodeResourcesBalancedAllocation</code><!--pnid:KS5nFstpVb1oU2qEy7oUg8--> 加权（给大数据离线/弹性批量用）。但要注意：<strong data-page-node-id="Q5HJ54OFQ4oiHQLbGWVpp6"><!--pnid:DREr3qDTX9lXUFcFORaL2C-->在线延迟敏感业务用 MostAllocated 会造成热点叠加</strong><!--pnid:j3qTx4L9gJahGpkmGUV79e-->，通常在线用 <code data-page-node-id="382hVzxCxGW9vWxof56G45" data-pnid-children="pgjx7vkJyOl7aVJfDfIgyQ">LeastAllocated</code><!--pnid:nwGOFZsA4rLuxxQTwgWIq3-->、离线 Mixed 才上 MostAllocated。</p>
+<hr data-page-node-id="VMatUGP1Gq885ZiDbBPQW1">
+<h2 data-page-node-id="Vta2AOlaFNruMs7VCzdyUS" id="q9-snapshotnodeinfo-scheduler-cache"><!--pnid:mcwFCy3COLYeMrpas2DOZt-->Q9. Snapshot（NodeInfo 快照）与 scheduler cache 的一致性怎么保证？</h2>
+<p data-page-node-id="clJ2b6mo5zC2qVawDiq7g9"><strong data-page-node-id="Q0a5KbyB02BRdWV44bOUuK"><!--pnid:L3ZGw3Aa1mhaP3XRhqcLtb-->结构</strong><!--pnid:fDL9ghsSzYPu4zbCTVN3Hd-->：
+- <code data-page-node-id="496Tyoys4BYyfQ7AlScc1P" data-pnid-children="M7POZvW2y6WtM5la70AoBE">SchedulerCache</code><!--pnid:PMe5s2qcRIDP4M8Ptxiv7M-->（thread-safe，由 informer 更新）维护 <code data-page-node-id="2AqMNFnbXkbxVFxr6GBZvZ" data-pnid-children="PmE3szosVxfBJWgg8iJshn">Nodes map[string]*NodeInfo</code><!--pnid:pcPd5q7jCDzoB2aTbTLeuT-->，每个 <code data-page-node-id="IFW5y1qBEzP6c0cuYBls47" data-pnid-children="llCIvK4IszF7B6is0PqkHe">NodeInfo</code><!--pnid:zIscdzrLcFMRLI5rKCKN25--> 维护该节点上 Pods 的资源聚合；
+- 每次调度周期拿到的是<strong data-page-node-id="zANupOqlH3BATVDNm3wjHj"><!--pnid:NanpO4PAkHZBfZ3Mk1Vkaf-->快照</strong><!--pnid:QLcwOwBIceLkBHcdP4KTK0-->（快照期间不再变），保证同周期内 Filter/Score 看到一致的视图。</p>
+<p data-page-node-id="TFl9F6t6iJ6SbRD4mV5URh"><strong data-page-node-id="sHMFC6PXlaivpFztgaFd4H"><!--pnid:rYnylmjDmycW1TGZ6Rt1VU-->不一致来源与自愈</strong><!--pnid:iqkOdNBQB85Go9gJRbyUww-->：</p>
+<table data-page-node-id="9n8WKMvgWDIoXnWoddtFi9">
+<thead data-page-node-id="vnmIrR5QnjRWV5JXX8cuEV">
+<tr data-page-node-id="8QYii71tstbS1YhZPuydje">
+<th data-page-node-id="El60qxw9goEwuUH1MCblsZ"><!--pnid:6NZKkfu0bWsintFmTHR9nX-->场景</th>
+<th data-page-node-id="5p4GibtkPnsu6ofvo3u0tQ"><!--pnid:OpVLIBvl5hA8MllaqpTGJf-->处理</th>
+</tr>
+</thead>
+<tbody data-page-node-id="kJ6OxeB6JbHdQY5EsZGer4">
+<tr data-page-node-id="GOPBVWCPdXIrDw2xPd7Bop">
+<td data-page-node-id="OLuXDf10PdJeiggKGkmZfd"><!--pnid:iSHC1QIfvQ3Ne4BlHbk4fB-->Assume 之后还没 Bind 成功</td>
+<td data-page-node-id="5Uvzxp33xLIa3qpmKevUeg"><!--pnid:dbrPgbgvUWHpRw0T2x8vat-->pod 在 <code data-page-node-id="wYyDQLClQl2KDXKnh3SUOg" data-pnid-children="hlMQTHYfTzWznExGR2GfGR">assumedPods</code><!--pnid:KZdpI5AxplcdTuW7nKOsbV--> 里带 TTL；超时/绑定失败 → <code data-page-node-id="OMvtEJafZhOAPZhbasdbg8" data-pnid-children="LMUqBJquOZctMC7Ried338">ForgetPod</code><!--pnid:QzBSefJopQgDqt2c8YHmXH--> + 重新入队</td>
+</tr>
+<tr data-page-node-id="8GjIczZ0zuSCG64rGSPVRr">
+<td data-page-node-id="VDiIDgwSaS6ZsLmSP7K96K"><!--pnid:bozN4J2Jiw1iY6Hz90MHcB-->实际 Pod 已删除但 cache 未更新</td>
+<td data-page-node-id="rII3jWudPxM8GDPoOgMVNK"><!--pnid:Pnww0Z3EvVyLTuPFBuUCM3-->informer 的 Delete event 修正</td>
+</tr>
+<tr data-page-node-id="fzDZeVaG1Po77xj7oSi9gl">
+<td data-page-node-id="Xi3YNvdYtnLEf5XXRByq5y"><!--pnid:cj6cQPyTJ3YCOSzZvsgXPx-->Bind 失败</td>
+<td data-page-node-id="6Y4QG02erbrlC8msVKWGEe"><code data-page-node-id="2uBA3x7rw3muEmZ2H46eqe" data-pnid-children="NLyvkDc9j31yOW5zyNgaOW">Unreserve</code><!--pnid:82sOPIJVhi437BgxsWh8rQ--> 回滚 assume</td>
+</tr>
+<tr data-page-node-id="sLgGHW1NFh3MGgxO27b6A1">
+<td data-page-node-id="w05SQthxG6NgxS5IbZXla2"><!--pnid:rgy1rkFcUzMISlYI0Q6yQP-->apiserver watch 断连 relist</td>
+<td data-page-node-id="9VIFNKy0lZswFNzF9kHQ9v"><!--pnid:P6Z5ChgZwFcbR9X2C5Ot68-->重新 list 重建 cache</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="k6zNRSOdL884TyBhxaNDQy"><strong data-page-node-id="PPSHemfK75tAWVygFRFBQ5"><!--pnid:1NfBBoFMqcI8xwFXVIIRfs-->必答</strong><!--pnid:aqIaL4y45pN9O2yJ9j50d7-->：正因为是"乐观 + 最终一致"，才会出现 <strong data-page-node-id="j2wUJZjZxgn8RjHX6xCDib"><!--pnid:Mc59wGDsVq5Z3oloh1y2hK-->"调度器觉得有资源，Kubelet 起来时却发现不够"</strong><!--pnid:4UjNYG4TwozahBBKDZbQgP-->（尽管很少），以及必须依赖 <strong data-page-node-id="RjihpH4BvR85RZUno9a1LS"><!--pnid:O1dy2elzIoh1uDQtBA8p5W-->informer 的修正</strong><!--pnid:ZlbGvLry3L9n6LSuGe2L0S-->而不能靠分布式锁。</p>
+<hr data-page-node-id="ceR4YYCX01QgeOEtM7azxY">
+<h2 data-page-node-id="s14aHN0srZdxXvkkRmVu73" id="q10"><!--pnid:EoopKyziJWFkrQ4y21WDlQ-->Q10. 亲和性三兄弟 + 污点 + 拓扑分布怎么选？</h2>
+<table data-page-node-id="b7Fr2yDRgCNhQIvPpVg4Lx">
+<thead data-page-node-id="FlyQtej9huo2e85FhA6J9R">
+<tr data-page-node-id="GxE80jv7TkubYBjsBrdzfG">
+<th data-page-node-id="9N107VQLH1NjlrYlLtIPqc"><!--pnid:7aorwIRey816E5nUVWn1bS-->手段</th>
+<th data-page-node-id="7fXhMovjBhdXv6HIvSD7fe"><!--pnid:hV8zgHdgq4xYEav3gLMokD-->粒度</th>
+<th data-page-node-id="wDBgpwmHzMxwjWLrFTGMhE"><!--pnid:0PAIQPVu18w0amqDoNo1Yq-->是硬约束还是软约束</th>
+<th data-page-node-id="25FJ9KL2JNlh6HQeMPge62"><!--pnid:IsUfzhsDLDVMTIQCgNQdNF-->规模风险</th>
+<th data-page-node-id="IsD04ZkDXfAGS0mpBQJXZX"><!--pnid:EZDCehZ2HDpiV2CS7jl9mS-->典型用法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="zfC9hrROIW8HeBYEATM6yc">
+<tr data-page-node-id="KkzfwGXzOO3zT7SolVTpS4">
+<td data-page-node-id="nJHv06Ze0hrQHJIRWhOXJa"><code data-page-node-id="KcWekuOgWQonbYDKGdaBmc" data-pnid-children="2zXS5SVqxXRYitODEOOkTq">nodeSelector</code></td>
+<td data-page-node-id="s4ceNVRK9FDwiLPILK80ym"><!--pnid:TvxdfuznfgPVLzAr89OHrr-->节点标签</td>
+<td data-page-node-id="4zk4iQMig50OTmRX2oIee1"><!--pnid:UBjOEPemzkzvlZHf1UgEsD-->硬</td>
+<td data-page-node-id="WFBjaQUFSZTZ6sXyjko7vK"><!--pnid:xZRSMJmslH19e0YvMfsUN6-->无</td>
+<td data-page-node-id="VCsYqbWQbbUEGGiYU8FDeg"><!--pnid:QBkAUsluh7m9t59rCOsO5U-->最简单过滤</td>
+</tr>
+<tr data-page-node-id="cnYWhSKBATdzymfzJfwH1H">
+<td data-page-node-id="a2DzSiMov16bRj48U8JiGd"><code data-page-node-id="XN2GlQquywrOSjbTaFewVC" data-pnid-children="FegGv6vK1mr0O1YshzcYlM">nodeAffinity</code></td>
+<td data-page-node-id="v8AExYcgpmqQWeu5NgCnDN"><!--pnid:jOD9z6PmuzAtEtgVk91Axo-->节点标签</td>
+<td data-page-node-id="X9lqLYQpHXwvb3NhHFA3I2"><!--pnid:a1xvpgEejzObS9Xz1w4V15-->硬 (<code data-page-node-id="VOQotjhazxitY4TqUXGj6U" data-pnid-children="8WiViGEG4Dv0YdnCxav35V">requiredDuringScheduling</code><!--pnid:e6B4jsswc0GOn8h1Zjnwgq-->) / 软 (<code data-page-node-id="CE52MnOq09hbz12QCCpt7d" data-pnid-children="64RyjEWmKUvuuBmwSjE3Hc">preferred</code><!--pnid:7jpDfwBxhsXmIyKEV59DH3-->)</td>
+<td data-page-node-id="ValRIsWVmjD7GMr8N16ict"><!--pnid:ASiteCnwNn63Hif4HqR98s-->低</td>
+<td data-page-node-id="tec0LaIhEPPoXtqiOrJrnQ"><!--pnid:9SGkHsfmM5ECTmF2MYyTV7-->机型/zone/GPU 型号</td>
+</tr>
+<tr data-page-node-id="WodFFxMB9FX83MINimmkTV">
+<td data-page-node-id="CRllT24UQlIdI5JLCtJwug"><code data-page-node-id="G1H4B0ydYqK5uA183qx8eb" data-pnid-children="URZ1zxjh8QuXroujSFT3re">podAffinity</code></td>
+<td data-page-node-id="6aIlc7fNasjr4QJBZ6D6pO"><!--pnid:LOXymCURe46WsyNTqU0qXT-->Pod 间</td>
+<td data-page-node-id="bdevgmS5Q1sF529HqPUyGO"><!--pnid:kFx2LcDMsxQNVqNrVjZMLW-->硬/软</td>
+<td data-page-node-id="u52p8kqd0k2sF4DfJQUKqL"><strong data-page-node-id="BV6O2s5tuN4VaFgj3VhJGl"><!--pnid:YaYIQqDsPBymFMxJC5OXqX-->中高</strong><!--pnid:Q0hzQmyCiipIo7howSxlh4-->（要扫同 topology 的所有 Pod）</td>
+<td data-page-node-id="Sk5q4TixVFKbUIL5mBJx0B"><!--pnid:1XCVPQusjiQmfhltPUZHLE-->缓存靠近、数据本地性</td>
+</tr>
+<tr data-page-node-id="WHk3Y3DSXwTUM1XWNqagCy">
+<td data-page-node-id="EX04NW0VBtr5WtMu3apkHF"><code data-page-node-id="UdEjEkvYNSHwVkkiaZsEtP" data-pnid-children="LJFPoTVvvJHakjTMmoT8wU">podAntiAffinity</code></td>
+<td data-page-node-id="1VisHpl7raJOuimAMDUNAS"><!--pnid:MuiPOPR3DmISxfHxc4gaa0-->Pod 间</td>
+<td data-page-node-id="f87x3OVpUbeM9y6AZrlKrJ"><!--pnid:RlsUiPORfqHwRodZWLqSmp-->硬/软</td>
+<td data-page-node-id="0ix9J8FCHRfMRyYJThJNRV"><strong data-page-node-id="mG89YSza63NDxIlVvZAcbj"><!--pnid:1DSN1ve89IidnRCw4VdUac-->高</strong></td>
+<td data-page-node-id="pGtuixY8JKedfYdDG0Zdoh"><!--pnid:zATJLVkLMU9u8VoQPNmBsR-->单实例打散、避免同机故障域</td>
+</tr>
+<tr data-page-node-id="75VKeZFNV4v8OxgElOEr72">
+<td data-page-node-id="G3lAy0cOmfJeDIwF8b49Ir"><code data-page-node-id="swjOjMkIb8POUKHtYCNSDw" data-pnid-children="7IZqjYw8pDU2tFQcct9NzW">topologySpreadConstraints</code></td>
+<td data-page-node-id="sBtmz1cPkcVvtQ4YKNjYM4"><!--pnid:ZtaAeS0h7QQlQYmrETsuL5-->拓扑域</td>
+<td data-page-node-id="5YVwNqJn4HUKraKQmAUX7V"><!--pnid:tOEqpxIGanfjbRyiRTBCHs-->硬 (<code data-page-node-id="0A4Jp2oHwn6BpvOKcOCLQh" data-pnid-children="ExSfxIkDf52QIMJMAgbLts">DoNotSchedule</code><!--pnid:9RoT1cNBgqK4TH7Qun3isl-->) / 软 (<code data-page-node-id="08vyZu7Is2nmKfVRFzlbKf" data-pnid-children="0P1LwR2LXwwIvvvsK7tTtW">ScheduleAnyway</code><!--pnid:eSEqsSS2AtuuDXxjQedXpe-->)</td>
+<td data-page-node-id="C6R30PZc4Ua2DyNlm4swUu"><strong data-page-node-id="kJsLQ8NLxs6TwwwVb9LanR"><!--pnid:MQRY1mZ7BzXpAflpAHfI0a-->中高</strong><!--pnid:fCed4rpZGpFtKiXXf1oLta-->（大规模算 scrutiny 收益差）</td>
+<td data-page-node-id="hB5ecaiGDHZvIBSOdWGpCQ"><!--pnid:qE9BwrUV0ftoCYGajs6xyk-->跨 zone/机架均匀分布</td>
+</tr>
+<tr data-page-node-id="j3hw1LrrmhBmHqHROT313P">
+<td data-page-node-id="zV4uz4pU9ld4xsVZyRh9aN"><code data-page-node-id="odhwO1rXnFeXDkl5WGIM9x" data-pnid-children="uiMPpLocJwTK7HhP7iK8GB">taints &amp; tolerations</code></td>
+<td data-page-node-id="uizgHmvmalDbZ0378mQmCL"><!--pnid:iRGCLdxksV8VXwCpWfY7Q5-->节点</td>
+<td data-page-node-id="gJqvu9VOOrQEwdV7ltS19o"><!--pnid:HSFKUqNxeJXJlnvBlKNJzW-->排斥/容忍 + NoSchedule/NoExecute</td>
+<td data-page-node-id="mQGYVFSpESED3xWOFd5sXR"><!--pnid:ynYUxylX2LKkT8sJKizfrT-->低</td>
+<td data-page-node-id="fTb5c22LVjnWzYpR4PjEAS"><!--pnid:LQhVBKXjyQLnlORo0xJqIj-->专用节点池、隔离 GPU/ARM</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="YL0j8Himen1cuiPzvHJPYL"><strong data-page-node-id="nJRc0xeIA5nW1rTFQvQglm"><!--pnid:lld7qdh7nMoPTge1QKMlTQ-->强烈建议的实践</strong><!--pnid:al9TMpFID3qczNvXyP3iVG-->：优先用 <code data-page-node-id="rv5CKB2TTNVGH2LKqMxkM5" data-pnid-children="8diPoDoHpdr9ZYRxPlKn9k">topologySpreadConstraints</code><!--pnid:fucYJ7D8IJBBbDJAN3DOjj--> 而不是 <code data-page-node-id="MUtfsGJdVQo9NSMtKJEV2y" data-pnid-children="tlu5rX8xNYx5sYO9YxbGKo">podAntiAffinity</code><!--pnid:PA2DQB3qkLvobz9OJp74Mf--> 做"打散"。原因：
+- <code data-page-node-id="F6O6XLosBcu1j5ARHpimE8" data-pnid-children="3KtleFi3kYw8qQbVbG0xzw">podAntiAffinity</code><!--pnid:Col9LcYv3wmUXusQhDHIow--> 只区分"有没有满足条件的 Pod"，是<strong data-page-node-id="AdpUpqm3gnRx6VnLfPU6GW"><!--pnid:ibgP375lbBd4z8R4qfrgT2-->布尔</strong><!--pnid:DaBKLxc9Cv4fXeTdWJOtfV-->判定，无法表达 skew；
+- TopologySpread 可以表达"每个 zone 之间副本数差不超过 1"，语义精确且能软着落（<code data-page-node-id="u0jVjYDVBAZGNQ4zGfKcSs" data-pnid-children="jdlwI952jwnnQsPd6jqcfl">ScheduleAnyway</code><!--pnid:vif0mEt7APAeYxnDk4Jfd7--> 保证不会因为打散而调度不出去）。</p>
+<p data-page-node-id="02bAEF2e0MGSMno2MT9bIs"><strong data-page-node-id="jQY3aiOkNkUO3Hf0Pgnk3l"><!--pnid:XJ0Lgol0yzsdDyzcujPiOI-->可直接套用（推荐组合拳）</strong><!--pnid:lajJAXMcOJSwY8Nc0irhIa-->：</p>
+<pre data-page-node-id="ZhWd5XL85icvJLB3zuEScX"><code data-page-node-id="qaoCWseiEmdZt4cjZbPBlj" data-pnid-children="FI93u2H9vKOa1CKnQk6sgu" class="language-yaml">spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values: [&quot;cn-north-1a&quot;, &quot;cn-north-1b&quot;, &quot;cn-north-1c&quot;]
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway     # 宁可挤一点也不能调度不出去
+      minDomains: 3                          # 保证至少覆盖 3 个 zone
+      labelSelector:
+        matchLabels:
+          app: web
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule       # 单机最多 1 副本
+      labelSelector:
+        matchLabels:
+          app: web
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: online
+      effect: NoSchedule
+</code></pre>
+<hr data-page-node-id="WfIwryvVhH1vWtcSXc2mL6">
+<h2 data-page-node-id="xGyocUPXLCJYh20v0ifdHD" id="q11-volumebinding-waitforfirstconsumer"><!--pnid:nCAt2g4IKKMp6O47PIeMXN-->Q11. VolumeBinding 插件与 <code data-page-node-id="E0c73WPVsO1rgtiuJQAowS" data-pnid-children="t6gY024pcKF4n5OvkyiKDk">WaitForFirstConsumer</code><!--pnid:rUBXkaiAa6BkziWECbzqIo--> 为什么要存在？</h2>
+<p data-page-node-id="0OOJo5DleFP1UmynhXj7Wu"><strong data-page-node-id="cSatMFObcNqK6awZ30nsV2"><!--pnid:cGzGgpLH37yIXEzx2D2VTB-->背景</strong><!--pnid:mbraswdhMnV7JEje9Epsui-->：PVC 详情在下述 StorageClass 下会选择即刻分配 PV：
+- <code data-page-node-id="5ofqozValW6FtBmwnFFWB5" data-pnid-children="y34HsN5H1S47H1k6EcMuGO">volumeBindingMode: Immediate</code><!--pnid:GthaViWPw8PMheNJuDqW4u--> → PVC 一创建就 bind + 分配 PV，<strong data-page-node-id="7J0XQRCwkhwM0EfHJXZqS1"><!--pnid:i1ypKdxwxBv2rDHPeZRdJd-->PV 的拓扑（zone）可能与 Pod 最终落点不一致</strong><!--pnid:VAEP9BBJvumKuh4gapAIKx--> → Pod Pending；
+- <code data-page-node-id="hBBVIxSDMFpOiQQsuZfCFu" data-pnid-children="RZ80F4HYgcXn3eosNYPZg5">volumeBindingMode: WaitForFirstConsumer</code><!--pnid:DvJNifgHEauqneYcWjefHC--> → 延迟到 Pod 首次调度时才 bind，<strong data-page-node-id="Dj28zxis3Te5D9tOcH2C0L"><!--pnid:x6k5hlmKv9yKFanzp0MVug-->让 PV 的 chosen zone 与调度结果一致</strong><!--pnid:7SBzvhk7AbmU9MBFegq9yw-->。</p>
+<p data-page-node-id="r2QbBlSZPZEOCZN1UsIGc1"><strong data-page-node-id="7vEkx6q99jfdVtAKgoi3Zy"><!--pnid:DGrSQRZ7fNzof4CjCltnys-->调度器侧做了两件事</strong><!--pnid:B1vwFJS8knOfzAyyZ1UyKp-->：
+1. <strong data-page-node-id="bU5GWUrUDalXQx6RI5Izag"><!--pnid:OhHIs3KeMSE00FNIrUv1w7-->Filter</strong><!--pnid:dEGqpajT17FRfMX7HVUVFB-->：检查该节点能否满足 PV 的 <code data-page-node-id="F63fOVMTTyRWmMvck0jfBC" data-pnid-children="Al6iFHU0fYBzA4rmsfFA1Q">nodeAffinity</code><!--pnid:T2iBsRDx7tAtYLwlvb3IAb-->（<code data-page-node-id="arY70XuU7LIee7R8RhccEg" data-pnid-children="XKJ9W0I14eJla7wKIYtMld">accessibleTopology</code><!--pnid:Fphxecbmt6u0HOzx40JQhU-->、CSI 写入的拓扑标签），过滤掉不可能节点；
+2. <strong data-page-node-id="RZSOfWcZWlOKn4VmA5Kukt"><!--pnid:0YqIX4TZB3H5O1Zb39K9wf-->Reserve/PreBind</strong><!--pnid:XGFIuXY9fL7rmElyjt0DjN-->：真正触发 bind（<code data-page-node-id="QhRbAcaEOkFgympdAmDqxp" data-pnid-children="aHZbrYxX5waSFaj1LrGoKe">BindCSIStorage</code><!--pnid:NAgbJSosreElC7a2wrt3T9--> 逻辑），并把结果写回 API Server。</p>
+<p data-page-node-id="2nhck31sMrd1JyjdalhYyh"><strong data-page-node-id="WfF5zgPqHNJE4dKrd7vvyi"><!--pnid:0iwOQuKUsBq849LZeO1CcM-->必答的坑</strong><!--pnid:KZczhMkhHKq9I6hPRIDhLG-->：
+- WaitForFirstConsumer 让<strong data-page-node-id="XlMbjsTIW1JwCaDhqcADyc"><!--pnid:kROSpzJ1s53C3czn3YpwYD-->调度需要考虑存储拓扑</strong><!--pnid:5HuxadzRGUEFjC2mLOwkHU--> ⇒ 节点更多/器件braska 拓扑复杂时，这一层会成为瓶颈之一（见大规模 L10）；
+- 云盘一般只允许挂载到同 zone ⇒ 这是最常见的 "0/N nodes are available: N node(s) had volume node affinity conflict"。</p>
+<hr data-page-node-id="LMCh8xJTjMsF6Z2uPfIMPG">
+<h2 data-page-node-id="XlLYgVKNdROqGAKmxC9x8W" id="q12-requests-limits"><!--pnid:ssAozkbxZc1YBLiVJNeueC-->Q12. 为什么 requests 比 limits 更影响调度？</h2>
+<ul data-page-node-id="1g1SAAyDV6QhbxF7xinQrQ">
+<li data-page-node-id="6LBp05wkXXiR2ivHNWU6Ki"><!--pnid:BcI9SuTmsfnHLYB2TNq5XG-->调度只看 <strong data-page-node-id="fm2H6ocMenN9TH4LEkS7hO"><code data-page-node-id="0kV2KpOzwIAkrbaQhnB826" data-pnid-children="dgPBb0lwwD0rKJKuoJDoNX">.spec.containers[].resources.requests</code></strong><!--pnid:nFma0bUGjyGM57heaWEy9E-->（以及 initContainers 的 max/update-strap gaps 取最大）；<strong data-page-node-id="olBWwU4gjzooP3pV888LNt"><!--pnid:gFmwLZqo2tBMGiHHT6uuFM-->limits 完全不参与调度</strong><!--pnid:9WPhmHdyH4ldYB9NukvvmZ-->；</li>
+<li data-page-node-id="ihnZ2Ve3cEheerGQfh409E"><!--pnid:5FfPW9bSP9TNQaoeI7oEyv-->CPU request → CFS shares（争抢时的权重）；CPU limit → CFS quota（硬上限，会造成 throttling）；</li>
+<li data-page-node-id="FTgWtcaLHhD6QAB12LUyny"><!--pnid:1BdIgLmQwcj8XdYcLOSTM6-->Memory request → 调度占位 + QoS 分级；memory limit → OOMKill 阈值（超过即被杀）。</li>
+</ul>
+<p data-page-node-id="aXEG5Cm8paXfBDiRozLTJt"><strong data-page-node-id="hP3yvXNp0FoOiwLMa287Mc"><!--pnid:40ntuNfa2VPyiSZCkf93a6-->QoS 与驱逐优先级</strong><!--pnid:kgy5ONQ9IF4oNjRqecinCM-->：Guaranteed（requests==limits，且 CPU/内存都设）&gt; Burstable &gt; BestEffort。<strong data-page-node-id="LGkUsVfr8aPaoNTXB7g2G6"><!--pnid:pp4nrCVI3RMsKIGZVQy268-->升级包: BestEffort Pod 最先被节点压力驱逐</strong><!--pnid:aU3zD4ZH2N8kYmFAK2BWJ4-->。</p>
+<p data-page-node-id="ocG2hBCyAdQxOZZA0pa2ft"><strong data-page-node-id="5DxnAM1bRjgfKE05et57bC"><!--pnid:HeWu8EtSAhDjx4MAXVqVMt-->必答陷阱</strong><!--pnid:7gUowFYBG8th9ZU41Ytvzp-->：
+- <code data-page-node-id="nKQQjztiEKdoLub2N03401" data-pnid-children="LN60b4eT7IejuauI2krf0x">requests</code><!--pnid:lyvs6QyH6WvEXCn1a94XcR--> 不设 → Burstable/BestEffort，调度器认为<strong data-page-node-id="aZ7awngb2ynO24D9Vqk7SN"><!--pnid:Gz3fiNETmnE1rSJDMmKzC7-->不用资源</strong><!--pnid:tf02HS0JSEYqXlT7rImChS-->，会造成节点过量售卖 + 后续 OOM 集中崩；
+- CPU limit 设太低 → throttling 导致 P99 毛刺；
+- 建议：CPU 的 request 按真实常驻设、limit 可不设（避免 throttling），内存的 request==limit（保稳定）。这是"经验建议"，需压测校准。</p>
+<hr data-page-node-id="HZYsxbvOudKwJMkJVAcNpP">
+<h2 data-page-node-id="NoYzQthlSenRudeTDL0dQ5" id="q13-priorityclass-qos-quota"><!--pnid:xC8b1Sid5YoprTk5Pmciih-->Q13. PriorityClass / QoS / Quota 分别解决什么问题？</h2>
+<table data-page-node-id="VVMCXQUWPHEI8LbF4uDZgJ">
+<thead data-page-node-id="MKkml1CqoVgyeKASEcU9f3">
+<tr data-page-node-id="odtgAYuJjGtnFXJQP8gSlt">
+<th data-page-node-id="ObQGJNsLnqWlUcKG298TeK"><!--pnid:ihE8rXn9YrWaXtmpgUqsbH-->机制</th>
+<th data-page-node-id="dOPpgAdyebIcXmQZmNThUf"><!--pnid:dPLPhFaRiFLEDDw80AqaDe-->解决</th>
+<th data-page-node-id="GpKZzB1dNVSHFhpeUBKjjV"><!--pnid:x7sWCMlqGTpnTPnTEGGPpG-->作用点</th>
+<th data-page-node-id="wRFd12qPE9bldFtrIZt8sr"><!--pnid:2judrZaNecpNafaS3X8YCb-->是否影响调度</th>
+</tr>
+</thead>
+<tbody data-page-node-id="xkaixZUAm1xRivfpErZ2vY">
+<tr data-page-node-id="k30dXt5ziCk3JNICijAmC7">
+<td data-page-node-id="WWTvxM3CVv9AFzP8gIGVxc"><!--pnid:rdQ7hC8lUlZwr0lheAPOwa-->PriorityClass</td>
+<td data-page-node-id="5B33diitREmmXgYhnBZHMF"><!--pnid:qRzjBBKh7IhWM21zH3Mr87-->谁先调度 / 谁能抢谁</td>
+<td data-page-node-id="jhpgPi9ZG5yDCsfRnRs6RS"><!--pnid:i0QnnoHeq7Z2IW0Hb9OJAX-->队列排序 + 抢占</td>
+<td data-page-node-id="Hdob5dvGs2JUYDY2RrI44J"><strong data-page-node-id="4XIDGHg7XwTJln0K1N5SXU"><!--pnid:QtdyNkz4j8IxcM8b3rDdWn-->是</strong><!--pnid:LMDjx5RVrAq9lPAhTVweCM-->（强影响）</td>
+</tr>
+<tr data-page-node-id="k1FhOX7Kn4OOnGqtOTlRPj">
+<td data-page-node-id="Gd49XLNOqjoAyMuMODpO5q"><!--pnid:dt2t5VpRZTSQ88bCqUAYxR-->QoS</td>
+<td data-page-node-id="R5E4e8AR3Ty6Yjl22TX0vV"><!--pnid:c1DFXiusrEn9iVT9gdANn3-->节点压力时谁先死</td>
+<td data-page-node-id="naeUygxs6LQdeLRVZ3ZbKL"><!--pnid:y3J290QTiNNbQmPzuaVI6v-->kubelet</td>
+<td data-page-node-id="JIM83b3GUbFCMBcCDabA5L"><!--pnid:eblTQTYCWfDpqgaNu7uTKA-->否（但影响稳定性）</td>
+</tr>
+<tr data-page-node-id="m91osXPn5USLE9BZUcs0y7">
+<td data-page-node-id="oCT37nO0bHCx2zWLmanm2Y"><!--pnid:ddKv0ToSLoaSZhFiTWx5Xo-->ResourceQuota</td>
+<td data-page-node-id="Jl7n0lWJjT219GwiaQrRCJ"><!--pnid:hsApXu9Ms9ohiptkfjxN7D-->命名空间能用多少总量</td>
+<td data-page-node-id="R2CBdEgiMMUfqAOQhu2KQV"><!--pnid:8gPHzVGGDPdLCc669PlO3q-->admission</td>
+<td data-page-node-id="tjeirbmRI7acQwsA0mWr1l"><!--pnid:nLAUTaNuwk1E4fkmdeuFjS-->否（admission 拒绝，pod 不会进队列）</td>
+</tr>
+<tr data-page-node-id="q6ZcVzvXM7uVGAnyiDfLbQ">
+<td data-page-node-id="9iuyQsTSy4KoqG7IKDOpTk"><!--pnid:jcteUK2tEKddIujHbIjLoM-->LimitRange</td>
+<td data-page-node-id="7keCjCGsBqFjKAcjuKjkFp"><!--pnid:5OjKOnodXdbaTB0yUMlbfE-->命名空间默认值/上下界</td>
+<td data-page-node-id="7dIzaMZ6D219FO9LG6oI1A"><!--pnid:vNrfHLHd0LV4AzJvWTDjOF-->admission</td>
+<td data-page-node-id="WfbJAGyNcDqlkejuHTGyGf"><!--pnid:zhp4tz1LoGKuUUZGK65jih-->否</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="EMoIxZJTM8Lm5VcWqZfgaQ">
+<h2 data-page-node-id="wOGHHWkUUjal1SCZ53ChyI" id="q14-profile"><!--pnid:B5L8Q2yihp0pJaesPwX0lY-->Q14. 多个调度器共存是怎么工作的？多 profile 与多调度器进程的区别？</h2>
+<p data-page-node-id="rxDa8BVNTtyU9N6Onr2Rwe"><strong data-page-node-id="CU7Ko8FVNRtRAJgBYmWptH"><!--pnid:86RWCwtVIbdXrBBTzRlh37-->两种模式</strong><!--pnid:4GI6ZpeDb0KBsumJq5pNgR-->：</p>
+<pre data-page-node-id="v7mf0ctKMH0hhaGdWy9AVs"><code data-page-node-id="UJR0tw8Xbbs2QARAOhzYjw" data-pnid-children="y78cnyRYb5WbwqTaHApeK3" class="language-yaml"># 模式 A：一个 kube-scheduler 进程跑多个 profile（推荐）
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+profiles:
+  - schedulerName: default-scheduler      # 在线业务：均衡 + 严格
+    plugins:
+      score:
+        enabled:
+          - name: NodeResourcesFit
+            weight: 1
+  - schedulerName: batch-scheduler        # 离线批处理：装箱 + 快
+    plugins:
+      score:
+        enabled:
+          - name: NodeResourcesFit
+            weight: 5
+    pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+</code></pre>
+<pre data-page-node-id="yhRyRcaEJARsIkXRJ5QfOa"><code data-page-node-id="RDNqijNcqsKirBWnIfg4un" data-pnid-children="mtuPStzeMtwQsCWTfWXNtN" class="language-yaml"># Pod 侧选择（注意：schedulerName 不可变）
+spec:
+  schedulerName: batch-scheduler
+</code></pre>
+<table data-page-node-id="mreUTmkdPiFD8QpKl1to1v">
+<thead data-page-node-id="Dbsgsv9Uiltc63LgfzkPs5">
+<tr data-page-node-id="ABfA0CQqcIorn9iUqa7A56">
+<th data-page-node-id="NLdOm0VopTNRiqs8um0VpE"><!--pnid:7zbTJTe1BbcGiLlWzTseCC-->对比</th>
+<th data-page-node-id="gF6DwsGfJlgtjvnbxMtc5L"><!--pnid:eNFGAq9aWfvuUeBs2NWxem-->多 profile（同进程）</th>
+<th data-page-node-id="qBQkremkeVktUOaUSbA5JQ"><!--pnid:4Ph2e43JogxSm2KBqSyXYg-->多调度器进程 / 独立部署</th>
+</tr>
+</thead>
+<tbody data-page-node-id="V4U42SZLi0CemKoQ7OeL4d">
+<tr data-page-node-id="YuFWJDtYhSq0DT1J1Kg9OO">
+<td data-page-node-id="UdrIJfB4efXZ5K9GNrW7lo"><!--pnid:NWMLIzytk3bW3J2xgWkK5W-->资源</td>
+<td data-page-node-id="pFrolkk6NvLFrzQaoJHfWT"><!--pnid:OXrDGjRGqBNpu30VV4DzXp-->共享同一进程，省内存</td>
+<td data-page-node-id="u13nP2vclVPBES03qFAUVj"><!--pnid:jVcMrzaPQyfocjVw0Yh7Qj-->各自独立，隔离更好</td>
+</tr>
+<tr data-page-node-id="QtpA7eCeWgDIhRWDgkbx4E">
+<td data-page-node-id="MOsnM0fyYkMAir8Sw0NHek"><!--pnid:RiYZ9aULrvzsuQrD5QwOxl-->队列</td>
+<td data-page-node-id="EIoS8j9oZmJzQSbEOYbWff"><strong data-page-node-id="BQ4Cp9KaymLdCieMsSRO2K"><!--pnid:W1tBDUjQkyQLYAjv37UEoL-->各自独立 ActiveQ</strong></td>
+<td data-page-node-id="5qWGYCJlqft4V5N4tT0pYl"><!--pnid:Bq96NLtAaQBZ8d2GoxBlfr-->各自独立</td>
+</tr>
+<tr data-page-node-id="Kk0eAJPrs4tO78sQhPW2qV">
+<td data-page-node-id="G8XvHucRcyTLAI1Vu3zMFM"><!--pnid:xMW3HWnDFaAsP0KIqp9I38-->故障域</td>
+<td data-page-node-id="hM79lm6aq3kgps82mBxkpl"><!--pnid:GNkVVjeE9JrvkW933gBVyD-->一个进程挂全挂</td>
+<td data-page-node-id="ET8RiLLNeHjUS8zMhvib7g"><!--pnid:I7BZG17q0Iiby54FOrknz6-->隔离好（一个挂了不影响另一个）</td>
+</tr>
+<tr data-page-node-id="8ZlVwgqacxg66v1evpYltl">
+<td data-page-node-id="1QpDC7AxMOqdoPehwZ4fe6"><!--pnid:s3XUEswHt4oP63kaHFKjD0-->适用</td>
+<td data-page-node-id="EooVr4KYJTe8HuVpEP2MCe"><!--pnid:W8Tf1UxA3l2pp8nTSKZbFw-->绝大多数场景</td>
+<td data-page-node-id="ksY6S6cBgtP1CxpAz5VDlA"><!--pnid:zlcbrx8WNoclFRjfB3eHMh-->极高隔离/独立演进诉求</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="uC4wXHnqWWdgZCHAenFDHT"><strong data-page-node-id="M1VTHMCbNXGJOYz71lplQW"><!--pnid:rrlb1KqgEA649j3Q9OPHP0-->必答</strong><!--pnid:QnGf7fV7zbRJd5g3nRJxFw-->：<strong data-page-node-id="sVMUwommHt3iV17Cx4dkdS"><code data-page-node-id="QzRHo3JplhW7WWP9TyKd6c" data-pnid-children="n1HK8v7ruFgj6m97vGAHJc">spec.schedulerName</code><!--pnid:7T3Uh6JPSfMnKW1ZXSHkxr--> 是不可变字段</strong><!--pnid:J0GjCGIosQvRLevh6T77MV-->，Pod 一旦创建就绑定了该名字；若没有对应调度器运行 → Pod 永远 Pending 且没人管（连 event 都没有，最难受的一类事故）。</p>
+<hr data-page-node-id="jlu5DsB0MRczfs20JYDfNm">
+<h2 data-page-node-id="ypfpj5kv03KKbI0p3onVKI" id="q15-scheduler-extender"><!--pnid:0P6RFttTYbrmesoAwGGXcR-->Q15. Scheduler Extender 为什么被废弃物这么多？</h2>
+<table data-page-node-id="U4IbzWLjXrpP93WrsbXgKq">
+<thead data-page-node-id="2D6HjnJ7J1CmSpWDpnCPlu">
+<tr data-page-node-id="ma0qMprSpISywOVw8Hknps">
+<th data-page-node-id="Bv7OZPSQjU8uv3iIP0yy4D"><!--pnid:sPYtRHInL5kY8eOMsAnNjZ-->维度</th>
+<th data-page-node-id="rY9fz8LmpjNqdKBJGCdvoM"><!--pnid:PvYxSdEPo0BhZHl7oKZeJV-->Extender（HTTP 外挂）</th>
+<th data-page-node-id="i6HEdI689bLUZoG3XlIfsc"><!--pnid:MDo0G4tdKykeYoDSUTFlHV-->Framework 插件（编译/多 profile）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="f5zcZXxSD75lYUmb2ZtJIr">
+<tr data-page-node-id="a3oxbzQvqs9tgq5cjDHTSs">
+<td data-page-node-id="6yV87sxKhGh3xZfqPegZjn"><!--pnid:5BaZfi9BJWpt8kJwuRtYaW-->性能</td>
+<td data-page-node-id="4We4dhP8XP1kwFaUBM2nPA"><strong data-page-node-id="Y2M5NBbu8F9jB0eUZyxXYu"><!--pnid:l0ryvuFAHYfjalsAli8v3h-->每次调度都要 HTTP 交互，串行阻塞</strong></td>
+<td data-page-node-id="l4tMpHdt6j3WbDawYbpGqq"><!--pnid:1omZRt5qZSykDmpzRfxDK3-->进程内，无网络开销</td>
+</tr>
+<tr data-page-node-id="OywQlmAsEuxFfv97qa0Fmk">
+<td data-page-node-id="CY5klWNq2ugZHNUqpzyebl"><!--pnid:ILakCw5w0CoucXzaak7yDb-->可靠性</td>
+<td data-page-node-id="SfZczaDZvp3GkBqBaZSyNr"><!--pnid:OT9pA40cVQeK2aoRuz3agM-->extender 挂了 ⇒ 调度卡住/拒绝</td>
+<td data-page-node-id="3lzulNIbwvNmYnZZNmCdwB"><!--pnid:quTtqsokVQdQh7Hq5q2lgz-->同进程，故障域小</td>
+</tr>
+<tr data-page-node-id="8GuPv8p8bURWaCLHrZ30GS">
+<td data-page-node-id="VAfhgNdtwPvIn5uk3S0wdI"><!--pnid:gY7kfsLSbytYDXIw8WDsYq-->能力</td>
+<td data-page-node-id="NovWqvD9ZH6iKfIM511F98"><!--pnid:ZO2wi5V6ZN5g7eKpGBsvNC-->只能做 Filter/Prioritize + 少量钩子</td>
+<td data-page-node-id="ZeGR0Ih0GlkyTBXeyuFzZV"><!--pnid:FlAe0X3D9TgLtPYKzOurBq-->12+ 扩展点全支持</td>
+</tr>
+<tr data-page-node-id="IWt63cyDH3VsCTpszRzhCA">
+<td data-page-node-id="yMs9zaGqDswMwOWUSVWs9E"><!--pnid:pK6pvtaXQ7SPu0nYg568j0-->缓存</td>
+<td data-page-node-id="jeEyZZIah14ov524Fk1fPw"><!--pnid:5FWlifOMlgrYMUlzWhebNo-->自己维护，易与 scheduler cache 不一致</td>
+<td data-page-node-id="PnfuGD5NlzpTcVoc82OEPz"><!--pnid:KwAzcCPfOYohDxp44kcUmM-->共享 CycleState/框架状态</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="IjavCqPtNNIqrRPeQ4nDiC"><strong data-page-node-id="c3MK9lHHqGxPqO2G4sYrH3"><!--pnid:44O5Qm65TTwKE15qUnml1q-->面试口径</strong><!--pnid:DCMcpxUrV4sXjSljMUEuHL-->：Extender 已经不推荐作为主路径（社区倾向用框架插件或多 profile + 自定义插件），但在"已有系统难改动/跨语言"时仍可用，需要注意加<strong data-page-node-id="NEtUSeO0ajLSGGHbdxiSt0"><!--pnid:WSeDdF0BlB1H7FrNTx2Z5s-->超时 + 降级 + 幂等</strong><!--pnid:OiqBSVsTIXpIBfYLlmyOIB-->。</p>
+<hr data-page-node-id="tNTgCChDZQDVRDchvRDBt4">
+<h2 data-page-node-id="UuJxQLdxgMd53h3RwJDuE6" id="q16-kube-scheduler"><!--pnid:3Csp9WkhFSwBVwtZatMppU-->Q16. kube-scheduler 如何做到高可用？双主会不会重复调度？</h2>
+<ul data-page-node-id="Ed4Z9q0ftjPDghPvVjG1UP">
+<li data-page-node-id="VWgv06QeehYh3AgdCbkFJF"><!--pnid:QwlgdeV4hGHpjuD7np7eyM-->基于 <strong data-page-node-id="VWvtGFvHa5RsnmfdWj3lYo"><code data-page-node-id="TvcpcqWxdY1uqD2HyKKnkY" data-pnid-children="hlIi69l7eG2UjYpOReMueL">coordination.k8s.io/v1 Lease</code></strong><!--pnid:ktasGjQ3v5dg5JS39r987p--> 做 leader election（与 controller-manager 同一套机制），只有 leader 进程执行 <code data-page-node-id="gViHOt8cJdTHpZLj0oNr5m" data-pnid-children="EGXCCHgB3NjlQYaK9tYVo3">scheduleOne</code><!--pnid:9hIcaFYNRpn70wwj4r5adr-->；</li>
+<li data-page-node-id="xQzhjuJkh51pwyp8SScnzi"><!--pnid:3wJOYy8sTkhjE5yJaLxwCm-->默认 Lease/Renew/Retry（componentbaseconfig 常见默认 15s/10s/2s，<strong data-page-node-id="CKASFnBYiHlf7KXjazzTP9"><!--pnid:JRjoKGhKQ2uJKaXPRNpjeC-->以运行版本为准</strong><!--pnid:snPegac1U3DDAB6W2RWArC-->对应 <code data-page-node-id="aOMx3iWwsI7tMe64yJsTYb" data-pnid-children="Rq5ba6LazbYI7ZxfUq6cqC">leaderElection</code><!--pnid:BO40XFQiqk2a8XA058S4Ou--> 字段）；</li>
+<li data-page-node-id="hOTNNRqnJlswEvbgtf2mmK"><!--pnid:OBvMiVD9hcY6of93rrcawA-->非 leader 进程不干事，只是等待抢锁。</li>
+</ul>
+<pre data-page-node-id="nvTuSxvgPKgiHXgoJmqvmk"><code data-page-node-id="62Nthaf8HqpOKtupADl886" data-pnid-children="2t8McwN9fbqotXqDP9EkAc" class="language-yaml">apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+leaderElection:
+  leaderElect: true
+  leaseDuration: 15s
+  renewDeadline: 10s
+  retryPeriod: 2s
+  resourceLock: leases
+  resourceName: kube-scheduler
+  resourceNamespace: kube-system
+</code></pre>
+<p data-page-node-id="W6XkzAEhfWItzT7jjQR51T"><strong data-page-node-id="YSw2oJ5oMhm7hjv8Hdc03z"><!--pnid:DhsarYroeQDfDEW03ctlM2-->为什么必须单点 leader</strong><!--pnid:u1rtfMDgBzaSaaLvBrhrG9-->：调度本质是对共享资源（全网 Node 资源视图）做决策，多主同时决策会产生<strong data-page-node-id="RxE5LiYKdFd1hDOLaFfSUQ"><!--pnid:hGYlPZfB4YtUmmYod9lM7b-->并发超卖</strong><!--pnid:lB9q9JsKxCQoarCSEBpL67-->（两个 Pod 同时算账互相之间看不到对方 assume）。</p>
+<p data-page-node-id="AxQBEy8J3yXp2tuA3gNELh"><strong data-page-node-id="pPECVK5559c0gcNmCsA4MY"><!--pnid:CTNJ0ZtIMY1JI5rQXPG0PN-->必答的异常</strong><!--pnid:fYKdJSYZmNY5D5Gq5WImW7-->：
+- Lease 抖动频繁 ⇒ 调度暂停窗口变长 ⇒ <code data-page-node-id="RHTwye9LVKMRYIJUIxV0a1" data-pnid-children="tqGMf8zG4QwKG409Ko8nMB">scheduler_pending_pods</code><!--pnid:Z1hQcaV3tEKoDjwomlVDU7--> 突增 + metric 断更；
+- 版本滚动升级时尤其要注意 election 参数一致性。</p>
+<hr data-page-node-id="7DZHtSbmJ3fPwhQAkksIPO">
+<h2 data-page-node-id="yXCWAddlnqM5xmRaerApPS" id="q17-descheduler"><!--pnid:mLl9f1olUokU2tes1TNklV-->Q17. Descheduler 的价值与常用策略？和调度器冲突吗？</h2>
+<p data-page-node-id="zSZCxBtFIFbk517IGtwb9H"><!--pnid:iEyllJpegTFXnS2aHvVKNc-->调度器是"<strong data-page-node-id="wGNuytlRI6DdtAjyab6dhR"><!--pnid:0SLut9lCmnEIxOS4gpC6CD-->一次性决策</strong><!--pnid:EC4zSZa2bJShfzk6cvBQmQ-->"，不会回头。随着时间推移：节点标签变了、新节点加入、资源碎片多了 ⇒ 集群越来越不平衡，需要 Descheduler/重调度。</p>
+<table data-page-node-id="xACv5pG4eJi38nbFja5N8s">
+<thead data-page-node-id="ww2c4McZjaB8SncGvs7JaV">
+<tr data-page-node-id="FzEjk0FTCcvfxvjIWONF0h">
+<th data-page-node-id="UewJSJsa7Vv7S5rDV87fMl"><!--pnid:H8eMvyzuM1aYzY5kMbv8iO-->策略</th>
+<th data-page-node-id="HH9hmbShTf9MrwdBPOaDx9"><!--pnid:BLWqcpTKyE7GwjYdMAkrHu-->作用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="zKDAwsTn03cTWGHH9kS8yx">
+<tr data-page-node-id="L9VFwWlqD8fVsIxanCZnEP">
+<td data-page-node-id="FLVRkEzkq8CtN3VAAUfy3T"><code data-page-node-id="s9kHPumLJxZtM7RgAIPq1l" data-pnid-children="VGPIx4xPQx5BHWC5aeHAyb">RemovePodsViolatingNodeAffinity</code></td>
+<td data-page-node-id="fAkGRbOKp0ItYeIDQg0QPJ"><!--pnid:Oq9wKwlftLGVIdjAOoscQu-->节点标签变了，Pod 不再满足 nodeAffinity</td>
+</tr>
+<tr data-page-node-id="n5dKmaeQA3soyq14C6oMPQ">
+<td data-page-node-id="oL7iVM5wlWBlP4Nz8Yh263"><code data-page-node-id="P3EBSLmQCInJI6xoqPkbSQ" data-pnid-children="UMqxyyEnbpmdIPFjHp2tRL">RemovePodsViolatingInterPodAntiAffinity</code></td>
+<td data-page-node-id="gzZYglU31bKl6PAklV5DdN"><!--pnid:JQFtXMGyHSRx3feNwKydhT-->违反 Pod 反亲和</td>
+</tr>
+<tr data-page-node-id="tUOEtRiIDF8u0R70KQZ5yI">
+<td data-page-node-id="RP4lVW3P1yUenbOLXSoeEF"><code data-page-node-id="63MkYyEkNrlVDVdXRWETPA" data-pnid-children="yBBg1C5ZOeqUskDL6xfFDF">RemovePodsViolatingTopologySpreadConstraint</code></td>
+<td data-page-node-id="xOQMkG5HTOoJ8At7pn9COD"><!--pnid:gUR9yZwXkvJyEey4mafNbC-->违反拓扑分布（很重要，新增节点后常用）</td>
+</tr>
+<tr data-page-node-id="8gE5yG65jsCPdCaJNTjBRA">
+<td data-page-node-id="9mxVFlSdiTMhfHuhINIB49"><code data-page-node-id="Elox02i0iJNF97lF91V2M5" data-pnid-children="6e0tA9h0dl7Aj49a6cI289">RemoveDuplicates</code></td>
+<td data-page-node-id="vuIRAQQkrAN2UmQbhsWDxp"><!--pnid:x03IfLtPOoBSsZHRJ3Gy42-->同 controller 下过多副本在同节点</td>
+</tr>
+<tr data-page-node-id="3TBco4rL2qPVevKj4YGe9u">
+<td data-page-node-id="HzPwxoCYatp3STDSUp8kzo"><code data-page-node-id="FZwWkqNWUK4lmfvzBNwCjN" data-pnid-children="lJThD0ebot6iqKYH44pfCg">LowNodeUtilization</code></td>
+<td data-page-node-id="dM4yUSytLY7Is92RBr81iz"><!--pnid:rVYeHQTI55G3Obv85a7HTn-->节点利用率过低 ⇒ 迁出，便于缩容省钱</td>
+</tr>
+<tr data-page-node-id="iKwYAKmmGuQom5UG6rhugP">
+<td data-page-node-id="VsDLEMw1IEt44fEONN0dcs"><code data-page-node-id="ZvbBYmu0RJmxwWYoauoDOF" data-pnid-children="PHUQMrzuQS3xe0mzV66tb3">HighNodeUtilization</code></td>
+<td data-page-node-id="uig2xATTLOzHVCVMBXMtgc"><!--pnid:K7Wky7Qy7zPaT5XMg237jo-->提高装箱密度（与 Evict 结合）</td>
+</tr>
+<tr data-page-node-id="0Fzz3wewhs55mCtHuS7UFD">
+<td data-page-node-id="ZB6jAlw85LeBCbwG5jN89J"><code data-page-node-id="dwkXebZwTVn5aQ5y7WPJAo" data-pnid-children="DBvysOFuCPgY4gOCpiFxrA">RemovePodsHavingTooManyRestarts</code></td>
+<td data-page-node-id="SFo8JiGOJKMo7juS9l3t1I"><!--pnid:4kYmtYt1cV3xYasHlUqev3-->老 CrashLoop Pod</td>
+</tr>
+<tr data-page-node-id="lox8I8soYRcAAtLOowH7ag">
+<td data-page-node-id="DUKMR33NnTKMZbp0dOCoIr"><code data-page-node-id="rLNDpCLxUJ1yewm2E12Xxp" data-pnid-children="6d0S15aMSgBYs0idUa2MPi">RemoveFailedPods</code><!--pnid:s4bbxD63DISg24Y76P3cvL-->(aka RemovePodsViolatingPss/ExpiringPods)</td>
+<td data-page-node-id="Z4rrmsQt8b8sn0OMIIYq8g"><!--pnid:fYN3IOaQBC0UlTNsEjLg2k-->清理失败 Pod 等</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="lpjZyHYLGSbrq1O4TZWniX"><strong data-page-node-id="aWhohhDIh6DkhpB48et1OI"><!--pnid:H7BiAj1UyN8JE3nPPW7pxG-->必答风险（这是高分点）</strong><!--pnid:w8XieiOUpy2GThKUQsl0yN-->：
+- Descheduler 通过 <strong data-page-node-id="q9e2lnYzlN9SAmphw1z8v2"><!--pnid:bZLl28kFUzJYWnzBksiHFZ-->Evict API</strong><!--pnid:Is6wBA7Gw7SnqZWbpBjVxH--> 驱逐，<strong data-page-node-id="9uOWtufzFoaAkzvhxOSzvt"><!--pnid:SS6QBwoH9Dtc82JmK8lazv-->严格遵守 PDB</strong><!--pnid:6z3HI7xssV2k8u8g7bb2ow-->，否则会引发可用性事故；
+- 驱逐后由上层 controller 重建 ⇒ 会重新进入调度 ⇒ 要防止"<strong data-page-node-id="s34aDhgBHIA4tEXZK9YSeu"><!--pnid:X5tfsHvwj3WDQsCtiKZSTR-->驱逐-重建-再驱逐</strong><!--pnid:ZQ9FF3VlOvcFodp8suyhcD-->"的无限循环（对<strong data-page-node-id="G4YboElJwZkq2yyloUmrcS"><!--pnid:f6bJ31El56fSz2gkqcFqyf-->无上层控制器管理的裸 Pod</strong><!--pnid:CsfjetcV3TphfZnvWLVNtM--> 要特别小心，驱逐等于直接消失）；
+- 必须配置 <code data-page-node-id="8zUPXUqhiw8Htvw63pJTu6" data-pnid-children="0HVA0eRdWfpIkwFjn1vWwA">--evict-local-storage-pods=false</code><!--pnid:2FXTMElm2EXNz4pFlb5elQ-->、优先级门槛（<code data-page-node-id="DjvIxGkpNLQRk2ojmqlKUa" data-pnid-children="UmLW4boQUaFog8JZj6iiHK">priorityThreshold</code><!--pnid:6jQPsxuui26dswecV3hzGq-->）避免驱逐系统组件。</p>
+<hr data-page-node-id="oF05I6YOR0t8hoJVVDllzC">
+<h2 data-page-node-id="gN0KiVvxgZwDOIBanOMcUS" id="q18-gang-scheduling-coscheduling-permit"><!--pnid:rp0qY60ahMy7sWjyuSEWiD-->Q18. Gang Scheduling / Coscheduling 怎么做？为什么必须用 Permit 扩展点？</h2>
+<p data-page-node-id="OQ8LApmKq9IDZxTThWf4BP"><strong data-page-node-id="czZCDLtXcHFAe1zAUEpK9i"><!--pnid:cw8D6FdT63CElCNG796JA9-->背景</strong><!--pnid:Yn6Zf99iLFM98SbZeSDglc-->：AI 训练/大数据作业要求"要么全部 Pod 起来，要么一个都不要"；否则会<strong data-page-node-id="krNjHJlQNMMk3BALenTvOY"><!--pnid:Iw65DGZY3CqCi6cF87iPR2-->死锁占资源</strong><!--pnid:ErmxmXoa6hBAi3g7Bna8D2-->（部分 Pod 起来了等不到同伴，占着 GPU 空转）。</p>
+<p data-page-node-id="uB55AEKaNI7804MYTwB72E"><strong data-page-node-id="XEumnYCSQMsR6s7sQwO3n0"><!--pnid:TfqsSsj9xEQ01fTisFYlY7-->实现</strong><!--pnid:C7kdGyYQQ16SJUFlYevmLU-->：
+- <code data-page-node-id="1WV2c4FnuCD6rlEVwiB8cv" data-pnid-children="eatb1wPHa7n22jrdAeDiWG">Permit</code><!--pnid:1NQ0dKBxeybUzCH0gWKeTo--> 插件：当一组 Pod（通过 PodGroup CR 或 label 关联）达到满足条件的最小数量时才批准绑定；否则返回 <code data-page-node-id="6TaxLJfslUPZY8RM6CVItD" data-pnid-children="0RQBqImc05QG5jLCzghb0A">Wait</code><!--pnid:hz9k5FlPjfomuayaHt4m9O--> 让 Pod 挂起，并设超时回滚；
+- <code data-page-node-id="2NmjXHPtvNVPcR8Xcz9Ozs" data-pnid-children="5xi7rDt09ps2JElKwcEbuG">PostFilter</code><!--pnid:Xi3aIwCMnQp40BZxMRDIC3-->：超时/资源无法凑齐时，整组放弃（或抢占）；
+- <code data-page-node-id="oXY0PNmC6YgrK3oqgrTW0D" data-pnid-children="NchW3mMRs0T8Iah2fX3kIS">QueueSort</code><!--pnid:a5yU6W57ObIFws00XUJ02i-->：<strong data-page-node-id="FRmmGF8NEEdJ6VYsZYbspH"><!--pnid:VckHmFc1qeNYUFbVCmv0Xk-->必须</strong><!--pnid:56vfipiIZ73amhCxxV6kck-->按 PodGroup 创建时间排序，避免"后来者先占资源"导致先来者饿死。</p>
+<p data-page-node-id="WGQ2QXzi6sICWvEz4mtzRp"><strong data-page-node-id="J7JeSyrYcHiTVGTiixV8iR"><!--pnid:ajMlAKq8B77tuJb1Nwv2V1-->必答的坑</strong><!--pnid:KjBvBzJAESyq1KNUEWieHt-->：
+- <code data-page-node-id="BeYBRQ9ysNJiFtYoMMDdEa" data-pnid-children="OkNyvfnMzflHMdd94l1RbN">Permit</code><!--pnid:nQ9fDSNeFL3wPYCd4r5Fgk--> 处于<strong data-page-node-id="gy9Sn9p6YgBeF9TnAAQRYT"><!--pnid:0EwoGTZRosBL2StezM3DDu-->绑定周期</strong><!--pnid:UeB2lSzoVgOxqzpFJVdyMy-->，等待的 Pod 已经通过 Filter/Score 并 <code data-page-node-id="izLoAEDStckdHLD0IuHAw4" data-pnid-children="er7OCJjcQmfy5XQtza4mhj">Assume</code><!--pnid:rMzKd2aglj7JaW9j5vE2EI--> 了资源 ⇒ <strong data-page-node-id="5LRzzgBueAwCtSPV96KiaT"><!--pnid:XJlHkSClHp2TdcjIFdNdIL-->等待期间资源是被占住的</strong><!--pnid:DvkzjPcwGA6epvLuPZhSkY-->。这就是"占位等待"，需要配套超时和配额，否则变资源泄漏；
+- 大规模下 coscheduling 的 wait 会显著抬升 <code data-page-node-id="LN9F5irPILNDfog4MuSG4N" data-pnid-children="ZEiYAsfbOw9jhLdNzecx8a">scheduler_pending_pods</code><!--pnid:XJn1NoeuERR3lUDh4fUQcr--> 与绑定延迟。</p>
+<hr data-page-node-id="yap8dzQhSA1XuxAduDYhI8">
+<h2 data-page-node-id="2KMzyJI4YjnyPtKnLxPPyG" id="q19-kubernetes"><!--pnid:cv1duiXWl1KCt7FIEzHKU6-->Q19. Kubernetes 原生支持多调度扩展点，那么"自定义调度器"有几种做法？</h2>
+<table data-page-node-id="MF7myyO2sEUXsmEmcjwp54">
+<thead data-page-node-id="Wu7h6KzolMipGco6xYicH2">
+<tr data-page-node-id="ZM330rZAtSY9lZrTfOldUj">
+<th data-page-node-id="BbKwMPLhb2IoSyxdEgfdsy"><!--pnid:JH4CPcymRM2kiU1BTqqymw-->方案</th>
+<th data-page-node-id="umPyqZeRkkDCjfhzVcftkS"><!--pnid:AHxbaBRnU7ms7dKJHLGFhA-->复杂度</th>
+<th data-page-node-id="fxCDzr3thjn4fzS0nWTLId"><!--pnid:vW1inSxBUqE4v1oGgsJjfq-->性能</th>
+<th data-page-node-id="8wHXGOaQRwynyd98jz92Gh"><!--pnid:eywzHlNNhZsHE48sgh5gRy-->维护成本</th>
+<th data-page-node-id="awJQgTopyoBzfvmgB6vZ5E"><!--pnid:BS5H8OPyk3rQmauoRQralw-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="39A7b9FV57riyiqQY59qYK">
+<tr data-page-node-id="BqH4CG5Q98siwYYXER4In9">
+<td data-page-node-id="D5qsFwRy9npvEG0wuqsTYo"><!--pnid:JafvWYlstpWEWv6jOBnskK-->调 Redis 的参数/权重 + 多 profile</td>
+<td data-page-node-id="gV4vKJIEb069Ek2kOWO80t"><!--pnid:oEdIVpuvAkhkkJ2EaySXtC-->低</td>
+<td data-page-node-id="mczRrLhIPZE9iiNejQxGNK"><!--pnid:H5XP5S5YLWLgeaI2Xq508x-->好</td>
+<td data-page-node-id="NYnjl9MBfRRGlz1FnSxmne"><!--pnid:ra1qynjfdnyzVTR3iZ6MsQ-->低</td>
+<td data-page-node-id="OMS0PTM8kXSgg2cM84JCCq"><strong data-page-node-id="YZnOnjM9qHhs17pGB7av3k"><!--pnid:KHb6S3bnKcWvIMjRKfEBPv-->首选</strong></td>
+</tr>
+<tr data-page-node-id="ytelLJAxCPqz6rvCM3Zsyu">
+<td data-page-node-id="t7gRVsF4qTgo1G7nIBE5Yx"><!--pnid:rVXyCdziOVSjpJXFuUKk9u-->编译自定义 Framework 插件（in-tree 或 out-of-tree）</td>
+<td data-page-node-id="kPG428Sw44ZIZ6WBIeNLRn"><!--pnid:rdX7LX7h9X7QGcVih8eWu1-->中/高</td>
+<td data-page-node-id="XQvX7z1xTM8x8SSX6D63af"><!--pnid:edDqO65DOnwQLJDHxLqseh-->最好</td>
+<td data-page-node-id="xGodu042rJy9G9CYrtyMNC"><!--pnid:ANSYGo8vN0Qy6FvYIMIg9P-->中</td>
+<td data-page-node-id="0N1meqcJIKnNcEJqRuK1wI"><!--pnid:hCl59RYfQKoZhcAwnT3GIo-->通用需求</td>
+</tr>
+<tr data-page-node-id="bMDMs9QNQC8gYXwVi3De5N">
+<td data-page-node-id="UoRinWJUS4eVp7KllgiFC0"><!--pnid:LiXWd7E6d9gGtBX3sMu6vY-->Scheduler Extender（HTTP）</td>
+<td data-page-node-id="AeinRCfHHx4uMPpz6HKsd7"><!--pnid:JGEnIlkNPzjsoGiyG2Y2uh-->低</td>
+<td data-page-node-id="dYK8wLWrHvnBCmILA7mU9m"><!--pnid:SVmZREmaXxG3zI7iOdERGb-->差</td>
+<td data-page-node-id="vqPkWdVaqUbbHdNlv7HIFg"><!--pnid:sZaD14686UJuy8XcX7WyYk-->中</td>
+<td data-page-node-id="TPqnZSNE9Qit5qfWDu0XUu"><!--pnid:51Y6b2e3q0tUky4EodaCeK-->遗留/快速验证</td>
+</tr>
+<tr data-page-node-id="1DIPsolHZLutIwl7W5rZF3">
+<td data-page-node-id="eji5oMRbhQutSpDrDsUw0G"><!--pnid:OlrUzLw3xVAPWWskZ6R6E5-->MutatingWebhook 改 nodeName（不推荐变相排 Secheduler）</td>
+<td data-page-node-id="hzVyTCpn2t3lqNq4MPsAgo"><!--pnid:n55jKlcEQppLMcfpwNrb4L-->中</td>
+<td data-page-node-id="OTSwOc7LWSmMQnwAFzH5jP"><!--pnid:Z8aofG8nCXHzSE6uc6T2QB-->好</td>
+<td data-page-node-id="gA46C4mKoXtNTawVZAwR9W"><!--pnid:HnJHmsx3BP1sydidz5Eh08-->高（灾难）</td>
+<td data-page-node-id="WVoKXEQvXfRxpDlWpaIYV6"><!--pnid:gIT47LXev0L2K42hi6CdDO-->不建议</td>
+</tr>
+<tr data-page-node-id="BIdImVahQJ6lnEpfZrp7He">
+<td data-page-node-id="rUOKWap1GZYeB1wEgKypCM"><!--pnid:2Z49ZzhGZTJO3qVQyYFwlt-->完全自研独立调度器</td>
+<td data-page-node-id="RUvIKejQbhz5Nib9tKHBdA"><!--pnid:KDmuj3GNkbvdIuwsC4HFxv-->高</td>
+<td data-page-node-id="yeu1FZ36nfABti18TyUvBg"><!--pnid:3BWg2rEzgnQuO5Ky6asqTA-->取决于实现</td>
+<td data-page-node-id="PKCMaPEd2p465IX6TyYjeG"><!--pnid:2TzZFzn93DCPFslzQKQsu8-->高</td>
+<td data-page-node-id="k37Z7o37aB470IsvGWNqia"><!--pnid:szJlaTnGqCbtFEJaTyMxXB-->特殊领域（如 HPC）</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="d4sJrdJpFfQeCHV8dDtHc6">
+<h2 data-page-node-id="Sh9qH2GQ3cv7zCu9jhOqVF" id="q20-api-server"><!--pnid:eexBd1M3fghvxcXd50wRu1-->Q20. 调度器如何降低对 API Server 的压力？</h2>
+<ul data-page-node-id="ral5JEQY0fSDoHdR6hcJnQ">
+<li data-page-node-id="VrRssQVz8XTIqJVpUGUo1u"><strong data-page-node-id="V1JZRMDRwP8BXQJ85lMmIO"><!--pnid:UZKgJrlJDBZ57n1v6jt108-->Pod Informer 带 field selector</strong><!--pnid:ttlt6JLB8wcrgHr7ZyhoNY-->：只 watch 未调度 Pod（<code data-page-node-id="qhYPuj4VQYvhf6gvN2oXUe" data-pnid-children="4dIUE2hsPrl1AYU16X72jg">spec.nodeName</code><!--pnid:CjMSUtp6VQ7JSBekXZhkU6--> 为空），不加候选 Pod 的全量流；</li>
+<li data-page-node-id="TS3wl58HHy3K9JmbAxzAjv"><strong data-page-node-id="G2CH7t9DFQyCq3ySiUzJML"><!--pnid:Bbh23Po9Oj42NbcKNz9Pdw-->Assume 乐观绑定</strong><!--pnid:OEjz5Eh7jxnW9ZSs9tIPrT-->：减少等待 API Server 往返；</li>
+<li data-page-node-id="mXeEHsLszwcPX6WSXY0ulg"><strong data-page-node-id="NoJ6cSpfUhm9sXE4NoNtIH"><!--pnid:ftAAhqCBkssGhbc3HUm8yl-->Bind 异步</strong><!--pnid:YNhjL314CLB9JrJoupRYKB-->：由独立 goroutine 执行绑定，不阻塞下一个 Pod 的调度周期；</li>
+<li data-page-node-id="wPikiogQzf5QtQUe0EbaEa"><strong data-page-node-id="1zc8Q43wb1IPLupJ1bHkgp"><!--pnid:O9d3KXwgNDPyTAbFEACVtq-->client 侧限流</strong><!--pnid:HmzzL4Oi1ccE106JMN1rWe-->：
+  <code data-page-node-id="ISTMZ7qxpZpGIAulYrTxl6" data-pnid-children="WBlxwUuEu4Ha98Piiwg4aZ">yaml
+  clientConnection:
+    qps: 100      # 建议初值（源码常见默认 50/100 量级，请 --write-config-to 核对）
+    burst: 150</code></li>
+<li data-page-node-id="EoJCjOuUYvnH7D8jv1FwXK"><strong data-page-node-id="HD6WS11W0SGc6ZgrDIx6Sx"><!--pnid:rqQQhDF9i29iMcs9gEioig-->事件侧</strong><!--pnid:jt3cvgVlEcP3A04JkupSCZ-->：大量 Pending 时会产生海量 <code data-page-node-id="Cc10OX2R778QBwnCOeZfgp" data-pnid-children="ylZgqOjZkpbInl4cwaRUNB">FailedScheduling</code><!--pnid:JWfHHZqN8uDTLnZUAiiLAZ--> Event ⇒ 需限流/聚合，必要时调 <code data-page-node-id="DwMdhqy9OGBnkFngihIaUZ" data-pnid-children="60Z7NWjAl4dWv4ant8387G">-v</code><!--pnid:4REvTlbKE7tHqWHZ6iDSpC--> 级别。</li>
+</ul>
+<hr data-page-node-id="xmVa6BTvzvyHJmXbCVBjP0">
+<h2 data-page-node-id="EsKLNZ85nDIx2Y0kw7CNqk" id="q21-device-plugin-extended-resource-numa"><!--pnid:xP86hGvJcv9iOBfzPkIP90-->Q21. Device Plugin / Extended Resource / NUMA 三者关系？</h2>
+<table data-page-node-id="4VJJQv9le8Ea5F9Az23SaQ">
+<thead data-page-node-id="6IKFuTKPBdaN46bGHjVrrN">
+<tr data-page-node-id="admfghKDLcXBGAJN60N7xC">
+<th data-page-node-id="igOQpD4mxhces6dDupT5sn"><!--pnid:OA6qrGy6nagJkZhXA0AL9G-->层</th>
+<th data-page-node-id="CFpFLJIlT1ytaVl900jh9o"><!--pnid:63zVyZCZTY5z8TliMYPJ1Z-->谁负责</th>
+<th data-page-node-id="3HN0wlupBWSzuewLA0byj4"><!--pnid:eAXlssOBCdFZwd7uAeivWP-->关键字段</th>
+</tr>
+</thead>
+<tbody data-page-node-id="BvoojHYFQj78npezlWMsIf">
+<tr data-page-node-id="N6ZXMMRiO2m33rRzyTg22q">
+<td data-page-node-id="Ycc7ej5BEimMicOrqcrRh9"><strong data-page-node-id="IVwfRu3f13kCr6zuL6keUF"><!--pnid:95hhr3WcZF8qTDRZE5HJwh-->上报资源量</strong></td>
+<td data-page-node-id="TRDjPFGp1jVUn9BO8qeZGI"><!--pnid:52cXcgQm6L5HuVJHRqpKoO-->kubelet device plugin (<code data-page-node-id="kbaKBEJDCFiWydtE9IZ4Vc" data-pnid-children="37AjUujdb0DYmoIYAEEPl8">ListAndWatch</code><!--pnid:P5v1P7qBkssmVs9p310bu8-->)</td>
+<td data-page-node-id="kqUiycPU9csy33EgX7GDMA"><!--pnid:PlktdpT9DHFwtnodB7rIUM-->node.status.capacity/allocatable <code data-page-node-id="QEepZ7gHu4XBBqxbFnK70s" data-pnid-children="VStRepN3RqKQW82qH1HQ6w">nvidia.com/gpu: 8</code></td>
+</tr>
+<tr data-page-node-id="dZ6cNCAFiEODDg9hmlpGk9">
+<td data-page-node-id="L9KqqO4QKEHWBEcKFuhiUX"><strong data-page-node-id="g4oPaP95bO53Tars4zppnl"><!--pnid:tXypXKrjJa0SuybcHpMcmP-->调度</strong></td>
+<td data-page-node-id="wUXGfNTxSeyfkTWGFv85HH"><!--pnid:LQgdRlhz2gDaF0YV79EpTy-->scheduler <code data-page-node-id="be0d4adbrJj1JrAq5cUnJn" data-pnid-children="KCZYgJlBL7rgOEPNWNzMTQ">NodeResourcesFit</code><!--pnid:RU2CIEcQu3XjJksQh2307Z-->（只看数量）</td>
+<td data-page-node-id="JhCzAnXqQD0KW64zvo0o6w"><code data-page-node-id="LMyrRlOJg1wMHqw9A52mQo" data-pnid-children="UlSxgi6ufmtkbdgSpMGgjF">resources.limits["nvidia.com/gpu"]: 1</code></td>
+</tr>
+<tr data-page-node-id="e5TZePFmLyIThGD1RQwtjR">
+<td data-page-node-id="T5vE5q9nDWruXD3mFPlChw"><strong data-page-node-id="KWTuou03vhkULK7nDhY7iE"><!--pnid:6jvL4It5MWMQDjwMaOfqzF-->分配具体设备</strong></td>
+<td data-page-node-id="FndbyBadjCR2hDuNgXD0v4"><!--pnid:oyR2cSFmrj1servIJEYozx-->device plugin <code data-page-node-id="lILH9h8Zbrc99KN6YYBY8I" data-pnid-children="xwjKlvCHtMlpPZwHK3ISPG">Allocate()</code><!--pnid:NwFp9uA2lCysw2DUjV3p0a--> 在 kubelet 侧</td>
+<td data-page-node-id="uGWgpaQ3rMGCCHFiL2krZe"><!--pnid:xbo5ySzAvLZZ2Fwi2eS8WL-->返回 envs/挂载/annotations</td>
+</tr>
+<tr data-page-node-id="RlzOHTpn5TJX4x2rJ1MAgn">
+<td data-page-node-id="zYuNJkBHheOlbLhGUdnO3b"><strong data-page-node-id="olv75tmADCQWgBwP267wjh"><!--pnid:g1AstQN9I5KsOPZ3SwR6BZ-->亲和局部性</strong></td>
+<td data-page-node-id="Ni07BBAtgU7SxCF6dQg6MC"><!--pnid:wuPVb4xfJqaAQCkRSrstuu-->kubelet <strong data-page-node-id="OEoRMFvd0Y5NUG9tPfFsTK"><!--pnid:t24FkJKxZFMcr85YqgC6sw-->TopologyManager</strong><!--pnid:KWHngfzbohBTJZQMoecoSy--> + <code data-page-node-id="T73b2GqP0khMkhjDw2sYeg" data-pnid-children="HmSXJsvdOwwi51iXeNTi7s">CPUManager</code><!--pnid:0qMzfyTn1VOqshQoSY64sj-->（single-numa-node 策略）</td>
+<td data-page-node-id="JtvkBvp0iNtTzTt8NCf5TP"><code data-page-node-id="yqb999cqSR7rClvdYiYhyK" data-pnid-children="PqddZQ1aEjJPEqbNLBgLe2">--topology-manager-policy</code></td>
+</tr>
+<tr data-page-node-id="IchXH0GrnXsSEQ0kMK3mxq">
+<td data-page-node-id="G5yJIV86WHBVPu3Yjvro7f"><strong data-page-node-id="y9FXzq9GPcLckXu7tSx0HT"><!--pnid:BRzaifUxiWKCjapWIUDapG-->GPU 型号/拓扑标签暴露</strong></td>
+<td data-page-node-id="mxDH2bj30WvXHPV1Hb5s49"><!--pnid:Z5LSuFHcnhXqyKJvBBrKCW-->GPU Operator / NFD / Device plugin 自身或 DRA</td>
+<td data-page-node-id="NFVG3QWGt0CDvXt2QanozO"><!--pnid:pJvkoKTOk5SczHesCvkrnf-->标签如 <code data-page-node-id="esc1q2YqigKYPCgWBNzLdq" data-pnid-children="JOnflVcRd5xmRyvkUxGxo6">nvidia.com/gpu.product</code></td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="Q6cqYo5EqsT2yT4Xpv6Y6U"><strong data-page-node-id="WqX8Rl29CTk830TAbZEFue"><!--pnid:LOmE2MCMVd1PH9k4CUr7ib-->必答认知</strong><!--pnid:ucaCMl4ZVEOJtq2J73ARVV-->：<strong data-page-node-id="TuxJMpC5pVGPJlE5iRL3sE"><!--pnid:axlPA9fao9A2tzQUDWNvmq-->原生调度器做 GPU 只认"数量"，不认"拓扑/型号细节"。</strong><!--pnid:3f40o3UbYaLWFTKdQSaKwo-->想做 GPU 型号/连通感拓扑/显存共享，需要：
+- 用 label/taint 做粗粒度隔离（NFD）；
+- 或上 <strong data-page-node-id="X2Ef1oqAit6SDnxUqxDCQ2"><!--pnid:APODKDO6sQvtR2BzqX28IH-->DRA（Dynamic Resource Allocation）</strong><!--pnid:CArO7jryuJc40S2MKrkZpX-->；
+- 或用离屏/第三方调度器（Koordinator、Volcano、HAMi 等）。</p>
+<hr data-page-node-id="uYRHMhQPisEsyq01mrp2tH">
+<h2 data-page-node-id="8Fo15IT143Gony7negsM6f" id="q22-dradynamic-resource-allocation-device-plugin"><!--pnid:nKXUGBkXcQvH70RbGK5Sft-->Q22. DRA（Dynamic Resource Allocation）解决了 Device Plugin 什么痛点？</h2>
+<table data-page-node-id="itl5YfUIR2qFLVZ6vZQy10">
+<thead data-page-node-id="nuXethDeT4C08aYcq4cKQn">
+<tr data-page-node-id="YKgKbdCXQHHFTD1TMXDE38">
+<th data-page-node-id="QJdqMt0fwEZal716NYbPXs"><!--pnid:kKoiQ0ZNTpHXKp4H40sPJt-->痛点（Device Plugin）</th>
+<th data-page-node-id="Qo2K6gRHwsV8dAOkoDtCzA"><!--pnid:mIT0rHpNNnQndvAu9KZAgB-->DRA 的解决方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="okI3CKZX2J6tIiRaSY1C5v">
+<tr data-page-node-id="ldTQIZvZgOhnUE86LiUjlK">
+<td data-page-node-id="7eNDvODcdho9KYaa7lhWIB"><!--pnid:IqgngKLaGgkrD5NkqfLZqZ-->资源模型只有"整数计数"，无法表达"显存 40G / 特定型号 / 特定拓扑"</td>
+<td data-page-node-id="ris1OSd4FutWWUaGA0oVDX"><!--pnid:hUJszrAoYbHoqFa7o0VTh7-->ResourceClaim + DeviceClass + ResourceSlice，<strong data-page-node-id="CrwU07uWHdQ0znppjkLu7y"><!--pnid:42fD5SaIywKbq9KMoqf9l7-->结构化参数</strong></td>
+</tr>
+<tr data-page-node-id="QQRlO7vmUmGR9t2VLuAKUW">
+<td data-page-node-id="9IT2KKcFRW6LKwp2ohH3N6"><!--pnid:OWxLjVyvWip0OHED6lpgyL-->只有 kubelet 参与，调度时无法提前参与设备选择</td>
+<td data-page-node-id="mgBARFkY3nPu1EjKlAYLv9"><!--pnid:E9pCBqAV9vA37R7WXI1WYx-->调度器介入 ResourceClaim 分配（structured parameters 下），避免"调度完才发现不匹配"</td>
+</tr>
+<tr data-page-node-id="BEtebfLq4Q3ICtiurlJ7oi">
+<td data-page-node-id="ypNwbXC7HShVgqIcVzguht"><!--pnid:9YViyU8Sq3vz3FwDCtJ4xN-->无法共享同一设备给多 Pod，也无法网络挂载设备</td>
+<td data-page-node-id="bBDyQyl8aKR4cRaerhcNX1"><!--pnid:JVYnq8IjfNM69gSUoHOxbt-->支持 shareable / 网络附加设备声明</td>
+</tr>
+<tr data-page-node-id="lvMQpkQfjmuxNUabWbSCxT">
+<td data-page-node-id="y1qW4nIOp3N1afFpe0CDQX"><!--pnid:QUSTH9WbX6cqo0DsWIiixX-->资源发现与属性难以表达</td>
+<td data-page-node-id="n0gjbUDLnwZuvptZIHQbby"><code data-page-node-id="tWhZ3frhUvEYL2gLKkQX7i" data-pnid-children="pdz13Kwa6AGYgbdlSKSGYW">ResourceSlice</code><!--pnid:XspbQlNvqwQlRgDVfMUVSh--> 由 DRA driver 发布，带属性选择器</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="wg927KLIRvPQ4NtdFrNxnx">
+<p data-page-node-id="NsZfwUOsrvABnEnrhU4jfD"><strong data-page-node-id="ocHpMP4MYmKq8Jf8TpqumD"><!--pnid:rmzB8KRgpOTNUzuUOfrkKy-->注意</strong><!--pnid:gULaq34u8s6KXYGO53rKP1-->：DRA 的 alpha→beta 演进较快，<strong data-page-node-id="TKFeVqJJlc7ZbVHiKyjjGb"><!--pnid:t7OIlHhxQGZd9hE1FNAsNA-->是否已 GA、structured parameters 版本请以 Release Notes 为准</strong><!--pnid:Wibw5NL6ycvVhAoj1Cw04D-->；面试时重点说清"它要解决的是表达力与调度介入，不是简单替代 device plugin"。</p>
+</blockquote>
+<hr data-page-node-id="1KHDnCzHc4FSfAeao3YYf9">
+<h1 data-page-node-id="SB7kwRqRMnmNgbQ9ixfYY4" id="part-b-16"><!--pnid:Z6GPsUtjPmND5sw953CiUK-->Part B · 大规模集群篇（16 题）</h1>
+<blockquote data-page-node-id="qWYOI5ayvlmiqcEQwHWtZY">
+<p data-page-node-id="CM03IHyv94tq89OZ9hyJzy"><!--pnid:d4V8WqKXQyZeM3qb5CryYl-->定义：<strong data-page-node-id="UOxrWKNfnkwwEoxyvE2zhB"><!--pnid:tWYZZI5sUlp9RGQATlqc8M-->大规模 = ≥ 1000 节点 / ≥ 15000 Pod</strong><!--pnid:aiU5GnUxV9EJL0thX3EUm8-->。以下每道题都按"现象 → 根因 → 量化方法 → 解法 → 验证"给。</p>
+</blockquote>
+<h2 data-page-node-id="cKsqy1VJD7RpzkTiGlaZen" id="l0"><!--pnid:K7NiIomPh4q5YRzWALiIYg-->L0. 官方宣称的规模上限是什么？（必须先有基准）</h2>
+<p data-page-node-id="HQxO1JK6L4hpkGAFIHzJoU"><!--pnid:NFM2jvQvssMOx52zB4Xlok-->Kubernetes 官方提出的扩展目标（<strong data-page-node-id="KsvI88o0Zi65SFdoTkbNHV"><!--pnid:QzsGB7jqzCczCmF6cckssr-->1.x 后期版本，以官方文档为准</strong><!--pnid:Va8dnu9u7LMEhU2PDD2osL-->）：</p>
+<table data-page-node-id="g6fmYTfvFv2JXRgztloZn2">
+<thead data-page-node-id="nYlJ91vOrHo3kINJbYW1a6">
+<tr data-page-node-id="rbL7Ykn1YRbUGOtLTu15eB">
+<th data-page-node-id="WIxvTQF8rnW3Mry55wJkpT"><!--pnid:Gl1mNeNRLZWmcXkUk89K83-->维度</th>
+<th data-page-node-id="63EMhCC5YX5ULSugXsRoB9"><!--pnid:3f2DDzeB6fsRrNB48cuHCQ-->上限</th>
+</tr>
+</thead>
+<tbody data-page-node-id="5xVEwAXnVcb5a7BcNZFasZ">
+<tr data-page-node-id="WZ67ctxRbAffe7SjrE2lKR">
+<td data-page-node-id="L8UecePBbNXt9VLdTeT5Ly"><!--pnid:fYm3rB46HV4hA6cbwAAZWK-->单节点 Pod 数</td>
+<td data-page-node-id="QpIfltn11HYAeZd8i8Yrfs"><!--pnid:AyW3hUsi7eqvddWktfYuCH-->110</td>
+</tr>
+<tr data-page-node-id="5hOILyXKmafBpvLEeCyoGc">
+<td data-page-node-id="zcFvGNhbKl27Ro3jGSfTg4"><!--pnid:RUpDRk294ihXdTiRN4bKAI-->Node 数</td>
+<td data-page-node-id="GJ5R16n9ufZZVypUeOR8eK"><!--pnid:bnw2WS4dmTrfCWb8hBbwFM-->5000</td>
+</tr>
+<tr data-page-node-id="0MGGnhWu5LWwSQ6qFRzyGU">
+<td data-page-node-id="c5Q5v5iv0l7VFPX08byypj"><!--pnid:9JCSx5XECXrlLzu8oTzxLQ-->集群总 Pod 数</td>
+<td data-page-node-id="cFj4w5QCOPdkWKWPjBzAYi"><!--pnid:Whid5YzbhfzFcOsZdd4ULf-->150000</td>
+</tr>
+<tr data-page-node-id="w4Hug5IL9dnoFnZDvg0IIf">
+<td data-page-node-id="Ka0TxmY5nlAtyWehKvcRX9"><!--pnid:BokVvIbVYMpo59h5q9r8kE-->总容器数</td>
+<td data-page-node-id="gwNJzgFdWxvPokOBOfaI9M"><!--pnid:z0AJEfndXlslyzQgXbmyP6-->300000</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="bO5SEQP3O6VubBsIzHzvgZ"><strong data-page-node-id="cRCBQs854xkIFLzd8grOB2"><!--pnid:DQP8nGZl6Q7QGUkC1GakfA-->SLO 口径（SIG Scalability 定义，大规模集群的性能验收）</strong><!--pnid:9rZC0X4e5Ps1f66IrAFnva-->：
+- <strong data-page-node-id="EKZDwVVTa0Y7kgNmOPcN5p"><!--pnid:X0FzOILiyRiXQGmEaJ6dJu-->Pod startup latency</strong><!--pnid:5ImU9yELNFYJfxJjNXdLIE-->（含镜像拉取与否两种口径）的分位数；
+- <strong data-page-node-id="X0yElGFTlI2RyW6w9ShtMZ"><!--pnid:jnVXiXBMaxnQIsGOLjiaWz-->API Server 调用延迟</strong><!--pnid:EvaMTJY2P3nORNL1wcC5pi-->；
+- 调度侧：Scheduler 使用 <code data-page-node-id="Go4Apaj16uvE9byO28equz" data-pnid-children="IBX8zeQaf1p9fOp3O5bRFB">scheduler_pod_scheduling_sli_duration_seconds</code><!--pnid:sbcKltDv7RQQ7Uc0KGH4d6--> 作为 SLI（<strong data-page-node-id="uN2YgUMOqOeREXz6KkgSVq"><!--pnid:ZRhL1oAfjYJHjp83rFMIB6-->该统计过滤掉多轮重试/抢占路径的 attempt，口径以版本为准</strong><!--pnid:Sm5dpYgB30obMk1JOpCXrs-->）。</p>
+<blockquote data-page-node-id="IxmH0c89MroCLJV3bwo8W6">
+<p data-page-node-id="ADc14v2Ev6p8v6et6uTSFR"><strong data-page-node-id="pluq5LMHXSAx62uCssTKVC"><!--pnid:SbnPmeAfCQG4rL1XLofVP7-->重要提醒</strong><!--pnid:GrM7ZInvKIZfxv9N4eKlvX-->：本文档<strong data-page-node-id="UInbeuiGuu2g3D9dwYfy3i"><!--pnid:ZdG47hiaV0AnJ52KAPvIt5-->不提供"某集群实测 X pods/s"这种数字</strong><!--pnid:2uDK3gfSGpmKYLFNkgJQTm-->——它强依赖节点规模、插件集、亲和约束复杂度、存储拓扑。<strong data-page-node-id="wvIxcOQoXXRhE2u2kyIky3"><!--pnid:AaMW1aGwxXkIh3JMBsKGvN-->你的答案应该是：给出测量方法 + 给出你自己的实测数字。</strong></p>
+</blockquote>
+<p data-page-node-id="HIv9MV9XJoE8y05ciu8I2o"><strong data-page-node-id="uOdEzNwlwjeqgMhfA2OMyZ"><!--pnid:E1XMXBGiUPZgTVebuRQq5S-->如何压测（必须会答）</strong><!--pnid:yyiy6axyEDPnl8xibyr7Pu-->：社区做法是用 <strong data-page-node-id="8zzChgQ0Zu9D6vdQuIwprr"><!--pnid:SVKfKI4W4UICNYCz6JOfkE-->Kubemark（hollow node）</strong><!--pnid:ynscbIsvJi3EkLtnKOb2hJ--> 或 <strong data-page-node-id="Br8zfAabAxZbg9BAtbv5AZ"><!--pnid:KV3PZXUwPXwVSZu3RHDVip-->KWOK</strong><!--pnid:COQRsRbz5YD8UEQu9qp6IF--> 模拟 N 千节点 + clusterloader2 / scheduler-perf 套件，测 <code data-page-node-id="KhidTuFedXoy6pnHkp8rQ8" data-pnid-children="zsxiLKbSclgHkhof4suzgV">PodScheduled</code><!--pnid:9WYHYv3oCOfW7udfsAAU96--> 吞吐。</p>
+<pre data-page-node-id="6XoffOegAB7ZxmcQx1NVAL"><code data-page-node-id="r6NJTUCtQlcBmNiDUtlfQ0" data-pnid-children="CQirsAuJE7OiQWvjXW0POx" class="language-bash"># 1. 起一个 fake/kwok 集群并注入 5000 个 hollow node
+# 2. 跑 scheduler-perf 套件（perf-tests/scheduler），产出 metrics 耗时分布
+# 3. 关注：scheduler_pod_scheduling_duration_seconds 的 P50/P90/P99 +
+#    scheduler_framework_plugin_duration_seconds 按 plugin 分解
+</code></pre>
+<hr data-page-node-id="Sj6y3R0WdDP90sExt07IIC">
+<h2 data-page-node-id="c3J03CmIt1FPicJAjdnAFQ" id="l1"><!--pnid:AoMZqpQB6LjmBV5fU2b1nY-->L1. 大规模集群调度吞吐的瓶颈到底在哪？（必考综述题）</h2>
+<p data-page-node-id="meXZLPFMVYAuUudJB6Gac0"><strong data-page-node-id="i0EKZgWVmtXfuMkJ0sCU8s"><!--pnid:0qUopOOljFNej5Uu32siwq-->从数据流上拆，瓶颈永远落在这 5 个位置</strong><!--pnid:qkKLks600nIAQiQtgXSrNH-->：</p>
+<table data-page-node-id="G6ZGw3LTtN6denpfCujpAV">
+<thead data-page-node-id="2Lwjk9060ZeQq06zNLeUyF">
+<tr data-page-node-id="sBgaobNCAFF0qCgX4uHARe">
+<th data-page-node-id="SQdkySJ6GYwVzWOv5Nuw7O"><!--pnid:i4O1LRRPDHL4vABP8qi6YY-->#</th>
+<th data-page-node-id="v6JnP5bNzmv1DGQ7d7dTUn"><!--pnid:V42U7TjYNdtJeWkbiEv3rC-->瓶颈点</th>
+<th data-page-node-id="beJMxnUCsfID4MO3RS93q6"><!--pnid:bDWMn10VlHipAcqTLBTE5F-->量化指标</th>
+<th data-page-node-id="apOEcczasN9vofVdD14CrT"><!--pnid:HSfAOUTwxwNjaTF563G3x9-->典型解法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="EMdx80Aw1Pk6Mce2IsopWA">
+<tr data-page-node-id="bUQ9WIOlbaM46A6a30Kw23">
+<td data-page-node-id="i36tuQFICNlxem9BCKwg8E"><!--pnid:QjizCk9n3wRj0iVi4JJD1l-->1</td>
+<td data-page-node-id="w3ium9rZe46pYxmZggFWiI"><strong data-page-node-id="s0SyeUPIFt2kD1aE2NiuVN"><!--pnid:oXI1NPdb8PJwQh04xswQp1-->单 profile 串行调度</strong></td>
+<td data-page-node-id="yO3L9JDhaMDMnjZUTpxkVh"><code data-page-node-id="nDgUquyjQiADEtSIsqAWmc" data-pnid-children="zr5C7e1CWycBxewIz99A7X">scheduler_pod_scheduling_duration_seconds</code><!--pnid:r2qlUhwKjKxZVq3dRpYM33--> 随 QPS 线性抬升</td>
+<td data-page-node-id="SvJ51aBvv454Sqsjt9ytbp"><!--pnid:T6yRztNfglRGsxaPUewc7N-->多 profile 拆流量 / 多进程拆分 / 业务独立集群</td>
+</tr>
+<tr data-page-node-id="xuGsDE5yz0aMwrdTZ8Hqmu">
+<td data-page-node-id="6gy4YR6taLRCLlvcMDgi9R"><!--pnid:0eFNHIjCb6J1Mcv8TQ6hqn-->2</td>
+<td data-page-node-id="SHAKzua1eQe9rAoNSNQRq3"><strong data-page-node-id="A8aYrpSZ53HfmQ5bcxEEJs"><!--pnid:XNsTpzz69OgluFZYZfxt2l-->节点遍历成本 O(N)</strong></td>
+<td data-page-node-id="Tat5SyrigP3yQZ3SvvXuDZ"><code data-page-node-id="OlWOK2joMwHtmLeAtvbFPl" data-pnid-children="6hv9RhqTcFMsz0zGurgTfA">scheduler_framework_plugin_duration_seconds{extension_point="Filter"}</code></td>
+<td data-page-node-id="JldS4rD620TSy28UEqlO0h"><code data-page-node-id="ak9mRIntYwOQHWWjn56Eqz" data-pnid-children="uUkQejUMnWzwRJTir8hE60">percentageOfNodesToScore</code><!--pnid:aWTHtHV4jUjIXBy8f7jK1Z-->；节点池化（taint + nodeAffinity 缩小候选集）</td>
+</tr>
+<tr data-page-node-id="g22TKKACOnPrUt77FBsnWs">
+<td data-page-node-id="G1phTFLT12KWTW59E7czjB"><!--pnid:W473speccgI0sWWJVblq1e-->3</td>
+<td data-page-node-id="f0xkvbG2oFOI918yVr58Ex"><strong data-page-node-id="Ur8FeFV5K6GFOJkedPrR7k"><!--pnid:2DhcxgpmfGpRqKH22Lkmqy-->亲和/Spread 计算 O(Pods)</strong></td>
+<td data-page-node-id="yGMWiGyi41JPJsJLziGrpS"><code data-page-node-id="QIr54ZLOxMXbWCCMlCgvp2" data-pnid-children="hgg31EIqNFIdYcypzYoIFv">scheduler_framework_plugin_duration_seconds{plugin="InterPodAffinity"}</code></td>
+<td data-page-node-id="l3VNBr2p1S2S1FdHxwbXpj"><!--pnid:lYJa86QZGAnScB2RB8gcZo-->限制 <code data-page-node-id="t4kJn504gsFpk6Pa1AFylu" data-pnid-children="Dmebe4OjdUxwCXO3pAjqcV">topologyKey</code><!--pnid:yXPpjQ1cHYRv6yburoTF9L--> 粒度、限制 labelSelector 基数、避免大量 Pod 在同一 domain</td>
+</tr>
+<tr data-page-node-id="V4aGmkaC13OaAVkat2L4s8">
+<td data-page-node-id="uoI12n5dne44qXGUmSGB2e"><!--pnid:j07HiyVhLmAzv3StCexJs0-->4</td>
+<td data-page-node-id="stFroWDm0qFrWR7Z0iUHXK"><strong data-page-node-id="YVAxDY0fRkZjxNXAFquIlr"><!--pnid:hffklGu9JQjHfeDw5a9BvQ-->存储拓扑参与调度</strong></td>
+<td data-page-node-id="TiOekQo13vRX2lZph98nVx"><code data-page-node-id="7T15fAu7KhD6qZSXv2fIoT" data-pnid-children="7t6pgdyyDdGozLOLkXbSNr">scheduler_framework_plugin_duration_seconds{plugin="VolumeBinding"}</code></td>
+<td data-page-node-id="8at5OZOg3I2qNmCyUGjeti"><!--pnid:P4B7NiFeQ3cP8nFeML0bes-->减少涉及 WaitForFirstConsumer 的 Pod 比例</td>
+</tr>
+<tr data-page-node-id="nih044JDy8uYrBFGP18ekG">
+<td data-page-node-id="MTNajExgFmHXUDSiADTKjP"><!--pnid:LQZxYLsF0jtBeE8KUY7jgQ-->5</td>
+<td data-page-node-id="mNyAhnP89x594xMWBRrgD4"><strong data-page-node-id="mjKgsad7jR08JwE5ul8O7U"><!--pnid:VpWcggEQaWptOmcEKr9PGI-->API Server 交互</strong></td>
+<td data-page-node-id="LugvtHq18lwN7XIimnU6je"><code data-page-node-id="zftSZg8aLut5NbKIueG4vS" data-pnid-children="gsEMRPRt5YDOXlRdblLjVI">apiserver_request_duration_seconds</code><!--pnid:XFgKI14HOT3GsDVFU8evEU-->、<code data-page-node-id="Su9oEclMS98ODiLcPT5PhJ" data-pnid-children="PWnFYohB5qvA9wbjZ3wTxL">scheduler</code><!--pnid:O0FNU4gQS31VaV5SKaQ9q6--> 侧 client 限流错误</td>
+<td data-page-node-id="MrQ2ODZHmJJcwLMwFSPz6l"><!--pnid:zA1JHOUxVZ5tM4aSevFXuo-->client qps/burst 调优、降低 Event 量、apiserver 扩容</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="0iPL15PfSL4iYL3yasiDTp"><strong data-page-node-id="IJflM3QpHfDwDGkwqjYKX3"><!--pnid:DaYET9enh1QbkHKnnInIpq-->标准答法</strong><!--pnid:tlQAP9NtGmUZNyZOtrEfDy-->：</p>
+<blockquote data-page-node-id="U28q9DKjaKDh1tmKf2lDeJ">
+<p data-page-node-id="wpSx9XDNYqkKjagrPM8lCz"><!--pnid:Sa1dbaCiY91SxoOLNKreFH-->"大规模下调度器不是单一瓶颈，而是分层的。我会先看插件级耗时分解（<code data-page-node-id="B2bet6ukYL0HxE3i5Bttr0" data-pnid-children="PyLmFu50Om5DmCtHND7gBs">scheduler_framework_plugin_duration_seconds</code><!--pnid:z2NDMf2cfoJkTPS4ia3NxQ--> 按 plugin/extension_point），找出 Top 2 的插件，再决定是缩候选节点集（降低 N）还是简化约束（降低每节点成本）。这两条路径是乘法关系。"</p>
+</blockquote>
+<hr data-page-node-id="0vu9VPpyFYuvikLXQ6UhiT">
+<h2 data-page-node-id="6wlCqFvCzYZxzFq2eeNsxo" id="l2"><!--pnid:267uemGo3HmiS5lf1IK2Gz-->L2. 节点池化 / 隔离为什么是解决大规模调度的第一银弹？</h2>
+<p data-page-node-id="iFr0Fkse1FW4eh2dmD0zHu"><strong data-page-node-id="xgSjOb6V5axucQSNcfa8ab"><!--pnid:aTA6q64M18GdQr39uKPSDV-->原理</strong><!--pnid:thavgJjc0te1sWzkd4Vvcd-->：<code data-page-node-id="GobNclrtbsdCMlZIMYx4x4" data-pnid-children="rltdstObGaJQiOlfpu8FPp">percentageOfNodesToScore</code><!--pnid:Iq81pFCnDC5DzS9NdaxUQx--> 是按"全部节点数"算比例的。<strong data-page-node-id="75b0EgDvQ71Po62DU7XWCu"><!--pnid:QZJdF9EewH5p6wNxXlq8WT-->如果每个 Pod 通过 <code data-page-node-id="IcPggwokoFElK4jbk3CD2c" data-pnid-children="Lja51zqaFRdkv9oxtYVmfc">nodeAffinity</code><!--pnid:x5C6CIab8dtPy8S8hZizMx-->/<code data-page-node-id="Vx92N1KkUThNCTHBOexyu2" data-pnid-children="xRkIWcH7UNdkXbi8RLLy5J">taints</code><!--pnid:O5hblczQ45MnZ0pYbRwJXy--> 先把候选集缩到 100~200 个节点，Filter 的成本就是常数级</strong><!--pnid:j30XeFviPyYIFKNWPzs9Fk-->，远强于调比例。</p>
+<pre data-page-node-id="o4PEL8ouRDzvXkQfVQ5dlU"><code data-page-node-id="sKDlExnNfqn2OPnhnIQQBM" data-pnid-children="NqXxaYoRoj5mhS7wk1PdwT">全集群 5000 节点
+   ├── online-pool    (2000 nodes)  taint: dedicated=online:NoSchedule
+   ├── gpu-pool       (300 nodes)   taint: nvidia.com/gpu=present:NoSchedule
+   ├── arm-pool       (500 nodes)   label: kubernetes.io/arch=arm64
+   └── batch-pool     (2200 nodes)  taint: workload=batch:NoSchedule
+</code></pre>
+<p data-page-node-id="VymiV4cKDzsushfbQtEItB"><strong data-page-node-id="swU8WvJr1sUjYNnHEVzlQY"><!--pnid:MhXv5xZRSeSG7yjLjPQVaI-->配套做法</strong><!--pnid:PSMakTC90zKN0PyZIea9mJ-->：
+- 给业务 Pod 显式 <code data-page-node-id="I1j58pbCxQbdoPy3a2IWLK" data-pnid-children="NZHkWY8NR0EfThD2JSoOmO">tolerations</code><!--pnid:KKtb7FBTIfXNfRoTN0EYgx--> + <code data-page-node-id="lUlzDdgQqIcrWiqHoQL3RL" data-pnid-children="2SG2dgDXkEgghhhjSWBlIf">nodeAffinity</code><!--pnid:EqDZ3oZUlQjStwydrIOSBb-->；
+- 给敏感/专用机型加 taint，防止普通 Pod 误调度（<code data-page-node-id="GPd4HxRwnQaJWmnoVy6mUl" data-pnid-children="YejHwACgNbKicWsDIdt2jV">NoSchedule</code><!--pnid:uH6chX0zqSeWzpwOyTwyit--> 是"防呆"）；
+- 用 <code data-page-node-id="d1oQ2ctRvKV0iduelUzB0J" data-pnid-children="qBZ421ydj2WouTy1FwSNP9">resourceQuota</code><!--pnid:RS6on55TYO6FUaBiP6y6Ck--> / <code data-page-node-id="9WxB0e5OSR7zP8bPJjOC4a" data-pnid-children="KLv92G004MyjwItMgpvL1g">priorityClass</code><!--pnid:CAH2aqZmmd5KREftKVPh8w--> 做租户配额。</p>
+<p data-page-node-id="iuyhxHJFtSKWiOIfVi3hdj"><strong data-page-node-id="Z1lp77PKtnmaZqpPXfb6TS"><!--pnid:TFfUmjdXIvhAd0amhR830u-->验证指标</strong><!--pnid:dK6Dx9ReKxHYoZhQmanEaI-->：改前后对比同一业务队列的 Filter P99 与整体 <code data-page-node-id="etOlKh1U4S7Ntu5U20cbsH" data-pnid-children="FBk39jHMOXtQIRa5lu1qi6">scheduler_pod_scheduling_duration_seconds</code><!--pnid:vxhn1QcG5fqPoT4qxXX5dC--> P99。</p>
+<hr data-page-node-id="Bo4ZmLhXM9SdfxHK51umG9">
+<h2 data-page-node-id="BqDpJyIkSxuELCCWnVUvbH" id="l3"><!--pnid:Bkvn7H99zonyHaI0xISGEm-->L3. 集群事件批量触发导致的"重调度风暴"怎么办？</h2>
+<p data-page-node-id="QafBZLapRHqeafTIWIlbb6"><strong data-page-node-id="5Vu0b9rc4E62fee4vtZe55"><!--pnid:tJSZ7nOIhudDIqksK2smEP-->现象</strong><!--pnid:bv34p419TzCRvjSOaxKP5e-->：集群批量加节点 / CSInode 更新 / 大量 PVC 变更 ⇒ UnschedulableQ 里上万 Pod 一次性搬回 ActiveQ ⇒ <code data-page-node-id="pTpRbWlxm0zlNw3MZu0YCt" data-pnid-children="XsTDDaN7eHtr2LDV2q6vaD">scheduler_pending_pods{queue="active"}</code><!--pnid:7DL4dV7hS2qi34hfjw0mKW--> 暴涨，CPU 打满，正常 Pod 排队变慢。</p>
+<p data-page-node-id="h0C3DhbhrZDjaeI7tSBJMm"><strong data-page-node-id="ddPLdq1tvb2qJfLbjLW62o"><!--pnid:0EWD6YaopLcxEGciIx82Mr-->根因</strong><!--pnid:3DlahsUuCPTki79s57dvRt-->：<code data-page-node-id="4VofFoMvAWAfxKyQBeMji9" data-pnid-children="1ZxGhG8hu9P1cd8mGCNm9J">MoveAllToActiveOrBackoffQueue</code><!--pnid:squaTZlvWmw3c1gpK0q1zr--> 是粗粒度搬移 + 大量 Pod 依赖同一批事件。</p>
+<p data-page-node-id="mHpdmSd8442uxAvnRe5qQi"><strong data-page-node-id="SYUDnFyTpvfotCDkiO3DLp"><!--pnid:sK9nfWeyMWsFTovXLruwRK-->解法组合</strong><!--pnid:n3FGFHMj9WO94DGyI92JUu-->：
+1. <strong data-page-node-id="lZIhCIg86BBqG0ifVun7dc"><!--pnid:2xX0cYRsWTnfSJ2HD8LU3p-->开启 QueueingHint</strong><!--pnid:EERrRBh62ub4eDvZkYzgL5-->（较新版本）：让"事件 → 重新入队"精细化，只有真正可能被救活的 Pod 才搬；
+2. <strong data-page-node-id="XRVbaNKjMj56RMkn04gCr0"><!--pnid:dMzbBydpQmQwNoQtT5E0xI-->调大退避参数</strong><!--pnid:aTXCXdjU651EsqCvwP6D15-->：确认抖动严重时，可适当加大退避上限（建议把 <code data-page-node-id="vhYHNSODaPasG9jlEunrRV" data-pnid-children="OJ6PLYSmvcf6msA9pvWoVJ">podMaxBackoffSeconds</code><!--pnid:uj0vAxwnLkC5ATiI5CPe8w--> 从 10 调到 20~30 观察），给集群自愈留窗口；
+3. <strong data-page-node-id="4qNwJ4FkORAa8ENruBjMfl"><!--pnid:uQAfDEMjDFEH9uwxL5vol9-->按业务拆分 profile</strong><!--pnid:poU4HN0asHVIXQwYOEYe05-->：让离线风暴不要污染在线队列；
+4. <strong data-page-node-id="Rrtxdkj2DFm1RDNymj0Msv"><!--pnid:JvU9CETEgdemyn7RFgF4bO-->不要一次性创建海量 Pod</strong><!--pnid:yBSmisFvUotz6O4umWwnR7-->：上层控制器加分批发放（batch sizing / Kueue quota 门控）；
+5. <strong data-page-node-id="pMbqWVDffXdfs9KHWefx6y"><!--pnid:pl7jg8Ml8WUPHgKDXXAmwB-->控制 Pending 总量</strong><!--pnid:oNHnmrSQzuthrj1A4tB8mg-->：给离线 Namespace 加 ResourceQuota，天然封顶。</p>
+<p data-page-node-id="zcbzicyr1JtRorLGlP26g4"><strong data-page-node-id="D46o5M6TVB2VeY9E3OOEpD"><!--pnid:Nn5HYYlEXARg2sl0xXLT91-->告警（可落地）</strong><!--pnid:G5Oby2f7JMaSo4hCAbuXEi-->：</p>
+<pre data-page-node-id="DExZ0U5SzPNV4Uqd1Ii8Gk"><code data-page-node-id="jka5vFhEnW9tUC8H4NeNU1" data-pnid-children="Jq4hPpspBw5zmUnN6MxCUF" class="language-promql"># 活跃队列堆积（阈值需按集群容量实测校准）
+sum(scheduler_pending_pods{queue=&quot;active&quot;}) &gt; 500
+
+# backoff 堆积，说明大量 Pod 在反复失败重试
+sum(scheduler_pending_pods{queue=&quot;backoff&quot;}) &gt; 200
+
+# 调度失败率（5m 窗口）
+sum(rate(scheduler_schedule_attempts_total{result=&quot;unschedulable&quot;}[5m]))
+  / clamp_min(sum(rate(scheduler_schedule_attempts_total[5m])), 0.001) &gt; 0.1
+</code></pre>
+<hr data-page-node-id="uCiHKWL1VTwx6LR1pmo949">
+<h2 data-page-node-id="QbIzkbHpjEwU09NJ7n3GD4" id="l4"><!--pnid:AWJOK2gJZecYhayIvZrCdW-->L4. 抢占风暴怎么防？（大规模经典反模式）</h2>
+<p data-page-node-id="XXrnKMMS81S5DHiqoNfLka"><strong data-page-node-id="HfHV5vIS4Z1mCkcuIvtAPb"><!--pnid:k6tySg8lwZcwaFxUjKay7Y-->现象</strong><!--pnid:LyA1XgkK9b95lBEIvgTeby-->：夜里批处理高峰，大量高优 Pod 抢低优 ⇒ <code data-page-node-id="iPvJT2ZYBztHApGpJNNhZn" data-pnid-children="hjIri6MI49NX8tjjaXFZES">scheduler_preemption_victims</code><!--pnid:TwPPedzTudB721zfZmlbpH--> 飙升、在线 Available 抖动、API Server 压力涨。</p>
+<p data-page-node-id="S7NtAt846oG2wBFewiMasz"><strong data-page-node-id="AZIjX25XT9wq8BeRiezKGk"><!--pnid:NfE9o1MoGAwX0NK9gYKRcW-->根因</strong><!--pnid:QPdJQIZk0hrdZUyLGjHlNM-->：无节制使用高优先级 + <code data-page-node-id="IcxatUDRNUmpSdCnJcr6kF" data-pnid-children="8SNYbbKS7xZcleLlKHepam">preemptionPolicy: PreemptLowerPriority</code><!--pnid:X4PdCl6RQRO0zoVjSoUoWd--> 滥用。</p>
+<p data-page-node-id="ssxJ60G5RHx60NdMkDDOzK"><strong data-page-node-id="KsKtZtr5zKZPkww9B3XxYS"><!--pnid:GnZZlOr6i3Q3k3J0f8NLaA-->解法（按优先级）</strong><!--pnid:zyLVLMh2U63xfXzT71Xsk8-->：
+1. <strong data-page-node-id="4SvSYG8iIgx2IpSC7q5IM7"><!--pnid:xKBll9OjfYZbHhbOM9mfeh-->默认 PriorityClass 设为 <code data-page-node-id="ns6vNYeseybfo5vAj1N1yI" data-pnid-children="cC3X8PV2fUe86KJMopYe6F">preemptionPolicy: Never</code></strong><!--pnid:9qnBjfqUAlH2tWbksuaxW7-->（强烈推荐），只有极少数真正核心业务才开抢占；
+2. <strong data-page-node-id="jYADVrlGO0xVFG4OyXsIla"><!--pnid:7Oc8gp7Khdkeupk9YtsEy4-->给 victim 侧配 PDB</strong><!--pnid:037DVfSxt8szZpEpa5sRAR-->，让抢占无法突破可用性底线；
+3. <strong data-page-node-id="yefitRwuwkv0Dd1o2XsDVI"><!--pnid:xOvVDP5wU6BwkMEmYDsPE6-->离线队列用 ResourceQuota 封顶</strong><!--pnid:Pl2yzsx7vShaheU4EzKQIQ-->，从源头减少"需要抢"的场景；
+4. <strong data-page-node-id="liJ6pFWTVyMKj3OCQP0WdB"><!--pnid:boE8DOdTkX0RpC417LGFcv-->错峰 + 弹性扩队长 Len Cleveland</strong><!--pnid:whJRIBDjmbKUXuC9JJ1v5D-->：离线高峰时先扩 nodepool（Cluster Autoscaler / Karpenter），而不是抢在线；
+5. <strong data-page-node-id="4vvycXUPm25Vtzk5bc2mfl"><!--pnid:0iGqTfsajFgu0XT9mgukxX-->在线/离线分节点池</strong><!--pnid:svk0anUWx8GztEZX8aCPBQ-->（taint 隔离），把抢占变成"物理隔离"而非"频率抢占"。</p>
+<pre data-page-node-id="z7XYs9sY61YtaVxmlr6Rlf"><code data-page-node-id="nAdpUplWnJgMWbfLnrEwiW" data-pnid-children="fXBJ9cGFacmOymDnM9PQfA" class="language-promql"># 抢占活跃度告警（&gt;0 就应该被人群 Review）
+sum(rate(scheduler_preemption_attempts_total[5m])) &gt; 0.1
+sum(rate(scheduler_preemption_victims[5m])) &gt; 0
+</code></pre>
+<hr data-page-node-id="UCOTIDgemZ7ncCkfv6nwql">
+<h2 data-page-node-id="jTvmsC5SDsUBgocdUmrcye" id="l5-pending-pod"><!--pnid:nuqoSFzUpmW8nYswMECmQS-->L5. Pending Pod 排障的标准路径（面试必背）</h2>
+<pre data-page-node-id="Ll5RpbRXTpgXLv3zrt1g2a"><code data-page-node-id="buY5BkgnmcpIxfCG2MB9am" data-pnid-children="FeDvVZ2KuAVvPC0x9QyC1B">1. kubectl get pod -A --field-selector=status.phase=Pending -o wide | head
+2. kubectl describe pod X        # 看 Events：FailedScheduling 的 reason 是关键
+     常见原因串：
+       &quot;0/N nodes are available: N Insufficient cpu.&quot;          → 资源不够
+       &quot;N node(s) had untolerated taint {key: value}&quot;          → 污点
+       &quot;N node(s) didn't match Pod's node affinity/selector&quot;   → 亲和/标签
+       &quot;N node(s) had volume node affinity conflict&quot;           → 存储拓扑
+       &quot;N node(s) didn't match pod anti-affinity rules&quot;        → 反亲和
+       &quot;N Insufficient nvidia.com/gpu&quot;                         → 扩展资源
+3. 若 Pod 完全没有任何 Event → 极可能是：
+       a) spec.schedulerName 写错 / 没有对应调度器在跑（最高频！）
+       b) 调度器进程挂了或 lease 争抢失败
+       c) 变更的选择器/field selector 出错导致 Pod 没进 informer
+4. 查调度器进程：kubectl -n kube-system get lease kube-scheduler
+5. 查 metrics：scheduler_pending_pods / scheduler_schedule_attempts_total
+6. 必要时开 -v=5 看单个 Pod 的决策日志（临时操作，注意恢复日志级别）
+</code></pre>
+<blockquote data-page-node-id="pjg2tDa7X2aAjrBQangZkf">
+<p data-page-node-id="waVXJiD3WbAvps98rj3aNR"><strong data-page-node-id="WT2Vek6D3wBv3ePU5tjebi"><!--pnid:trh5L2sVpmESwM7kPBpmvB-->金牌追问</strong><!--pnid:7lxTSr8vMgwXsYvy63AJUI-->：为什么有的 Pod "Pending 但没有事件"？答：<code data-page-node-id="JMF0SK3nMTvDFZJGESoVh9" data-pnid-children="GkFyZV9fLC1E3PdVuTrdjb">schedulerName</code><!--pnid:dMoY0fWgZ353bGohNqHf3B--> 错误/调度器未运行是最常见原因，因为<strong data-page-node-id="Ekxt3txSQY8CtqazQnsa2b"><!--pnid:l1PYgQOj9epUHb4BJ22kKd-->没有任何组件认领它</strong><!--pnid:ZlshjiAyMk3Na8666Er35C-->，自然就没有 event。</p>
+</blockquote>
+<hr data-page-node-id="FhsEVO0VU92nHQ4JKBOCoS">
+<h2 data-page-node-id="vR2oRsQbIE6TtVjnq6hhQc" id="l6-failedscheduling-event"><!--pnid:Zb4iLV3fZjYr79f5yU22g2-->L6. 大规模下 FailedScheduling Event 洪水怎么治？</h2>
+<p data-page-node-id="ulVYvHGjFdM9pRjTQgzrLm"><strong data-page-node-id="rhVlqftWKH8bFG8U3rc8sL"><!--pnid:q3tbMhYv9orWwQTWja98tf-->现象</strong><!--pnid:i2UPK0QfJ156QfjQoTQX5t-->：上万 Pending Pod 持续失败 ⇒ 调度器疯狂写 Event ⇒ API Server <code data-page-node-id="aoEmYC92ITRiWMmlUyOn7f" data-pnid-children="8XvBOg66CikVWAxqGmQuEd">apiserver_current_inflight_requests</code><!--pnid:I7yaNwyt95UohUS3GTvZht--> 打满，<code data-page-node-id="d8wxvBgONU9cgZlkj3LIrT" data-pnid-children="DQ8DskYsl3Me2lu5blqI3W">apiserver_request_duration_seconds{verb="create",resource="events"}</code><!--pnid:SFJvZEhccLar5w3m7PHNnB--> 恶化 ⇒ 连带影响其它组件。</p>
+<p data-page-node-id="DBblDt9CJ6uref1pH3EiZI"><strong data-page-node-id="y2ZkKJKdLXu5iRv7d0QC6r"><!--pnid:ecDW9VHwSSbiC217JNqkjY-->治理清单</strong><!--pnid:BPPaDwy3BxshFreM1eHQ2y-->：</p>
+<table data-page-node-id="JhmbbKmF1QvtUFEyhjSB9F">
+<thead data-page-node-id="AA2V2WWsbDJbScXJrpCDxB">
+<tr data-page-node-id="x3Upp4kI0EavNVNDPqoclM">
+<th data-page-node-id="IY6bM9mQgkx8fwZ65sX4eV"><!--pnid:4sltHSRF8yYX9wFOR25w6Y-->手段</th>
+<th data-page-node-id="G6Teh4CZ8lDNXk1AlHtN0k"><!--pnid:yKLEBlamxolLXfh7CArMHE-->做法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="q4oLpdmln9Z2hogWxybCxu">
+<tr data-page-node-id="hktIcGs5BABfSa019COn0m">
+<td data-page-node-id="8g0RO5rfFCqDDNl7z5bKU1"><strong data-page-node-id="i6iG6c4XcpcjOwZohOUg6J"><!--pnid:ydQMKY1IrXgp3ILNhRacXa-->Event 限流</strong></td>
+<td data-page-node-id="4yjIqwvY5rak5YBCNGfBJs"><!--pnid:RhJNhUQ6go9Is16TfRnJHl-->调整调度器 client qps/burst；给 Event 单独的 client 参数（版本支持时）</td>
+</tr>
+<tr data-page-node-id="3oAFgRyYbU3Xfd6zxvmJbL">
+<td data-page-node-id="9iSjQDIoDLzTaAmKtvmk8A"><strong data-page-node-id="XMIbhKr1bulYvAp8x3mLFs"><!--pnid:g1x8riWXutj6FoGfQLJSsu-->日志降级</strong></td>
+<td data-page-node-id="MMuUW1l4CSBNRd7HUYdWud"><!--pnid:5pQtVIcwHrheSaDzcEUiKw-->恢复 <code data-page-node-id="2OfA6LwmHEws5T12jp5fxt" data-pnid-children="Ssk9WRHYJxC5Rdndw7AlGp">-v=2</code><!--pnid:wG80wGj3XPnSrFCApP6Hxz-->（不要把 <code data-page-node-id="H9RpjS60sLA248WWOhphWb" data-pnid-children="wCXMVxGzfkYiDMivT4Ltvk">-v=5</code><!--pnid:TauLwPcADKhNXQsxrc9vHM--> 常开）</td>
+</tr>
+<tr data-page-node-id="MwL8XoHWq2dVyiegj4Ocup">
+<td data-page-node-id="XaXQxFkL7YMos5flXNu6BW"><strong data-page-node-id="AIVlaWA2uuciUXcQfCPB5U"><!--pnid:YROlZXhMge886lDKKJVjqi-->根因减量</strong></td>
+<td data-page-node-id="YzbLKlhNcMF8RXhueJ4zeT"><!--pnid:W4OsYA8gQbGqgqlYRHi9Qn-->治理 pending 本身（批处理配额、弹性扩容、调度整形）</td>
+</tr>
+<tr data-page-node-id="3xYgFPwhOhDnDFA7wHcspB">
+<td data-page-node-id="hqMAVF88HcDwVocAaDy8E0"><strong data-page-node-id="xj9U74prbECRkplAne0Z38"><!--pnid:dBwyjke3d3vJVw75mXR7vT-->Event 保留策略</strong></td>
+<td data-page-node-id="6DAF1iHsp9sfkxAsm9IUxF"><!--pnid:m8HGdoNesXoIbIY1qzTxTw-->apiserver <code data-page-node-id="byH5dyySu4JbWHxsu4FrfC" data-pnid-children="8Xkb2D4e1OQpt6rqOGCncv">--event-ttl</code><!--pnid:W3QUDRwWILtih2jGPYb6wf-->（注意版本差异）、避免 Event 表膨胀影响 etcd</td>
+</tr>
+<tr data-page-node-id="8X2rOFe214tccBuSKisiY7">
+<td data-page-node-id="vz2JHbxI9OVUdhOdfV26sJ"><strong data-page-node-id="tyu1umdDL1AtqEwp2egYUa"><!--pnid:kh8bBEmswe37gzJOCuEvMp-->新版本特性</strong></td>
+<td data-page-node-id="8VSjhP7nJ1UbZerBHkfmAz"><!--pnid:JAC1NSe9lIrOp9gJuIYagm-->部分版本引入 FailedScheduling 事件<strong data-page-node-id="ecwHvja4t0jS9P69tbBfqK"><!--pnid:fvJ5qcMBx42RhpzTpiFvEh-->聚合</strong><!--pnid:l350vc89JXQzTextQ2OXVp-->能力（门控名/可用性以所用版本 Release Notes 为准），升级后可大幅降低 Event 数</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="OrBBJ7SpWFqDKdRN3mFqQJ"><strong data-page-node-id="wX8lE13Ri3B1PhNsmksIkf"><!--pnid:0RcnGbfrFasiqU2XULpqFB-->告警</strong><!--pnid:bP3osxFHpLIJo9Bzj4svSm-->：</p>
+<pre data-page-node-id="plOjzTjE6eMrNkuy3zSEBt"><code data-page-node-id="O8nH1ighHLtY9Mici6y8vv" data-pnid-children="ZdLKlsyqypensO88nh3n9F" class="language-promql">sum(rate(apiserver_request_total{verb=&quot;create&quot;,resource=&quot;events&quot;,code=~&quot;2..&quot;}[5m])) &gt; 500
+</code></pre>
+<hr data-page-node-id="RKHrpRldvthGacoE7c9VsY">
+<h2 data-page-node-id="Nc5S49lEq9uKGRg2vgL3Bv" id="l7"><!--pnid:iAsz6tsMAxwtPmdAW8j04B-->L7. 资源碎片导致"总量够但调度不出去"怎么办？</h2>
+<p data-page-node-id="nIamDp1D3R2NpQJyPdU8ez"><strong data-page-node-id="qT1HLRjqpY2gwFYcDvzPno"><!--pnid:BTStXyAREMQuYH9p6l3mTO-->现象</strong><!--pnid:QBVmfhEH0eVZanDVE9PEoK-->：<code data-page-node-id="Jewu61ibAUZOZDkVNyx7qN" data-pnid-children="KrhJscPE1jBO3sgTjmUVA4">Free CPU: 200 cores</code><!--pnid:bifd3bkpjfSIQhAuMOIQBF-->，但一个新的 16C Pod 就是调度不出去（每个节点余 4~8C）。</p>
+<p data-page-node-id="u8xI3OAXxppZxMoHT5GRLm"><strong data-page-node-id="JboF3LU6p4vbShU85fr3dC"><!--pnid:UXxubJ1BF6RaBJG89woaCI-->根因</strong><!--pnid:dIXvPeLVH4wwL5cYw0YeZW-->：历史上用 LeastAllocated 打分 + 无装箱 ⇒ 资源被打散。</p>
+<p data-page-node-id="JtA01jsjm381TgsHw0zhiX"><strong data-page-node-id="CnddZEzJZswLoAgrsjmciD"><!--pnid:wIcJi0lVDuibYGlzI1CWqT-->解法</strong><!--pnid:5x8rfNG3SKFnStKnKQ1TAO-->：
+1. <strong data-page-node-id="sXXGeDlmktKUqiPv1WJOMS"><!--pnid:ozGSQeVEXnG78I1WpCrRfk-->打分策略改为 <code data-page-node-id="LlePINOKZ4KMNyaTrioGH3" data-pnid-children="UhK1KwzJnWC3NMNPEpofza">MostAllocated</code></strong><!--pnid:m1dfhNXhWNRZ8R3ERnq0pg-->（针对离线/批处理 profile），让新 Pod 优先填坑；
+2. 开启/加权 <code data-page-node-id="Md0LumXgeLxSpUwUlTkhzo" data-pnid-children="Wajnd7XGFWLe24xnJcApDo">NodeResourcesBalancedAllocation</code><!--pnid:YevjXY7h00nxUF0dkUdUPq-->，避免 CPU 用完内存剩一堆（反之亦然）；
+3. <strong data-page-node-id="ASZbyQOJP24fZ3K8knLHjH"><!--pnid:DFE3p5FKH2pAcPWpDeJkDP-->Requests 治理</strong><!--pnid:7hwdpZWqdYMjwf3gBeujSP-->：治理"申请虚高"（requests 远大于实际用量），这是碎片的根本来源 —— 用量画像（VPA recommendation / Prometheus 实测）驱动 requests 收敛；
+4. <strong data-page-node-id="tYazOlZPKnPgMxQPGWaFQY"><!--pnid:aB8RhgzQ7mhNiJfUgUs9hL-->引入 Descheduler</strong><!--pnid:K4xSsiccfJsecjwrFr7cgj-->（<code data-page-node-id="mYq4Mt5O14HbOZvqF2TAYV" data-pnid-children="Ea0X5hTlSdbEsMK1RiarRX">HighNodeUtilization</code><!--pnid:Yg2QUboDJC1MjkOCyQjW6p--> / <code data-page-node-id="57SeS3F83uPrJ36QHrbUlQ" data-pnid-children="rnhQiJmNfkI0SEjWuJP7re">LowNodeUtilization</code><!--pnid:GGfhbJnXcKUU3k1VMyl1mx-->）做二次整理（严格守 PDB）；
+5. <strong data-page-node-id="FQphHqn3UBx65jlY6MPcg0"><!--pnid:3gojkBQspSLBC8m1a28VjW-->规格标准化</strong><!--pnid:aEZR3hJkBXhVStzIzczYym-->：限制 node 机型数量、限制 Pod 规格档位（如只允许 2C/4G、4C/8G、8C/16G、16C/32G），碎片概率大幅下降。</p>
+<p data-page-node-id="PvYh2WUrnh3w4nKaZQ6rTd"><strong data-page-node-id="97K24IYa7uOYWh2nlyshQP"><!--pnid:qPli4kPK02J109rrihPJXt-->验证</strong><!--pnid:dhkO6hVAu5R1qRuWNyVZu4-->：用分配率指标看改善：</p>
+<pre data-page-node-id="3QI1pw4exeCdpbKvOAESd6"><code data-page-node-id="L3Q3s9c2LDyAB4KlDYFqhr" data-pnid-children="gz4gPjIrASA8CCYsqZoVJd" class="language-promql"># 集群 CPU 分配率（request / allocatable）
+sum(kube_pod_container_resource_requests{resource=&quot;cpu&quot;})
+  / sum(kube_node_status_allocatable{resource=&quot;cpu&quot;}) &gt; 0.75
+
+# 但&quot;碎片&quot;更要看：无法满足某规格的节点占比（需用自定义计算）
+</code></pre>
+<hr data-page-node-id="4C3oLtaz4n0fx7Tdqj6XDr">
+<h2 data-page-node-id="Jqfs7zWeCn8PK25agX2863" id="l8-5000-vs-5-1000"><!--pnid:mUZunRnR4WeqPtsxfMjSmd-->L8. 一个 5000 节点集群 vs 5 个 1000 节点集群，怎么选？</h2>
+<table data-page-node-id="1RKncufMjK11gY6F3OFXJC">
+<thead data-page-node-id="oV9IGginsMNOGZfmR9CAPc">
+<tr data-page-node-id="YLujyCN5nvEnMNtGZITkJX">
+<th data-page-node-id="IgI8SbahGf5WQ7pmMXrRWi"><!--pnid:QwuSaJZuptrmj1WR7knETr-->维度</th>
+<th data-page-node-id="xEteiFhZzo98lgIJAjTeK2"><!--pnid:GUbmiLgbwDltkEmcle3ywz-->单大集群</th>
+<th data-page-node-id="skzfYnvr1sv62xJsHFg5y4"><!--pnid:RvT49NVk9UWyYjYZCLylYq-->多小集群</th>
+</tr>
+</thead>
+<tbody data-page-node-id="m1hGgWB96DhiyCJVUTJssg">
+<tr data-page-node-id="ujsyBsL2oKPi96olHDyQdZ">
+<td data-page-node-id="tT9IKUKkjcfdB27ayWsmv4"><!--pnid:r9eYkDi7BGvdmFJGO58luj-->资源利用率</td>
+<td data-page-node-id="KaBnjse9v9ws4967vCWvdE"><!--pnid:Dhb7FbLRRcxx26oap7bhjl-->高（池化效应，削峰补谷）</td>
+<td data-page-node-id="tdRy4rmY495jbWEJPGA6PY"><!--pnid:TM8Ri6osZp6UYBxNLh7szr-->低（需预留 buffer）</td>
+</tr>
+<tr data-page-node-id="Gdd4Tj107q7nNUsgcXQFul">
+<td data-page-node-id="b6rV3hRbvHvTr1LJXyxA4S"><!--pnid:ZBXNuR8NrdND5nXDs9e5dX-->故障爆炸半径</td>
+<td data-page-node-id="LU7s3XbgcKLzlG7iPQhg3f"><strong data-page-node-id="xqdlbniCFXkm0vZazSEnKk"><!--pnid:tOubKdFJiNRoCRGfb6s0ht-->大</strong><!--pnid:4jFswZJfrq1UUuY0BdzRuV-->（一次故障全站）</td>
+<td data-page-node-id="0V8Ay4r4yFMwr5uzbaxWrG"><!--pnid:DEOXOhI0J11K2sspCVHTWx-->小</td>
+</tr>
+<tr data-page-node-id="J7xBoUQ5ELsQbAA5I5Pip8">
+<td data-page-node-id="AfqE7rcuGfO2bJxwubBKF7"><!--pnid:3YzlXftLwSzRN1GSBIXVOr-->运维复杂度</td>
+<td data-page-node-id="nHOMMfYmoASqUxBcW9smLZ"><!--pnid:NsTvUhxYO5RMtqLJKh0Qti-->低（一套控制面）</td>
+<td data-page-node-id="Jr5JCZSKxQ5OcwBKJWpMom"><strong data-page-node-id="qEEW3uFVqsDGy2mntc0Ok3"><!--pnid:yOyNsgFWoCfqYQH4oRe8mm-->高</strong><!--pnid:LsvdGKaIwEexAkfE3j3tV0-->（多套升级/配置漂移）</td>
+</tr>
+<tr data-page-node-id="eQXRbfCPgI5MkJuXrUB33i">
+<td data-page-node-id="9wMuYnUEnc013yiDgD4XxU"><!--pnid:ciegZnWtiK6r5HP0uu6Wku-->etcd/API 压力</td>
+<td data-page-node-id="gOgj7ZhNOilg3rvowGZR5L"><!--pnid:PW2GEaDqOSYeNkCiq5Iiwo-->大（需要专职调优）</td>
+<td data-page-node-id="CfiPdq236pPEDFmJSFT4Iy"><!--pnid:UzDdNjkaQia0CKNqKqEcjH-->分摊</td>
+</tr>
+<tr data-page-node-id="4yT7ua7xvVE07gek4cj77Z">
+<td data-page-node-id="LuUFCS9ctDRlErxbdkZgNE"><!--pnid:h7rM8unAeumzm0izso0dl9-->成本</td>
+<td data-page-node-id="tyNETNQV0PLE6GtVQqS6wR"><!--pnid:cpHKdphvdMwZuezKpQ7xLw-->低（overhead 少）</td>
+<td data-page-node-id="4NLvS5JXvAnbhXpQPCqi5x"><!--pnid:6MO3uOzqXluIy7sRR2mEGM-->高</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="4dF2O7WkxsufhG4P9sCzFG"><strong data-page-node-id="eQixOFR3SFyZglCAWNVWDD"><!--pnid:idnJK4rpIkFG0pYmKlb76L-->标准答法</strong><!--pnid:3brDoF1Uu7zLGLyhbJ9NS2-->：</p>
+<blockquote data-page-node-id="8RBb7BqzjimBawmS18FawJ">
+<p data-page-node-id="utRqRhD6nJxPPArR6SHN1a"><!--pnid:E6jd52IzFG8l2kJUWBST0r-->"不要为了分区而分区。分区的真正理由是<strong data-page-node-id="42K8uTEOxclYcrJndheADn"><!--pnid:WcPwL7ZLqURLI43ssL8cYG-->故障域隔离与变更隔离</strong><!--pnid:CdRZ9rfqPfrHLa1rtfu0hq-->，而不是性能。当出现以下信号才考虑拆：控制面单点故障会造成跨业务不可用、升级必须全局暂停、不同业务 SLO 差异极大（延迟敏感 vs 批处理）、或租户隔离合规要求。性能问题优先用节点池化 + profile 拆分 + 参数调优解决。"</p>
+</blockquote>
+<hr data-page-node-id="FX010EjaOi1j1oo0C9yZzi">
+<h2 data-page-node-id="aEhItabxydAJX2j6Jv3YEI" id="l9-gpu-ai"><!--pnid:nj8sv67FNtyD6vuJXybS2Q-->L9. 大规模 GPU / AI 场景的调度难点？</h2>
+<table data-page-node-id="aTpXqPVyHXC1T1V4gFmGXL">
+<thead data-page-node-id="uzvjqt4Pa5iuPGhdkU74VD">
+<tr data-page-node-id="Qbl5xYXxlipR5hDkBzH8U7">
+<th data-page-node-id="62HfAovZnonMn3cHDfujWu"><!--pnid:83kEmMnBCi9hl8g0XSZ9Qh-->难点</th>
+<th data-page-node-id="gnP59QRkhJuM4hGaWkQsIA"><!--pnid:ZuKpVQ7gbQpkOlXaTWidW3-->现象</th>
+<th data-page-node-id="1x9L9icQYDDCZD1osSg2F1"><!--pnid:O3Tbm4FnE7xwAGW48iwZkg-->解法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="fIKCptCYqD957yJ8ukNSFl">
+<tr data-page-node-id="h6GswOnoNoyNiZkSkUWIf9">
+<td data-page-node-id="P5mgYwvSG7fpWlpf10JEet"><!--pnid:frGutlUafa1QizQfe8pHr0-->GPU 是"整块"资源</td>
+<td data-page-node-id="p9PquvHMvgAQgQXDCtFKQD"><!--pnid:RusDGIK9ljx8w8xQikptNP-->一张卡只能给一个 Pod（原生），利用率低（&lt;30%）</td>
+<td data-page-node-id="Mw8dePLYQMcfJY4lD0QJTo"><!--pnid:7vnuy5xrerPyxpGYZ5Ap4a-->分片方案（MIG / 时间片共享厂商方案 / DRA）；实则要在 device plugin/第三方层实现</td>
+</tr>
+<tr data-page-node-id="I3kR9IOerALAyTHliw9Kli">
+<td data-page-node-id="4maOqy6kHjLhH6pKqSfw18"><!--pnid:fjTzzesowW0RrnaUerIus4-->Gang Scheduling</td>
+<td data-page-node-id="ug4AaFxBngCFceZwJBMI6F"><!--pnid:MXK3UnLpl4LF5hhiV5sMYV-->部分起来 ⇒ 死锁占卡</td>
+<td data-page-node-id="8MEUosfjFjQDq359Wod5Zu"><!--pnid:mZaL8VlYkVhOPgVGhqQNhh-->coscheduling（Permit 插件）+ PodGroup + Kueue/Voice/Volcano</td>
+</tr>
+<tr data-page-node-id="bozeRA9TjJxYxUHasLB7EX">
+<td data-page-node-id="2u4pR3McEitAtlo8xMCShs"><!--pnid:FKnc6IKeBwydgJ5Snet3jr-->拓扑亲和</td>
+<td data-page-node-id="LRVVolUb4z0ixrLMEWI8L9"><!--pnid:iC64qP2SpidRTCK3NbMkMi-->NVLink/NVSwitch 亲和，跨卡通信慢</td>
+<td data-page-node-id="zpQLmZOGKhSAsdZ1jt2Jhh"><!--pnid:ltGZ78V076SKYG13cKdYJR-->label/NFD + nodeAffinity；或用专业的网络拓扑感知调度</td>
+</tr>
+<tr data-page-node-id="hueZp17hbLvSmsdo8Eav7o">
+<td data-page-node-id="JWJOqkhH49KTXfuVV5Vq8C"><!--pnid:tfkHRRId3wLSmXqwzhljSK-->抢占</td>
+<td data-page-node-id="lqARkisEDfWdzH1QuYI0oO"><!--pnid:qhJOS57vBMJrEYT1uYHwFr-->高优训练任务等不到卡</td>
+<td data-page-node-id="mcxS5yHc6nTLveNaEDfbA6"><!--pnid:qitnSEvDYw6WsSwx85nZN9-->优先级 + 合理 Quota；谨慎用抢占（训练中断成本极高）</td>
+</tr>
+<tr data-page-node-id="iTcx6jGFiVTPsWEZI4BcXX">
+<td data-page-node-id="dd3aSHJcyfE2GIyOoRO6Pl"><!--pnid:aiGfUkIEK8uVlxSrrJPNIj-->Extender 性能</td>
+<td data-page-node-id="2piasrPXkNmszvR6Ngl8LS"><!--pnid:OxPF7ujJXJOK2InS5FMMgF-->自研调度逻辑 O(N) 串行 HTTP</td>
+<td data-page-node-id="b2fPR2GE17qDPGzOMY2dKw"><!--pnid:IGnszcVFgGHB0nJ5yl6pNv-->改为 in-tree/out-of-tree framework 插件</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="lRBqMc0sBD946c4RI1PH2f">
+<h2 data-page-node-id="ywHfOTe2Xp4RfpsW2RI2vk" id="l10"><!--pnid:opPuUspCyOf7GxylxDIY5B-->L10. 弹性扩缩节点时调度侧会踩什么坑？</h2>
+<p data-page-node-id="thwNm8bbjVfLY8omvlIdii"><strong data-page-node-id="sXm3o7r4QrSd0imP8rROfy"><!--pnid:NfqtvTvmUqczbiNxw3MnYD-->场景</strong><!--pnid:B0pffBPP5Yj1CM2Inb2QsO-->：CA/Karpenter 扩容 1000 节点 ⇒ 大量 Pod 立即被调度到新节点，但节点 CNI/CSI 还没就绪 ⇒ Pod <code data-page-node-id="kfeVu7km5fxmz7SVSboYpm" data-pnid-children="quAOQ5R7AkQOtfwfYYr0yN">ContainerCreating</code><!--pnid:EGNPPEcQ1IxHl0VFwAK05b--> 长时间 / <code data-page-node-id="nmRsHate7RzWzlSNDU0kAn" data-pnid-children="OyENTRh6j7ATUKTZHvB6Ii">FailedMount</code><!--pnid:DYaZ35otTUworVZERgZxVs--> / <code data-page-node-id="Vr3cko7D6ufDkqNQTa33PC" data-pnid-children="DWtwETtCUKUUltNXlAT7QW">ImagePullBackOff</code><!--pnid:NmjZfk9hX6Vt8QPAJpvSGt--> / CNI not ready。</p>
+<p data-page-node-id="BLBwOpWseuolWjZrRFnZBX"><strong data-page-node-id="LA5pnJ1ii39cft0g85GsNB"><!--pnid:LwLTdZVXh1SgPLY4U3JFFo-->解法</strong><!--pnid:Z5EHWzmcDhHIgC47KRUiSq-->：
+1. 依赖 <strong data-page-node-id="A6vJM60DlUVGHbo7dbGuVL"><code data-page-node-id="xPWUz0H6AYREOOKkasKLDs" data-pnid-children="tZ0jgFPpU2PCzkZ3mrXR0I">node.kubernetes.io/not-ready</code><!--pnid:0hRYBZNs7fZMYHda8YI1Nb--> / <code data-page-node-id="ydH0tMtfV6JP5uKU55tYXK" data-pnid-children="y6rifdrTsTDDEqSM1T4EId">network-unavailable</code><!--pnid:MpbUQdobRnHxCjPTV7isPB--> / cloud provider uninitialized taint</strong><!--pnid:BxcPB1N5J1miDQ0l4xkjEd--> 天然防呆（scheduler 不会往 NoSchedule 污点节点调）；
+2. <strong data-page-node-id="LDBhZPTuiHat4QQlQV7sQV"><!--pnid:kga9ENPxNHL5LvczAUhAbD-->启动污点</strong><!--pnid:fLfJRlvE7KjzvXJfWYqCr0-->（如 <code data-page-node-id="Hu0Qk0yobAZWKHDm0xk8hZ" data-pnid-children="ERY5nkz0ojRVTUAnorRqu2">node.cilium.io/agent-not-ready</code><!--pnid:DACGFhaWtTDEg1OIEn6BQK-->、<code data-page-node-id="TS6KnU2Uwl2NKFmOY3YD46" data-pnid-children="BxvYswyr5fx2hYwEp7AWs4">node.kubernetes.io/network-unavailable</code><!--pnid:gbRT0wpkIf7847LaN1CyKT-->）由 CNI 就绪后移除；
+3. 关键业务加 <code data-page-node-id="aevDw8X8nl7Yq7k7y0uGuv" data-pnid-children="atTEH3O8ItCalBnwKK7MOh">minReadySeconds</code><!--pnid:Gq5EyIfyoAR7oNsxk1s1vt--> / readinessGate 防"节点起来就接流"；
+4. <strong data-page-node-id="bNLa98QYz6l6nOJTi8L1wu"><!--pnid:dZa9AEUdf17pjmes7ZeU2f-->弹性节奏控制</strong><!--pnid:295Lsb4x56I3agnemMbabD-->：客户端侧的批次发放避免瞬时打爆调度器和 API Server；
+5. 给新节点预留 / 扩容预热（提前创建 Warm Pool）。</p>
+<p data-page-node-id="7GsNS7sVnFmTJxe8ASVjpD"><strong data-page-node-id="Oo7jebOokQR4MPEWvCrIUg"><!--pnid:EGSk1UQIk7wPOES3jR1XFD-->收缩反向问题</strong><!--pnid:bx3vbQm80pUgJnJJ285uEQ-->：缩容时大量 Pod 同时被驱逐 ⇒ 瞬时 ΔQPS 爆发 ⇒ 同时进入调度队列，需要注意 PDB + 分批。</p>
+<hr data-page-node-id="LXb2JwQgRCFeJKfGyyXvaB">
+<h2 data-page-node-id="dE2FLQraYy74xe5gVFRNCU" id="l11-kubernetes-control-plane-scheduler"><!--pnid:sZ9mq0Ws9tv67gbdKTUxUt-->L11. 大规模下 Kubernetes Control Plane 与 Scheduler 的相互伤害？</h2>
+<ul data-page-node-id="deLITHIUHeCxOHlS4fIpkA">
+<li data-page-node-id="WB0rvIUX99DLLLMXAPgqNj"><strong data-page-node-id="AzuViYz6hwssr4gVbR13of"><!--pnid:DDfWlDAsKg7YB8sat110fG-->Scheduler watch 未调度 Pod</strong><!--pnid:2STeREkuJiuMSdRpyd14NO-->：大批 Pod 瞬时创建 ⇒ informer 事件流爆发 ⇒ 调度器内存/CPU 涨；</li>
+<li data-page-node-id="GsPXoUqdVPVqOr3vHGn2oD"><strong data-page-node-id="aw0f1ZT7PuJrk84qnTTUHT"><!--pnid:lRsiyefO2zSzFhycSGAhJs-->Scheduler 写 Event / Bind</strong><!--pnid:blq12OqbjKL0eosiG4oQfA-->：反向给 API Server 增压；</li>
+<li data-page-node-id="uYLTpWecguIlK2hZ3kLV2a"><strong data-page-node-id="RlpXaIbZJDfLOkBmDmU2Fa"><!--pnid:6WyDob3zbtZ0HT4QRSW0y8-->etcd 延迟上涨</strong><!--pnid:1h1OQOCvRTw4HWeyACoKEp--> ⇒ informer relist / resourceVersion 过期 "too old resource version" ⇒ scheduler cache 需要重建 ⇒ 调度暂停。</li>
+</ul>
+<p data-page-node-id="7rCrXELR3CEazofHYMspPn"><strong data-page-node-id="gwMuM5yPNySXRFaDuuk7SH"><!--pnid:YoI2Kbr0xGgJKuoJgk0enE-->解法</strong><!--pnid:4AWmDo03UOeUpbhNucoF0X-->：
+- 拆分 informer（多 profile 会各自 habere 一份 pod informer，注意内存随 profile 数涨）；
+- 控制 apiserver <code data-page-node-id="JbVIrw5vZtoF7S2VjmWXLd" data-pnid-children="ZQJbecsTQrc0nJAiNl5A6v">--max-requests-inflight</code><!--pnid:7pb9NL9iwr8LJ9UQODfVuM--> / Priority &amp; Fairness (APF) 给 scheduler 分配专用 FlowSchema，<strong data-page-node-id="SW84P5OOKlypeTeKRjyHi0"><!--pnid:odeN4QZCUKs5IPQCM6CHU6-->保障调度器不被其它组件饿死</strong><!--pnid:WCjuQ3I7UCSfqV4lj4W75j-->；
+- etcd 独立盘 + 监控 fsync 延迟（<code data-page-node-id="OIXvZf6h75oPDAYYh2hvEc" data-pnid-children="6BsdIl2Oroui9aZ0ndhgxM">etcd_disk_wal_fsync_duration_seconds</code><!--pnid:Ng6nMmLkKrOaiuZrkbU3JI--> P99）。</p>
+<pre data-page-node-id="Skyi4pr1uimHHS59aIS8WZ"><code data-page-node-id="gIQlaKwnIzwnpsFDdXHA2d" data-pnid-children="WMZPoZHstPf40vlAIw2q1y" class="language-yaml"># APF 给调度器保障配额（示意，字段以版本为准）
+apiVersion: flowcontrol.apiserver.k8s.io/v1
+kind: PriorityLevelConfiguration
+metadata:
+  name: system-scheduler
+spec:
+  type: Limited
+  limited:
+    assuredConcurrencyShares: 100
+    limitResponse:
+      type: Queue
+      queuing:
+        queueLengthLimit: 500
+</code></pre>
+<hr data-page-node-id="STqcpqyjvLbFhqawcj8r68">
+<h2 data-page-node-id="3WT1e1D8S4aN8tuMU120t2" id="l12"><!--pnid:coWBRMLZS6iRI5Oc9GHnQX-->L12. 多租户 / 多个产品共用集群怎么防止互相影響？</h2>
+<p data-page-node-id="do1E4ytzPDTsEZmHhutzwh"><!--pnid:rCLX30hm95lYWkg5Qv5yOQ-->组合拳：
+1. <strong data-page-node-id="iExWsmZDRJiVWm3IqiE0L8"><!--pnid:UdqZdoEHB0xcEYhyDZyVR2-->节点池 + taint</strong><!--pnid:we4C0U9hD7QuRdTIoOktnH-->（硬隔离）；
+2. <strong data-page-node-id="R9G3d4MzxV4LMrtQ0xnBz8"><!--pnid:usJTZGEdtPeJQ6EYObivGW-->profile 拆分</strong><!--pnid:DVyJVlJVPqAqssegURpQs3-->（策略隔离：在线/离线不同打分）；
+3. <strong data-page-node-id="GOMKORZDBbjYkDdFNrdtQJ"><!--pnid:jMXQbe1o2Xz2IZdNMIncDJ-->ResourceQuota</strong><!--pnid:m96qQwtjczkUn9My0X5aW1-->（总量封顶）+ <strong data-page-node-id="gGSD1vGhBAMvHWN8ftkcC4"><!--pnid:XA0OqXjM91XhQ7OFIGd0no-->LimitRange</strong><!--pnid:dHW0GOuzyI498xlehhoKWa-->（默认 requests，防 Pod 开 0 request）；
+4. <strong data-page-node-id="HjystRsQ34vHDPEnGbkDaf"><!--pnid:XEHguXf16jlU3ORGzk2qOd-->PriorityClass 分层</strong><!--pnid:IkUI9CnorEFrafZ2jOmEX6--> 且默认层 <code data-page-node-id="G7iCIUZbVcXEczJVqYV4t2" data-pnid-children="GGT5HWG13zXLRyRuHtT40D">preemptionPolicy: Never</code><!--pnid:RVnuuo9j1D1iE0WlwJLkKw-->；
+5. <strong data-page-node-id="jmZ03pRsFTdydVLtBGbeTW"><!--pnid:nBauAu92N8aFpueak7wSkx-->Priority &amp; Fairness</strong><!--pnid:20ANyy37C6iBgiLmHywL3t--> 保证调度器的 apiserver 配额。</p>
+<pre data-page-node-id="yiPAHODMgXzuvKDhogSVjU"><code data-page-node-id="PBboiV2lvDmzWgl83286j7" data-pnid-children="IKYbPRjc5Q30VamI2t1U9m" class="language-yaml"># 防呆：给每个 NS 注入默认 requests（否则业务创建 0 request 的 Pod 会引发过度调度 + OOM）
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: tenant-a
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 500m
+        memory: 512Mi
+      default:
+        cpu: &quot;2&quot;
+        memory: 2Gi
+      max:
+        cpu: &quot;32&quot;
+        memory: 64Gi
+</code></pre>
+<hr data-page-node-id="MEj69OOxA2tQ91Hs8r3gpD">
+<h2 data-page-node-id="ePa5eSX6iE5EMkHEGX5wLy" id="l13-scheduler-apiserveretcd"><!--pnid:H64LxjMWYm4LESvjY8dl7P-->L13. 怎么判断"scheduler 本身慢"还是"apiserver/etcd 慢"？</h2>
+<p data-page-node-id="pMTQkzBYo7yYtPj4RrXGYL"><strong data-page-node-id="w8mO2XTBther1pcsHGZWca"><!--pnid:4J0unXnaqc1pbVrE6eSCfC-->三步定位法</strong><!--pnid:bCYLRiONOcMzM3lZL59mSe-->：</p>
+<pre data-page-node-id="Cht2aFN6MIpT2TeZX6x27o"><code data-page-node-id="aCXqvQcz67czJSSm1mZGqH" data-pnid-children="aq3v0bMUjFCokMrlMRkrBK" class="language-promql"># ① 调度器自身：插件级耗时分解（若是这里高 → 是 scheduler 侧算法/规模问题）
+histogram_quantile(0.99,
+  sum by (plugin, extension_point, le) (
+    rate(scheduler_framework_plugin_duration_seconds_bucket[5m])
+  )
+)
+
+# ② 到 apiserver 的往返（若这里高 → 是 apiserver/etcd 或客户端限流）
+histogram_quantile(0.99,
+  sum by (verb, resource, le) (
+    rate(apiserver_request_duration_seconds_bucket[5m])
+  )
+)
+
+# ③ etcd 自身（若这里高 → 根子在 etcd）
+histogram_quantile(0.99,
+  rate(etcd_request_duration_seconds_bucket[5m])
+)
+histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))
+</code></pre>
+<p data-page-node-id="pK3Qb61Y9xPdvaUxC7ZFNn"><strong data-page-node-id="rn3Qtk4NH6bqSnDmKtmzhZ"><!--pnid:NYyJLpX8Pn6tgoeGxAus2b-->判定表</strong><!--pnid:NmE0quNzu4LuBgHjEo2CiB-->：</p>
+<table data-page-node-id="tLHmH60dXC5NofxLIEigiW">
+<thead data-page-node-id="dtxPNEbWgKY0wNQeeTuPAc">
+<tr data-page-node-id="02iMCgGC3w2eK54lxPwZ5j">
+<th data-page-node-id="jhQugCYwkZM0yLWMc5Jy2B"><!--pnid:J6RpzdWxRMb9gDo88h1MS1-->现象</th>
+<th data-page-node-id="MHkhqdNkwLYMknBbFr4HSK"><!--pnid:drNrhx544KE1RnDZa8wTlc-->结论</th>
+</tr>
+</thead>
+<tbody data-page-node-id="COKF1P2a4yWq26QocHSkng">
+<tr data-page-node-id="TXV1WMlU1pZ3og56rEKQYW">
+<td data-page-node-id="9aogkwtJhvlBckLGmjL17Y"><!--pnid:LZzlil9BFDZOofigGp6Zpe-->① 高、②③ 正常</td>
+<td data-page-node-id="YxNn2ba17rW8sMYQIULmk9"><!--pnid:vc2LDHVeeCzJ5XmLvz8MgW-->scheduler 算法/规模瓶颈 → 调 percentageOfNodesToScore、简化约束、节点池化</td>
+</tr>
+<tr data-page-node-id="uMCJ2Y8wkplGE6UicQSGBY">
+<td data-page-node-id="Y5irZ1iAvo1eNUu53CcsLN"><!--pnid:wFYPkRqPYqmWEEg5LUnnJg-->①②③ 都高</td>
+<td data-page-node-id="HfhKAFXfDNm1ioaTqVU84C"><!--pnid:xbpazrs38meSHYej4HlbjI-->etcd 慢，级联到 apiserver 再到 scheduler → 先治 etcd（磁盘/压缩/对象数）</td>
+</tr>
+<tr data-page-node-id="nzo6tmaOVACwURy5TkgWIP">
+<td data-page-node-id="zUfAx6eTzuz37HILt5Y5Eu"><!--pnid:L5jWIOvt5WTC56tqH5EgC2-->① 正常、② 高、③ 正常</td>
+<td data-page-node-id="ry9p0aazjRK9oBn0Nq0Uxw"><!--pnid:W19IYjdmPFI4ylrMeoZJ9k-->apiserver 侧：对象数过多 / Event 洪水 / 限流分流 → 看 APF、看 verb=create events</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="qLfcTE07fYkivO68IaCzwP">
+<h2 data-page-node-id="5LR0qfN0YrzNVTXp208oBl" id="l14"><!--pnid:C5bxsITU3ySPdsn0hR5N9s-->L14. 亲和/反亲和在大规模下为什么是性能杀手？怎么优化？</h2>
+<p data-page-node-id="YFc1UmPrVbr9WcrvoKpJyy"><strong data-page-node-id="OuKf0aR0u7SAU9e4mRImgt"><!--pnid:icCS3nHnkNdWqAhVVQxRtg-->成本模型</strong><!--pnid:wQlPh5I6ClRiItzEHCFwto-->：
+- <code data-page-node-id="1ZjIK3cHYToAYfd0KhEAUE" data-pnid-children="ORJGceDxR23mcXHbe8qnFv">podAffinity/podAntiAffinity</code><!--pnid:1XjxXDYLcZMXSJAN5QwRcm--> 需要对每个候选节点，<strong data-page-node-id="FxzNBge0eE0PvKFEKMHWCh"><!--pnid:jfgDUlzRHrxJwz7FSsde17-->遍历该 topology domain 下所有匹配 labelSelector 的 Pod</strong><!--pnid:idNjkN0sLN1x1mrwNu06QW-->；
+- 若 topologyKey=hostname 且 Pod 很多 ⇒ 每次要聚合全集群 Pod ⇒ 与 Pod 总数近似线性。</p>
+<p data-page-node-id="kgAx3vL4FbqbUJEfagYlV2"><strong data-page-node-id="ceV6kKU4A0sTFrhjb9ZERy"><!--pnid:HmQHy9r8QxTKJxPObgSMOh-->社区优化</strong><!--pnid:3JGnAig3EIlo8hdQLbfCkF-->（答出来很加分）：
+- PreFilter 阶段预先计算 matching pod 列表 / topology pairs，避免每个节点重复扫；
+- 限制同一拓扑域内的候选数量；
+- <code data-page-node-id="iznFbAEYMizIs1G0JeoDFL" data-pnid-children="mkLyL1jlqv6dcHgoWBNTAM">topologyKey</code><!--pnid:NPssdPUa1qWLFUKd9kCOHH--> 不要乱选 hostname（除非必要），用更粗的 topologyKey 能减少聚合开销。</p>
+<p data-page-node-id="jWZhT0NYUZSxS7NvqkWHCy"><strong data-page-node-id="LwyYaGIrsrbkOgPo2qsw8O"><!--pnid:WkMiYui4g7TWBTjp73MNWX-->治理建议</strong><!--pnid:Zfzu1zkM5YxCCoJSBt8Yh2-->：
+1. <strong data-page-node-id="P9CG4rBKHLFwdW5guQT4aO"><!--pnid:YFtxmxTLKDbpnY3Bhj6V1T-->优先用 <code data-page-node-id="4ZqqGVxgSOgfam5uJKcaxg" data-pnid-children="TfcO0Jpf0XA4b92eMiF9FI">topologySpreadConstraints</code><!--pnid:Ic6GmHdWGPSo0cdYClbKyr--> 取代 <code data-page-node-id="A4b2kJikICY8kT7sZy0SXN" data-pnid-children="aUWdbv2wt590it0gliedQC">podAntiAffinity</code></strong><!--pnid:xtKY0eF1AkeEx19oiAT7vq--> 表达打散；
+2. labelSelector <strong data-page-node-id="ZegWVfzHVDiAwjx6XwoLWz"><!--pnid:ZdFUXB71q8xAdUSfTHPx14-->基数要小</strong><!--pnid:ZbkXf0nKIYyiV6vxOo2a8D-->（不要用它匹配全量 Pod）；
+3. 周期性检查 spike：<code data-page-node-id="fzLaiscaNKfa9Lgctp2V83" data-pnid-children="aq4kKuSlZA5lkLE2f9PIUr">scheduler_framework_plugin_duration_seconds{plugin=~"InterPodAffinity|PodTopologySpread"}</code><!--pnid:hkXkwMWaKXjKiPfrqQlOvj--> P99。</p>
+<hr data-page-node-id="iwP02GKmKMaUMilQEjjhPl">
+<h2 data-page-node-id="MWlTAZjJXce9LWhiXMl4pZ" id="l15"><!--pnid:ctqn78eaD3Iy6U9PC80RLV-->L15. 调度策略变更如何灰度与回滚？（生产变更治理）</h2>
+<p data-page-node-id="GfHMSLtM2f1TMbVlp3qnX3"><strong data-page-node-id="MdGZBxvdUQd1S88JANQuN9"><!--pnid:SyuM1safoBIGq2JuyzoxPv-->任何调度器配置变更都必须走这条路</strong><!--pnid:kThr1dFvv3FB0eqcFR9Ifk-->：</p>
+<table data-page-node-id="nLGpzzpBao1KuFnXam5q75">
+<thead data-page-node-id="v5147FOrHQggf6gzIbpgbr">
+<tr data-page-node-id="qBrjnmxiDWmdjppBXXJIAn">
+<th data-page-node-id="HDblJ2BeDzyifmG1voUfGy"><!--pnid:KSXKh5a56ukc03kvx1ylXe-->阶段</th>
+<th data-page-node-id="neS2bdCSHfHPzucaDCA2o0"><!--pnid:KMV2HnZialLakzz9v8zNm6-->灰度比例</th>
+<th data-page-node-id="yD7DsKTGX2VHutskvPO2Fu"><!--pnid:e38xxHbo77GfssfXICz61N-->观察指标（≥ 30min）</th>
+<th data-page-node-id="1ZN3gkp9SNXdPoDkKmV84o"><!--pnid:ZYQdiQ8vMNslRQkKaJAZ8Z-->回滚触发条件</th>
+</tr>
+</thead>
+<tbody data-page-node-id="VBHR98wrcmiZIPioIBLTcq">
+<tr data-page-node-id="HOrnwrZaXnXxlguHZiSwsY">
+<td data-page-node-id="tF3pfaxrp3CIfAhfxmNNab"><!--pnid:eWe2ZXQIPwtzvmowsJfbJ2-->Step 1</td>
+<td data-page-node-id="q8mHHCLG7BuroxMM0Zlhll"><strong data-page-node-id="crfprmDLOVi203SNPOhPSO"><!--pnid:kQ2ZBT0TAhdORee3dyYmyN-->1%</strong><!--pnid:RyqHEuf3LeRET8lLmIyxTM--> Pod（通过独立 <code data-page-node-id="vQtU7JJfUX64KZvA73y6NS" data-pnid-children="VKkaYmXaQSs1hopJDHNEzv">schedulerName</code><!--pnid:qfxJT5KKUwUqFf390e9GYs--> 灰度，而不是直接改默认调度器）</td>
+<td data-page-node-id="gwqcR5GKelsVwEOc12C89L"><!--pnid:1yCstRAOFSKYlgRZZfSx6Q-->P99 调度时延、失败率、Pending 数</td>
+<td data-page-node-id="xlNBCSgP300SvOUMVFd8yL"><!--pnid:3vMuFUu9vaQeUgCxHm1h0K-->失败率 &gt; 基线 +2pp，或 P99 &gt; 基线 ×1.5</td>
+</tr>
+<tr data-page-node-id="zpfLI5TNBBTOKy2pC1a9e8">
+<td data-page-node-id="q6GvkkvvMIcJKdq2RleL9I"><!--pnid:FYVRQ2Qj6uNNJQfysWxNxB-->Step 2</td>
+<td data-page-node-id="A7tDFwmOMEgEswv2kOtUJK"><!--pnid:eb2rDj12gaYkauSir14luL-->10%</td>
+<td data-page-node-id="xy4HCG0lmkzqw4ITS9e1CE"><!--pnid:ab2eJsipGKvokHLY1sNMGC-->+ 业务 P99 延迟、错误率</td>
+<td data-page-node-id="WQBPInO4HyNLE7VqesgWDm"><!--pnid:4OLANgA2s2Dyj2rvwsP89G-->同上，或任一业务 SLO 告警触发</td>
+</tr>
+<tr data-page-node-id="JKgfTPzlDW1bNODFvfrliu">
+<td data-page-node-id="HKCxheYmO0kjZeDikuuNzb"><!--pnid:NcluKHaQqi3deZhQUAHhJM-->Step 3</td>
+<td data-page-node-id="3yUItzWsS3fbE9rS8BoaUm"><!--pnid:Xq9KSCRAdI0a5SxULKdq0X-->50%</td>
+<td data-page-node-id="ka95rxh8XDqsx7LjCQD23t"><!--pnid:p2aGqQpZxGMTXQlDZyEWoV-->全量 SLO Dashboard</td>
+<td data-page-node-id="m0CNgw1JEtl9aZdmvEJwyG"><!--pnid:nLQzQLgfhjdx24PbCHNtwl-->同上</td>
+</tr>
+<tr data-page-node-id="APbR4oVg9ruFeUHqu9yNNt">
+<td data-page-node-id="BhtLIXT966I9VzKJdsZrm7"><!--pnid:jTlZOvLdNaDafHxbF6pynZ-->Step 4</td>
+<td data-page-node-id="ykI5k5UNaDGWbN0tqeT0rQ"><!--pnid:BqXSfm8KEWQ0y6B8mYL6VG-->100%</td>
+<td data-page-node-id="XZcOmPYUVP3lbgf93Z5nlp"><!--pnid:O0Ww6VgiNJWouBL9UtL0mC-->稳定 ≥ 24h</td>
+<td data-page-node-id="Tggf75EusHTFVpQG3HBmdw"><!--pnid:g7DRCmKniVw3MYnpAJGSrA-->—</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="yieaAenDKEufOkNIngk4qI"><strong data-page-node-id="SgBqIS2rmdX3IOP9hvRimT"><!--pnid:4KSFThYlqyKQyNtNMfyZuh-->回滚要点</strong><!--pnid:cf34b6CzKQ4zMG88OlIPHb-->：
+- <strong data-page-node-id="H2RarKmAsBX7Qsh2LDAD3V"><!--pnid:gg4SQRQum9lEuUotpy7Q7C-->优先"改回 schedulerName"</strong><!--pnid:uCY4sdQvehPzacdBIQTH1v-->（把 Pod 切回 default-scheduler），而不是回滚二进制；这是秒级、幂等的；
+- 配置用 ConfigMap/文件 + 版本化管理，回滚就是切回上一个版本文件；
+- <em data-page-node-id="1znOreiGlZulNdwGw4ivwV"><!--pnid:xoC5HQWOu5utBvtNkdiiGt-->注意</em><!--pnid:NV4rpjsMOLF2WVJRkWaZng-->：回滚旧 scheduling 配置<strong data-page-node-id="qT0Rk3ORLGSsbrd09qlEjp"><!--pnid:KSjVaaYjTGL8G62EY5vn4V-->不会重新调度</strong><!--pnid:81Td1biXanE1gwHZgI9V4L-->已经在跑的 Pod ⇒ 已受影响的 Pod 需要靠 Descheduler 或人工滚动重启才能回到期望分布（这点必须在方案里写明）。</p>
+<p data-page-node-id="0QgZei59x0Gj1yhhRvS5MM"><strong data-page-node-id="9z60zWefdTI9awGBCfLsgs"><!--pnid:Kx9P3FO0HSflesKMfZ1iLB-->示例：通过新 profile 灰度</strong></p>
+<pre data-page-node-id="FnNL4haiLIaJIqQoM4jJzT"><code data-page-node-id="iaJguLQIDODHAYucEba4da" data-pnid-children="4RPfBEqwrLjdFPbXCbhdnG" class="language-yaml"># 1) 先在同一个 kube-scheduler 里加一个灰度 profile
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+profiles:
+  - schedulerName: default-scheduler        # 老策略，保持不变
+  - schedulerName: default-scheduler-canary # 新策略
+    plugins:
+      score:
+        enabled:
+          - name: NodeResourcesFit
+            weight: 2
+    pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            type: MostAllocated
+            resources:
+              - {name: cpu, weight: 1}
+              - {name: memory, weight: 1}
+</code></pre>
+<pre data-page-node-id="AcfPqUp6tw1SigF3aXj7xI"><code data-page-node-id="j7LMwvykg7QhscP9mhRSiu" data-pnid-children="Hg8tRVUgdXdhhI3bAevAs7" class="language-bash"># 2) 把 1% 的 Deployment 切进去（用 patch，可观察、可秒回）
+kubectl -n app patch deploy web -p '{&quot;spec&quot;:{&quot;template&quot;:{&quot;spec&quot;:{&quot;schedulerName&quot;:&quot;default-scheduler-canary&quot;}}}}'
+# 3) 观察 30min ... 出问题：
+kubectl -n app patch deploy web -p '{&quot;spec&quot;:{&quot;template&quot;:{&quot;spec&quot;:{&quot;schedulerName&quot;:&quot;default-scheduler&quot;}}}}'
+</code></pre>
+<hr data-page-node-id="EYYPjcEBqOO8JBZBmltmsb">
+<h2 data-page-node-id="atsjQyXnbfEuNbQv2kPnQF" id="l16"><!--pnid:HjMK0ZT0seOyaFEYEP9lkx-->L16. 给你一个新集群，怎么设计其"调度治理"方案？（综合题/架构题）</h2>
+<p data-page-node-id="eXbXMUv7YeriTbULWcx1P6"><!--pnid:mljoi39pFm9KTGfpeeO8Hr-->按这个顺序答，面试官会认为你干过：</p>
+<ol data-page-node-id="5jJ5usM45WDRWazzVTA3TA">
+<li data-page-node-id="ldK6lyImLA0kuaxdKB93Bj"><strong data-page-node-id="fDM81ncdt4sjOzbfthqSJn"><!--pnid:Q44ISN6PJ0MXmJZsTui6Tp-->先问 SLO</strong><!--pnid:qdpXqHzp7e7V4KFWd5ccWI-->：业务的可用性目标是多少？P99 延迟目标？成本预算约束？（<strong data-page-node-id="Yqxss3WKCZZkMHKoupeGCH"><!--pnid:CK910fvaSGG5RQdqmc7ueW-->不先问 SLO 就谈调度的都是耍流氓</strong><!--pnid:744eNHqRyyShq89ds6cn6c-->）</li>
+<li data-page-node-id="pOOaD3mWcUFMoNk4DzOUdf"><strong data-page-node-id="dv1hHhSEWvcCgfhqqrJuFg"><!--pnid:S756LMQQKzkko5gs2wfjLZ-->节点池化设计</strong><!--pnid:WNcQs7beocM35RVdn4pgqq-->：按机型/业务线/租户划 pool（taint + label），天然缩小调度候选集。</li>
+<li data-page-node-id="GY2AT7V9EbwWOhnJyTezgb"><strong data-page-node-id="pZIAQokXD8vPTDitE3y27o"><!--pnid:Fe6TQot4vNI02QkkhPBDzA-->优先级体系</strong><!--pnid:oAoHl5sghnlIi3SKky8BSj-->：3~5 个 PriorityClass（system &gt; prod &gt; default &gt; batch-low），默认层 <code data-page-node-id="TQvU7bsa4uMyQ4Wu6sd1id" data-pnid-children="TpYHLKqP0RCpnYjQ84Txmm">preemptionPolicy: Never</code><!--pnid:UoZUF5eGqvuXcZWVzd9oa8-->。</li>
+<li data-page-node-id="ULmxjZ3316KbZtZAjsjMw2"><strong data-page-node-id="P8CEOjamVKYvc2W6zNr73V"><!--pnid:zxKBz2UNJAtfjhLkurn2GB-->requests/limits 治理</strong><!--pnid:zvaONlLKCVaxQMgCdf4s0w-->：LimitRange 给默认值；定期用实测用量做 requests 校准（VPA recommendation / Prometheus）。</li>
+<li data-page-node-id="FgQOLapB8bdOd6JjZpDK92"><strong data-page-node-id="z8fSPmOurxC5XPfiZjGXD5"><!--pnid:Dt5eN7laP7jb8H66nPOUXK-->多 profile</strong><!--pnid:OU8Y1NZPNjzuVJdnDenI20-->：在线用 LeastAllocated + 均衡；离线用 MostAllocated + 装箱。</li>
+<li data-page-node-id="pEfReaE5ybIW16CPS2514w"><strong data-page-node-id="nxPqmIpuFrBAt0rIe06T4R"><!--pnid:TqQi06hOcNxp39TBYtH11p-->可观测性</strong><!--pnid:GxZUS3BbEARk9ial7Vi9gR-->：scheduler metrics + 关键告警（Pending、失败率、P99、抢占、插件耗时 Top）。</li>
+<li data-page-node-id="6xz6yoHhNzJh5IoOWczlxR"><strong data-page-node-id="B2zCthG8U3csP19MS4NTul"><!--pnid:7kL0GFAYX1ljO9kzsulPiX-->混沌演练</strong><!--pnid:ykhnIjQ2baJbSlLdRMO0MD-->：定期 GameDay —— 杀调度器、模拟节点宕机、模拟 Pod 洪峰，验证 SLO 与 MTTR。</li>
+<li data-page-node-id="ePbF2qgrvuVLwrZ69raNDv"><strong data-page-node-id="91zHCuLhD9tmq5Bii3YVVG"><!--pnid:XTuIzdiONEYHitNmTQdGqj-->变更治理</strong><!--pnid:4dLCvC6Ah1wDsztNbKUCoI-->：灰度/回滚流程 + Descheduler 兜底。</li>
+</ol>
+<hr data-page-node-id="nh0h0zOgEFV2WLriTTykeu">
+<h1 data-page-node-id="qX6UlV7Efxbgs0wMlUpQQX" id="part-c-sre"><!--pnid:RHQKPnXvxITagbGeYtIHLX-->Part C · 反模式清单（SRE 视角，可直接用于生产巡检）</h1>
+<blockquote data-page-node-id="dN5sW7zPqIYDUI1SVczF3V">
+<p data-page-node-id="sjopszk2trsl0LXVMT9Ib6"><!--pnid:9IegTw3JK1u1Kmso9eptfh-->每条含：反模式 / 证据 / 风险等级 / 修复动作 / 验证方式</p>
+</blockquote>
+<table data-page-node-id="f8k49SajgmugwEGRlatRP8">
+<thead data-page-node-id="vYE1QbJLdr7X0lUj0eUSn9">
+<tr data-page-node-id="MSO4nD7g3LvWTNaLjHFvYN">
+<th data-page-node-id="ApOyvjuNneATtKCbzBReUi"><!--pnid:YNlk6VBldN6uL1FhigujnO-->#</th>
+<th data-page-node-id="vhKoTA62zPHGr3GwleRrgL"><!--pnid:KD1TvjTwx5z9IOMHeFCNu1-->反模式</th>
+<th data-page-node-id="GkwhhLvkWSZEDUOWUb4dds"><!--pnid:r9vKICDhmeMnaiqbNm0kg1-->证据（怎么发现）</th>
+<th data-page-node-id="jgviR421sY8iR4KbgUpBPM"><!--pnid:dnsv7EvW5rCP5RNYoPv778-->等级</th>
+<th data-page-node-id="3N0WLlCfmjS0C2o4ZqmiD2"><!--pnid:wNGOfalzUdGtU2l5rAiGjw-->修复动作</th>
+<th data-page-node-id="m4iVVbkrFaYudSIBLQOQmQ"><!--pnid:dA17a55jSEywOxdseb0hBd-->验证方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="q5SFHFHsnMKMjkZu17Q53F">
+<tr data-page-node-id="uNj0MBiaKx9eFu6PZw7arj">
+<td data-page-node-id="Mds45Bw1zGL82gBItz51Wj"><!--pnid:wYPV1iMcKMyZSgWAoiSPt4-->C1</td>
+<td data-page-node-id="5VhoDXWGHEoRHV1zCxuMD0"><!--pnid:HcMKNhuKRO7o5wOR6SGBSC-->容器不设 requests / requests 远低于实际用量</td>
+<td data-page-node-id="ZbEp6uyJiIFMjuLHXLFghF"><code data-page-node-id="6FBBXEh0CMV9A4DzTQvF5H" data-pnid-children="26YKxkjjPoot1Dfl5gAvKS">kube_pod_container_resource_requests</code><!--pnid:rxcPrl3NPaZw6l0XT5Wngi--> vs 实际用量；节点 OOM 频繁</td>
+<td data-page-node-id="8LhOctrdF4EIPhIPowV1G8"><!--pnid:Yu9kc5KgVhSyqqGVBeXQ1T-->🔴 高</td>
+<td data-page-node-id="XsAoGlotShe39t21IHvEDM"><!--pnid:dV8QQq9pfbE1fTUBV314HM-->LimitRange 注入默认；VPA recommend 校准</td>
+<td data-page-node-id="m2ItH1MjBQxIBxowwR8Fzg"><!--pnid:aSLReZ12wHrg1gaxJASMaz-->节点 OOMKill 数下降；<code data-page-node-id="L92EdOQ7XBaQhfjnV6Gp82" data-pnid-children="ID52B86i62LcS75qe0oRRL">kube_pod_container_status_terminated_reason{reason="OOMKilled"}</code><!--pnid:aQAiiwvRn8dBjtV0Qh7O95--> 归零</td>
+</tr>
+<tr data-page-node-id="QuQftIz0ILWSP0rlfxSnwV">
+<td data-page-node-id="T9rqVBUwApymuqjptM7ZDe"><!--pnid:z1ReMB41Aq2UuTvZrWjwsO-->C2</td>
+<td data-page-node-id="Bp4N6p6DuRApkuI6B6wPgP"><!--pnid:XzfBTvG88m8204QseL15Wv-->只用 <code data-page-node-id="9N2m9npb1LnSdh78XOHN5I" data-pnid-children="Q8ezfrzeXvBkAHLNAeK6e0">podAntiAffinity</code><!--pnid:GMJGqUGN4OPSn15lOSpzQj--> 做打散，且 labelSelector 基数巨大</td>
+<td data-page-node-id="KttKeWfSlG2cErI5Ie0wKQ"><code data-page-node-id="0iNBcjcm0caoev0SMeXS1d" data-pnid-children="rBkdCDzbWYwBoyhsPAgYFw">scheduler_framework_plugin_duration_seconds{plugin="InterPodAffinity"}</code><!--pnid:lKFNGU2FVAWG2WC2gaWd2O--> P99 高</td>
+<td data-page-node-id="TwchRRu4qE5y4eUMjTbuOF"><!--pnid:fMLenUiYCbdMdehJKOunKo-->🔴 高</td>
+<td data-page-node-id="dJ3B2DqVEBymJU4Jg5EOrS"><!--pnid:ro6LO1i3PQmzUFktWCg3oc-->改用 <code data-page-node-id="BFqWLsXboNT1D2kw19taUJ" data-pnid-children="KDQrwawoGPObcWtK8tzIOz">topologySpreadConstraints</code><!--pnid:AZcArqX7t9FCjoAa1LULgd-->；收敛 selector</td>
+<td data-page-node-id="r80tb4fuxgJaqV82PqEWl3"><!--pnid:zuicjeXEhd5jQRbBIW6H2J-->该插件 P99 下降 ≥ 30%（实测）</td>
+</tr>
+<tr data-page-node-id="o38IpgFz5Vkh3osgTXRvNj">
+<td data-page-node-id="OEkq7dmeYozG1USaT543Qd"><!--pnid:31cBYAnqeXN4yymUoMdsvZ-->C3</td>
+<td data-page-node-id="vGPYMzZAt18wJIiTRNTHeU"><!--pnid:SfuCOlgsvKufOPCJ2LtVNt-->默认 PriorityClass 允许抢占</td>
+<td data-page-node-id="CEKQbknqlWWN1mmKK3MEnW"><!--pnid:EJO5mEqeutirc8jhgYLZmS-->存在多个 value &gt; 0 且 <code data-page-node-id="0vfcca0daofYvXzZwHHNcl" data-pnid-children="pwD6JEKIXDsSSJlOZx2ZnB">preemptionPolicy</code><!--pnid:TJTw72fuVp5mkxpAneJSdY--> 非 Never 的默认类</td>
+<td data-page-node-id="V2xAJjwRL9oeMr9cgak53I"><!--pnid:1qLmqcCXzWKeDXwWQ6KkHP-->🔴 高</td>
+<td data-page-node-id="CqU361Rzj2TgOGtw6wXjsY"><!--pnid:eCp6T9gwGmUs02U8yfGxbR-->默认层设 <code data-page-node-id="gbS3y16OjdITbGjorvdrhV" data-pnid-children="Poxb751HZX8cXzaaFPx5Jj">preemptionPolicy: Never</code></td>
+<td data-page-node-id="g6fs1gBM4vG23bFIGx6NS4"><code data-page-node-id="Eg8U0zUqi9fnPbuv6Z0KDk" data-pnid-children="mHJWsXXvQsI9sMmzGeZJPg">scheduler_preemption_victims</code><!--pnid:GKZhLnmrpeyq5vqUyMqOzP--> 速率下降</td>
+</tr>
+<tr data-page-node-id="uJ0nAroddCiC4ESNchogdx">
+<td data-page-node-id="6pNf8pOL9cTzA6b6MXym00"><!--pnid:zIt1Yaxj73AHFVt42SdpNK-->C4</td>
+<td data-page-node-id="WBY0h7qPr07nq7coWGL382"><!--pnid:rZs6oUjwVFolzmLXyNhcrF-->scheduleName 拼错 / 无对应调度器</td>
+<td data-page-node-id="1FezpI3Nv0lNTFljYIodIs"><!--pnid:ZNB7J7NhwgwGAhiXnGDXLs-->Pod Pending 且<strong data-page-node-id="cpjcxwULfaQmslyjnsL1hn"><!--pnid:Mebs0NOGX3JToPYm5zjGXp-->无任何 Event</strong></td>
+<td data-page-node-id="YwJWCH8RG07uQLUt2vY2pd"><!--pnid:P9nmJoKZUrd9ReXZMge3u6-->🟠 中</td>
+<td data-page-node-id="vi14846rIBi8JR8VhlSHmR"><!--pnid:vn0ONqG4l0hwjVsZiZaC6f-->校验 webhook 检查 schedulerName 是否在白名单；巡检脚本</td>
+<td data-page-node-id="Z880KlJ1Xh29Gwjc5jJ7lk"><!--pnid:r3Pk4w2EYML8ajy6KdtlAP-->巡检脚本输出异常 Pod 数为 0</td>
+</tr>
+<tr data-page-node-id="3XuGKk2wcJbemosICX8TTM">
+<td data-page-node-id="h1ljae2YbWJDcUnkHSYOYy"><!--pnid:e0jn11xMqJ4GsUVrLazPpk-->C5</td>
+<td data-page-node-id="MNgtgvmr5Gd5WBydvaFvRd"><!--pnid:qkZaxqQHnzH9qkQiXu1WvF-->生产长期开 <code data-page-node-id="PTLLBl8FXwbaDBNfxiTBzI" data-pnid-children="qJd874Zr5FMDNMeZMeFC8A">-v=5</code><!--pnid:tAUwZEa56v4Yfcq7rXTefs--> 调试日志</td>
+<td data-page-node-id="kZi7IU6ZLz6Ldq2TvKiFXC"><!--pnid:NR6XMbif1NaYCX7ImRW7cI-->scheduler 日志量巨大、CPU 高</td>
+<td data-page-node-id="y5v52DU9kSopd55z41bYFx"><!--pnid:Sd9oAYig4ypvntIo4yIKiV-->🟠 中</td>
+<td data-page-node-id="9DsvsNHBcbKwaKK4dk9JFd"><!--pnid:Pw7hkE3tptMuyrzLR0Wp7R-->恢复 <code data-page-node-id="UlN4pqvW2OI4Kh5iAYvfT0" data-pnid-children="2GABomMy7kcR5OplVPnHOn">-v=2</code><!--pnid:EvomYlryQPVf6EJDqDe3L8-->；按需临时打开</td>
+<td data-page-node-id="gms8wCcLPO6FJt7cLpT1ty"><!--pnid:2RMSnYgLeFINT7LAzNIiLy-->CPU 使用率回落；日志量下降</td>
+</tr>
+<tr data-page-node-id="QqH6rzxyXikJqzJsffjHzr">
+<td data-page-node-id="6h7Ji2sbNgZV6qHvKwmx7R"><!--pnid:gb69oEdetO6WxtgU1KbcKR-->C6</td>
+<td data-page-node-id="LkkJQeyrBHPXHPTVVnLGss"><!--pnid:IWXE2cb7odzodHHQ2MPZn4-->一个超大 RuntimeClass/Pool 无任何隔离</td>
+<td data-page-node-id="x46YRjaX5fIbGZjt28PajP"><code data-page-node-id="UUotzrS31IbyVWvLxX40N5" data-pnid-children="CGoQ9EFHp4E2CC1jLWQBV1">kube_node_info</code><!--pnid:Xbcocy2QSdrFwJAswYMrw2--> 5000 节点单一 labels</td>
+<td data-page-node-id="Co6yVeQs3k0h58y6qxPtCK"><!--pnid:oG8VKa08TRyNAeROdPhr6Q-->🟠 中</td>
+<td data-page-node-id="wPFB7RVRGSJQ3ngl4Hlpw7"><!--pnid:AGAeT36pJ5cWsC18EdsZRz-->池化 + taint</td>
+<td data-page-node-id="cwP4AvVLvaU7WY2kzYC6Hk"><!--pnid:DV0W9ugKxZi06aPSMlBeqP-->Filter P99 下降</td>
+</tr>
+<tr data-page-node-id="z9MwiiZjH6hpSUmokMsuCu">
+<td data-page-node-id="KifhNtY6ECYrFWHHL4h0OU"><!--pnid:uQ3EoLRC02S0VcFkbgwPlU-->C7</td>
+<td data-page-node-id="kHkHMR53OMafcg1GrDMw0s"><!--pnid:X5TKplTwaqrlSERQKI7DHH-->用 Scheduler Extender 做核心逻辑</td>
+<td data-page-node-id="quv9pjJxrPwwTvGXRE21SD"><!--pnid:3jaMN0QT5GgkN9OoMwvcoN-->extender 依赖 + kube-scheduler 超时日志</td>
+<td data-page-node-id="VCLX7biIPIO6p7e0DDmjLj"><!--pnid:MljeG8BcKPzui5TR9EFlmm-->🟠 中</td>
+<td data-page-node-id="lny2vNBdUxlolxC19jI0YD"><!--pnid:p33wFxX9jztz7j7vypQ99y-->迁移为 framework 插件</td>
+<td data-page-node-id="HExU2iGb7xGPWCLViQcd3R"><!--pnid:bq9kqcoTBsiSOQVerCqaim-->无 HTTP 调用；错误率归零</td>
+</tr>
+<tr data-page-node-id="MeCNXnYe8F4xz6NE3VPOwS">
+<td data-page-node-id="vr4xLntPR79x2aI8XDCUOl"><!--pnid:rIeHuaXFdxzMl5v1NGpmrB-->C8</td>
+<td data-page-node-id="UibAg67XWDLjeDwRP9JQd6"><!--pnid:pgOEgbm2uNVqVztYC56bmL-->Descheduler 未配 PDB / priorityThreshold</td>
+<td data-page-node-id="7HGfPyNG9MNqQqW4kIDswU"><!--pnid:VLEwiqfdcSuhu9n0Kj9rEi-->驱逐关键 Pod、业务抖动</td>
+<td data-page-node-id="ACxR2sFVYXRkb8jtfomNz6"><!--pnid:hsVcEKTcDC9TrvQdv4D4EC-->🔴 高</td>
+<td data-page-node-id="Rm2ZnVFtHFI7vlKJgiAuFg"><!--pnid:kO0w2PCElq1V1FdSoCOIlb-->配 evict 策略 threshold + PDB</td>
+<td data-page-node-id="ZiyqPziUriXNeSMYl9GDrI"><!--pnid:yjmGIoTXu1QH5r6RdlCQU7-->演练：驱逐时段业务可用性不跌破 SLO</td>
+</tr>
+<tr data-page-node-id="j6P8g5HO01HFUllkw881UM">
+<td data-page-node-id="IRqdhFGo85243BM2Kajxej"><!--pnid:6RNX4HUSIQ4v2i5ISj43BV-->C9</td>
+<td data-page-node-id="xUs4k3iLbHSbZc4GH0yEwC"><!--pnid:Tpf45tCv3UcjrL27wOxvz5-->集群无调度 SLO 与告警</td>
+<td data-page-node-id="9iiZFH8fY60eI734YZ82LS"><!--pnid:r35h4YJbzftLeWTTIOotYw-->无 PromQL / 无 Dashboard</td>
+<td data-page-node-id="ErqE263veJaSwjxgiuQEgE"><!--pnid:cORB6WWhqVZM5VMsIejVLZ-->🟠 中</td>
+<td data-page-node-id="oUxCSYTw60g3iAc6Mt20hI"><!--pnid:bX7SSHKJ4KQ3rHrGBeThNq-->建立 Part D 的告警集</td>
+<td data-page-node-id="d9pgM4kehy15KxojfcC7H7"><!--pnid:7VFLfJKnFPuhS4xstJwOvT-->演练：注入 Pending 洪峰，告警 5min 内触发</td>
+</tr>
+<tr data-page-node-id="TUFEb4aqvRAd6dQayHA2Ln">
+<td data-page-node-id="OrT0I4oTo6uyzxlYNtpuzS"><!--pnid:jhiTtaj1URiuaArFCzfSat-->C10</td>
+<td data-page-node-id="p7ROZx1jJ3ArsCGHqqWnDd"><!--pnid:EodVEV3xaWHNm61ZCCulkD-->一次性创建上万 Pod（无批次控制）</td>
+<td data-page-node-id="HdKM90IHDWm5EbgdleD0iZ"><!--pnid:nwDyxB2K7BkStCUw9oL5IW-->apiserver inflight 打满 + scheduler CPU 满</td>
+<td data-page-node-id="hYkWFFuchgR2hqYiIL7E8Z"><!--pnid:uP4HYdZWovrd9QQSnXQcNv-->🟠 中</td>
+<td data-page-node-id="AZ7gzk5QSzQYxVFqetBJMw"><!--pnid:MJE0bfbXv7clAImgH4V7a1-->上层控制器分批 + Quota 封顶</td>
+<td data-page-node-id="IwMNB6aqfHXfihMMnu6ADx"><!--pnid:sgWfl5iNn9c8VZoJ59dAyy-->创建速率平稳，无 QoS 挤兑</td>
+</tr>
+<tr data-page-node-id="AKsaHzzAvTbKsCqtUtRif9">
+<td data-page-node-id="dt1PgVrmTz78TsQ45Qu6eT"><!--pnid:e7jZoitqktli575Eil1Vmk-->C11</td>
+<td data-page-node-id="RnGTIbkYdqKjr4FgtWeRnJ"><!--pnid:kSoOjcZCyoh1a1681fpbmM-->MostAllocated 用于在线延迟敏感业务</td>
+<td data-page-node-id="nTgfFqduoREsKR5jB09Amd"><!--pnid:c6cD0ijBcAN2VZPJpRJHtN-->同节点多实例叠加，P99 恶化</td>
+<td data-page-node-id="9DQj2hWxXuJ8mcDliwH8dp"><!--pnid:1wDhKYn4jdakwatKSq7kZG-->🟠 中</td>
+<td data-page-node-id="UavZEfqpXOujZN1HKWfKW9"><!--pnid:I3hPZllOFq3HRcxWyxWx2M-->在线 profile 用 LeastAllocated</td>
+<td data-page-node-id="BSVp1XlxjjGvlebK1xZuSi"><!--pnid:xYLJzPiLNf21ytNFRWuGi3-->业务 P99 回到基线</td>
+</tr>
+<tr data-page-node-id="UM5mX6UOyvNp5biTjJOyJf">
+<td data-page-node-id="Jxev9OZCpxfVf8feeAdxD5"><!--pnid:Xj459p2BrQxTFALFHGxMpy-->C12</td>
+<td data-page-node-id="Wg5Kbg6uWzmbUPYpOTQUll"><!--pnid:NqJPa4e5KVDIFxg1kP8Gt6-->不监控 scheduler lease</td>
+<td data-page-node-id="GAJgLkue7wMfhGs4RTzlSm"><!--pnid:WoLUlUaQFGv6qj3aJ3tMJc-->调度暂停无告警</td>
+<td data-page-node-id="Tzdb8XEt00iLo0q5B9gmI9"><!--pnid:2twK8VyTx9diOVCINJOnOG-->🔴 高</td>
+<td data-page-node-id="lBM356hLxw32aJbbc0eJc9"><!--pnid:9Wrevm8uHIOhRL7Nh26J0z-->加 lease 存活/频率告警</td>
+<td data-page-node-id="pplRfjzO4WIoo3wjg7wPsC"><!--pnid:j5p7fIBVWNQR6IBqqbPiVy-->模拟抢主，告警触发</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="cGVorxn3Pr4pNuWdYomW36">
+<h1 data-page-node-id="bWZiOlykrZpJt1FNwiaJjy" id="part-d-slo"><!--pnid:XGC4o82VIHgebJYBD9iw2w-->Part D · 可观测性：SLO、指标与告警（可直接落地）</h1>
+<h2 data-page-node-id="FEdTtxtCumedAbdQQsa3dH" id="d1-slo"><!--pnid:bYdEq7Ny9iRRnMYeiAoLKG-->D1. 建议的调度 SLO（<strong data-page-node-id="Sql1dygzF4ehwO8xKQ3QCN"><!--pnid:7zZOKcDZWikEEu6N7XUATM-->初始值，必须按业务实测校准</strong><!--pnid:MzbDOq6fqwnBaupLhMTTk5-->）</h2>
+<table data-page-node-id="pcJAc2b3awaRLaQJ2wt8UY">
+<thead data-page-node-id="brz8CcZSEHOiiIHsRsDA0r">
+<tr data-page-node-id="GvGWaMBOn9ZOfTF2WBzMPE">
+<th data-page-node-id="AMNimSACmKY1WNYpDsFzEe"><!--pnid:8Zn2hiZWyZVCg5VTE79q8u-->SLI</th>
+<th data-page-node-id="GQmDcCWDkdgyxMuY4kymd8"><!--pnid:wdfnUvYOJIDcl6KyXUZ9sJ-->建议目标（起点）</th>
+<th data-page-node-id="ovRxKSgrGdtaBQbEue21sF"><!--pnid:hcf3KLO8n0bfDHmxGDyxK3-->计算方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="HyGsodd5zTV2eSmDl4hwDj">
+<tr data-page-node-id="FIrnA6vMdggxcjHOZhZj0C">
+<td data-page-node-id="z44TsJ0eiZA52Pspmo9fQp"><!--pnid:hKaiEh7oSs3hMwKEj7GnUA-->调度成功率（5min 窗口）</td>
+<td data-page-node-id="3MtRbOEzRlRSda5xpiiggk"><!--pnid:NCme0LUGfma0P37bM1SbL9-->≥ 99.9%</td>
+<td data-page-node-id="s8jMihKVba0lJyBFethlPV"><code data-page-node-id="mE71lpreB5DOOC1WckRorC" data-pnid-children="Ar2SEpB6o9BXtgKKEBjwXj">1 - rate(result="unschedulable") / rate(total)</code></td>
+</tr>
+<tr data-page-node-id="3QAolnrvlUGcCShSo2RQgp">
+<td data-page-node-id="YChYC8qYYaay2WnhpkYUzF"><!--pnid:V9lW4p9nVrNnzbIOfmmdCu-->P99 调度时延（首调度路径）</td>
+<td data-page-node-id="ej2wXiGZ74geCWKflefWre"><!--pnid:9jKWNS55TJCbIJLaVRM4hZ-->≤ 2s</td>
+<td data-page-node-id="mvfsf4kP1hMHybjwlaiAst"><code data-page-node-id="gjDWxVgVIejM1ucQUhWzlS" data-pnid-children="ZVoJXKJZjFQSrsFphKm2Al">histogram_quantile(0.99, scheduler_pod_scheduling_sli_duration_seconds_bucket)</code></td>
+</tr>
+<tr data-page-node-id="4S8ZpdZAot9Xe0VqyKPhR1">
+<td data-page-node-id="LCNK0CbLyppRQbzjANegCs"><!--pnid:LLehIPuM6rQvzBUEw8HsAT-->Pending &gt; 5min 的 Pod 占比</td>
+<td data-page-node-id="2uuCRtGCuwz4akl5rSd8JT"><!--pnid:4ofrFARG6jsI7nRyJoisZV-->≤ 0.1%</td>
+<td data-page-node-id="zSVXKfrd7cxkpfZ4zd7BgK"><!--pnid:TZYMCxb5uR59jDbEstGZoD-->需自定义（Pod annotation 时间戳或审计）</td>
+</tr>
+<tr data-page-node-id="ztU3wj6CYOilxyia0V7W5c">
+<td data-page-node-id="pPfxTDpMEz6vcUnEg4LfMv"><!--pnid:HltyIjgMrvll3k16mKVBUl-->抢占事件频率</td>
+<td data-page-node-id="DrVaI5Dnznk6dAoMWMoRjc"><!--pnid:TQZjw8JxrCQGi9C9NvorCc-->在线 profile ≈ 0</td>
+<td data-page-node-id="f1qwppBStVQnBV0kBHlVxx"><code data-page-node-id="6EzHWnXcC1AO7CBqVojGeu" data-pnid-children="LhdFh7ry4ufPcXuXLaZSnY">rate(scheduler_preemption_attempts_total[5m])</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="qWaFNKQvVnkewgIye6775m">
+<p data-page-node-id="axz4zp1F1no6a5pAZrPASi"><!--pnid:HSng3gpJ9dBCVeARXJM1FY-->错误预算：以 30 天滚动窗口，消耗速率 &gt; 14.4×/6×（Google SRE burn rate）分别触发紧急/工单告警。</p>
+</blockquote>
+<h2 data-page-node-id="cClt2pQIulKFg10jcSAjw7" id="d2-curl-10259metrics"><!--pnid:4kSttE51C7XxKIpnDBKqCx-->D2. 核心指标清单（先 <code data-page-node-id="pznYYTGLnK5KWuQW8mXcw0" data-pnid-children="sjL4xMoVSEy2qOnX0S3nCO">curl :10259/metrics</code><!--pnid:3hbvoXvYZBATLZm5jXxiAf--> 核对指标名）</h2>
+<table data-page-node-id="bVxTVCjabAcsyuJITfCxaq">
+<thead data-page-node-id="4FsvV8AbOVOQpzzpj6SVAs">
+<tr data-page-node-id="EOXIalDhYfMlqhBo8mvY7b">
+<th data-page-node-id="rZOuqC7hFXYIeQ7I2gjtkj"><!--pnid:dJ9hxpzQzG56iEYNoxJ8WS-->指标</th>
+<th data-page-node-id="1zkGIBX9xSlPds3o1C40D2"><!--pnid:ERwMEurMkaMA2ATIpXRojh-->含义</th>
+<th data-page-node-id="YNZqoMenqq5u5T1uuPUn6h"><!--pnid:A0gHtDaiEhRuv3lppqVRb5-->用于</th>
+</tr>
+</thead>
+<tbody data-page-node-id="FvmTYPuTIZLwOlcH09mZmD">
+<tr data-page-node-id="r0rrw6Zjic1xajvE8g7oiL">
+<td data-page-node-id="yoEPGOE8uJsyZ3MrWED7hQ"><code data-page-node-id="8LJgQEuf9TKvUZfrKnMrvP" data-pnid-children="oVAhP105h9z0uOvpHdx3pe">scheduler_pending_pods{queue=...}</code></td>
+<td data-page-node-id="8aLsTR3vmFGznWXTfZG8DN"><!--pnid:nDCj8i3fQ4xbL3f2V7DJ20-->各级队列长度</td>
+<td data-page-node-id="AX7UjrjwvpFWOKeeSdR3z0"><!--pnid:HQQcbPjhczCTs93qrLq8NS-->堆积、风暴</td>
+</tr>
+<tr data-page-node-id="Mj9RjSmikSWuRMar1xtBPH">
+<td data-page-node-id="l1NDGD2WEuyWBUkwISByfE"><code data-page-node-id="KZUcEMJHfbVQEJZhMH8Zwh" data-pnid-children="qWMXOw0DSt3cukV1kJXVmT">scheduler_pod_scheduling_duration_seconds{attempts}</code></td>
+<td data-page-node-id="5jb35S2LNvYkV74zQX680M"><!--pnid:Hu0oS7lz4q7fGrP0Tsq8ce-->端到端调度耗时</td>
+<td data-page-node-id="MKJct9kqQDlEJa8gYFvnSe"><!--pnid:1LvFgNsTYZMTj0iUmrdXqz-->P99 时延、attempts 分层分析</td>
+</tr>
+<tr data-page-node-id="tyBXzyae17b83ibx1H7g5N">
+<td data-page-node-id="qxwgHPZ5y12aZSr6kJLvO3"><code data-page-node-id="4ofbHIQ5gvi8mctB7l7Uzd" data-pnid-children="IgL9BLKiEoc8iDViTda4cp">scheduler_pod_scheduling_sli_duration_seconds</code></td>
+<td data-page-node-id="e3ZH1GJj3YxRMSAu9kn4QA"><!--pnid:ogtbiAdnynL4BkjirN22pc-->SLI 口径耗时（排除复杂重试路径，口径以版本为准）</td>
+<td data-page-node-id="qQyp9jUjIQFA2jAsv9hCiK"><!--pnid:X7TgEud5NM0yGVqG2st6PH-->SLO 度量</td>
+</tr>
+<tr data-page-node-id="m8M6uIBtJZ4oPo2d248Al8">
+<td data-page-node-id="kQQYFwJS0fXJi6fvEzaLgI"><code data-page-node-id="yt9haL8PVr8HFxVB8tc299" data-pnid-children="HjOtkf6qPQn4Mk4eJtPyvH">scheduler_schedule_attempts_total{profile,result}</code></td>
+<td data-page-node-id="xnBwAvKsLXi1yubHUn6I3H"><!--pnid:35mV85KbmFpLLkcqBwb8PW-->结果分布</td>
+<td data-page-node-id="cgyWpeE2k03UDoH3qsGXD7"><!--pnid:amwabiltNR5YefQQXtqnt9-->成功率</td>
+</tr>
+<tr data-page-node-id="kaF6wOFLmhfCFbO0nHoIHW">
+<td data-page-node-id="oyauNDRBmFexgNV1uF2mpv"><code data-page-node-id="hx9nISBHJnYlaHnqs5YFKK" data-pnid-children="orHjR545CgD6F1xdIKywtC">scheduler_framework_plugin_duration_seconds{plugin,extension_point,status}</code></td>
+<td data-page-node-id="36PMPjkGvEiaE0kHIAqQJB"><strong data-page-node-id="jji94vzDPY74BUCV6BiRzK"><!--pnid:HTA7tXTZBtpFKnvEiGZmqO-->插件级耗时</strong><!--pnid:ds4bGcTgrD9KqEFPV4wCPE-->（最有价值的分解指标）</td>
+<td data-page-node-id="GpFdpaZSIc9LGhIZev0aHO"><!--pnid:ImHJTeRgwIXVOBjNwVGK8S-->性能瓶颈定位</td>
+</tr>
+<tr data-page-node-id="5VOts5phbBp5L4INk2dQtQ">
+<td data-page-node-id="ZIJ2cQ3iHwveRWYhw2yT1Y"><code data-page-node-id="VIlEAmUZ6Fb421CMnUDqSH" data-pnid-children="Slcn9tVR6Y6QkDolx2WZlR">scheduler_preemption_attempts_total</code><!--pnid:SYdzx9rqQvLbst92SbWJca--> / <code data-page-node-id="ibPxHNleWtbViDg8acC4br" data-pnid-children="F4ewUJY5eh5fxK6yxAE70b">scheduler_preemption_victims</code></td>
+<td data-page-node-id="zxugfiYXKZvpoqwqA3EbIi"><!--pnid:GfyPL2rsQGUa0Bx8I1iKpY-->抢占活动</td>
+<td data-page-node-id="MXSwRjKbuvbyzRslcSqii4"><!--pnid:JomL3RM082vLm2hfy0O1yi-->抢占风暴</td>
+</tr>
+<tr data-page-node-id="jZCGVybM3FVFjQnlOCRdbk">
+<td data-page-node-id="cX0tT6KvZ6Ak5ymmeHkSKv"><code data-page-node-id="I5MYkyA3OwB2CAS5EF8QP1" data-pnid-children="A0I8dzlv9OYS5MVHYz3m5Q">scheduler_queue_incoming_pods_total{event}</code></td>
+<td data-page-node-id="sQEXxoHdCSXfSqIU6N0HtZ"><!--pnid:CyhknuS7yZHCNHSINCbjYM-->入队来源</td>
+<td data-page-node-id="fmGSUYPwevwUFkizbZkGTe"><!--pnid:RAa7ZkyPS7H1SgWJEUzWOn-->队列抖动</td>
+</tr>
+<tr data-page-node-id="2OJyPPuRHJGNM7cDLJv3wq">
+<td data-page-node-id="aknGUrbqWiwG6xSruY2wr9"><code data-page-node-id="m7Akm6L3t1lz3b964qMuat" data-pnid-children="6bgl0ekD7ETDsprwBH8izF">scheduler_scheduler_cache_size{type}</code></td>
+<td data-page-node-id="mPtPJZGxidikbROIIlIOLx"><!--pnid:7F8SSIfWzhaIfMRJYOre1B-->cache 对象数</td>
+<td data-page-node-id="LPEZoqsPaXkEmkG94Sf5T1"><!--pnid:wpDRUIO8eFgTDZf9tMCTq7-->内存/cahce 泄漏</td>
+</tr>
+<tr data-page-node-id="MUPCQ9rnS2JUNwHQd0CEUT">
+<td data-page-node-id="bE5CV0cqAylzi6T2jtU3kw"><code data-page-node-id="TwnFzbOFOmw8u3ZLoBJ73k" data-pnid-children="YWeayKyOrCvVkRWSKCKNls">scheduler_goroutines</code></td>
+<td data-page-node-id="sCoVucq1XUePHqUUULpFt2"><!--pnid:iui5yyggvMJ9SfkG9CtiEt-->goroutine 数</td>
+<td data-page-node-id="HSqSXFm08BjgHXq8AsHbjO"><!--pnid:AHfk3F1ImwU6AjLQdiIW0E-->泄漏/卡住</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="9y7w4K7dzqQMpoSDRBBYyt" id="d3-prometheus"><!--pnid:zNAKe6QJvZSbm8Q7VPZUMl-->D3. Prometheus 告警规则（可直接粘贴，阈值请实测校准）</h2>
+<pre data-page-node-id="tJXie93oAikd8OVVXgrby6"><code data-page-node-id="idcuK6kxV3smaYPfPhNCaj" data-pnid-children="NCCoFHYHm6JWl9VKpiHdZG" class="language-yaml">groups:
+  - name: kube-scheduler
+    rules:
+      - alert: SchedulerNoMetrics
+        expr: absent(up{job=&quot;kube-scheduler&quot;} == 1)
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;kube-scheduler 指标消失，可能进程挂掉或 lease 争抢失败&quot;
+
+      - alert: SchedulerPendingPodsHigh
+        expr: sum(scheduler_pending_pods{queue=&quot;active&quot;}) &gt; 500
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;调度活跃队列堆积 {{ $value }}，检查资源/亲和/配额&quot;
+
+      - alert: SchedulerUnschedulableRateHigh
+        expr: |
+          sum(rate(scheduler_schedule_attempts_total{result=&quot;unschedulable&quot;}[5m]))
+            / clamp_min(sum(rate(scheduler_schedule_attempts_total[5m])), 0.001) &gt; 0.1
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;5 分钟内调度失败率 {{ $value | humanizePercentage }}&quot;
+
+      - alert: SchedulerSchedulingLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(scheduler_pod_scheduling_duration_seconds_bucket[5m])) by (le)) &gt; 5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;P99 调度时延 {{ $value }}s&quot;
+
+      - alert: SchedulerPreemptionActive
+        expr: sum(rate(scheduler_preemption_attempts_total[5m])) &gt; 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;调度器正在频繁抢占，检查是否出现抢占风暴&quot;
+
+      - alert: SchedulerCacheTooLarge
+        expr: scheduler_scheduler_cache_size{type=&quot;pods&quot;} &gt; 200000
+        for: 15m
+        labels: {severity: info}
+        annotations:
+          summary: &quot;scheduler cache 中 Pod 数异常，检查是否有 assumed pod 泄漏&quot;
+</code></pre>
+<blockquote data-page-node-id="GJ1K94vQBJX28hqA3f7sNV">
+<p data-page-node-id="Wd4VOEfFGX96As4p4j003R"><strong data-page-node-id="YuNwoXOA0rMlzVVBL1ykET"><!--pnid:0UycOuxpZWiPbZ5xJZe5eh-->10259 端口是 HTTPS</strong><!--pnid:WtqiCkI1GclyRT7SDx0Vn1-->，抓取需要 <code data-page-node-id="nPmqTr7s4iQkjlDXwaioMW" data-pnid-children="QMSLuVqPmeirmjLd38e7Ax">scheme: https</code><!--pnid:lVphK5kXKr6aZGDV0T4jB9--> + <code data-page-node-id="1HIWSRwGXTKNx9dguX0Nf7" data-pnid-children="UMHYaG05yV0ZRIxi6cnyPs">insecureSkipVerify</code><!--pnid:MTsOhMUXErBA8O5sXBucLP--> + bearer token（或 kubeconfig RBAC），CA/SAN 处理务必放到经审批的方案里，别口头 monkey-patch。</p>
+</blockquote>
+<hr data-page-node-id="koPmKEM0sfosSZAVhdDcGv">
+<h1 data-page-node-id="cFwR6RDY0v8YyVfZwtfZNA" id="part-e-gameday"><!--pnid:hqTVtgQBK1bNo2HUcrzx9K-->Part E · 演练（GameDay）计划表</h1>
+<table data-page-node-id="RKrEOkvcV9Ef8v3b9XaiDD">
+<thead data-page-node-id="DiND2LEQoKlcAqMR9zQ6JD">
+<tr data-page-node-id="ofy3m1vOVzoCfIVk2RKVw3">
+<th data-page-node-id="wXuu2j7HpAbipoov7J3UAq"><!--pnid:GHrepOcEQ2vyV6arPXifDN-->场景</th>
+<th data-page-node-id="q9YUdc0HrSZ26j3vJXXg6x"><!--pnid:70XMPwLx4Dk7U8udGM2bIg-->注入方式</th>
+<th data-page-node-id="k3VPg5mc28r2gLIwVY7KV9"><!--pnid:hcSLpIzUARd65S3Yk5UfRf-->期望表现</th>
+<th data-page-node-id="X7Ooe2JU5Ky04u5Rugc6WY"><!--pnid:scPCg5uqkNDtowCYP2M7RX-->验证的 SLO</th>
+</tr>
+</thead>
+<tbody data-page-node-id="E5s2k8NpyQnx65gOz9Rwbx">
+<tr data-page-node-id="7eTFYfaoEf4Im4PD1k31HZ">
+<td data-page-node-id="RuR5QM03OWeIJEd28IUxng"><!--pnid:1CZganoyMyn90CFSWtlhBp-->调度器主失联</td>
+<td data-page-node-id="I0Kbf9M6FHvzHM4O99MU2x"><!--pnid:LQ5BvvlZ5QXGPRe7jRVg5D-->删除 scheduler Pod / 强制抢 lease</td>
+<td data-page-node-id="PfvPYMtfIXUo0bH10V66Bg"><!--pnid:wPcMumhXSSlgLl9iSPRIPY-->30s 内新主接管，Pending 短暂上涨后回落</td>
+<td data-page-node-id="HIsADLPTvzHcTlqsUuqVLv"><!--pnid:yQJ2Muhi6c7DsO2lJYODL9-->调度可用性</td>
+</tr>
+<tr data-page-node-id="qDLJ9uLlUurM03rxRntAbl">
+<td data-page-node-id="IcoLPevF8Cecrpm0SZTcw5"><!--pnid:iUWPptO3dzhsWcWF7fK3pz-->Pod 洪峰</td>
+<td data-page-node-id="DcshZXr0cuFH8lJpC5LlsN"><!--pnid:NJ4pkpwb7DHgDULgq1bV1f-->一次性创建 3000 Pod</td>
+<td data-page-node-id="Vf97oZW9h6dagfJHB0V8c1"><!--pnid:jMtQuegQhNnPsgVxaYrHlx-->无 unschedulable 溢出、apiserver 无 5xx</td>
+<td data-page-node-id="mX4w4RwWGfFwVNG8pEj7A9"><!--pnid:SrbwT1lV3xbHmVnYX1IjQC-->调度成功率、时延</td>
+</tr>
+<tr data-page-node-id="aeju2yveJ3yettNeKTmqEZ">
+<td data-page-node-id="eb77queN7UyNz3JyD3E2nl"><!--pnid:gKDrRNkclBWA561OlwI0P3-->节点宕机</td>
+<td data-page-node-id="5tcqVFdZxYshL1FlPgk1SI"><!--pnid:aHsqIMCxIQ9YyA9dqFkhbV-->Stop 一个 100 Pod 的节点</td>
+<td data-page-node-id="lxvNxSWjb318VHTXnULjJK"><!--pnid:reaTRo1Pqk8SBAWRVc6Utu-->5min 内重调度完成，业务 P99 不破线</td>
+<td data-page-node-id="HCWvjamGQpQcULyAfINOun"><!--pnid:XfOcOOoGhbZyjiGmovsCiv-->可用性 + MTTR</td>
+</tr>
+<tr data-page-node-id="lWirVarN1ML8IeB9P868XP">
+<td data-page-node-id="18UdMD8hMjS9vLvXZ6B7wa"><!--pnid:XmH0d9J4PI9LQQ0SAp61bf-->资源碎片</td>
+<td data-page-node-id="f6oJuwnYoko8SQygoYuU45"><!--pnid:6Q1Iw5NiWYAr55ODhic68u-->人为造成每节点仅剩 4C 空闲</td>
+<td data-page-node-id="sr1blypzw1vtqpYSDprmqf"><!--pnid:1Kp9ewOprZpqrqxgouyCYT-->16C 的新 Pod 要么调度失败率超过阈值、要么被 MostAllocated 策略正确装箱；二者必有其一且结论可解释</td>
+<td data-page-node-id="6tozTkCTeTNB0z9DQglsAR"><!--pnid:heTOFVzGl2hUPDzvjgXoVB-->装箱策略有效性</td>
+</tr>
+<tr data-page-node-id="vDtHMIGwpIOsTDxmNExJ30">
+<td data-page-node-id="sUvIzO2HTVaRRRaYRkd4rn"><!--pnid:f0qgFK6LaV5pmY9ef3AIkV-->存储拓扑冲突</td>
+<td data-page-node-id="GYx89mE2xitdgqhLXmGzqM"><!--pnid:tfo9WTiX9uJ3aTyqzEfFZN-->跨 zone PVC + Pod</td>
+<td data-page-node-id="4vp6qrWiDgpF65EKh9IS06"><!--pnid:74tdLdq0bbUs3FThPD9c1O-->调度到正确 zone（或给出明确事件）</td>
+<td data-page-node-id="iE5HJVY2dvISe8Nr13BEIt"><!--pnid:h94RHeRuFzJ8wqwNo6YRlm-->存储亲和正确性</td>
+</tr>
+<tr data-page-node-id="hIoq7F2xfsxOK8hpHqv5rS">
+<td data-page-node-id="FTdcixigQuYagvlAZ4FeUS"><!--pnid:5FewkY1Fe7u0c6yuWau99t-->抢占演练</td>
+<td data-page-node-id="oJOc5f3Mq8EbYHGucG3bRX"><!--pnid:Xihevr6T2TaqeeT6hPxSzP-->注入高优 Pod</td>
+<td data-page-node-id="pyn4Ipbq6wifnKMKylirEk"><!--pnid:C9lztaS39TpbbaUexYlq9c-->Victim 被优雅终止、PDB 不被突破</td>
+<td data-page-node-id="VkaHSZViu5vTBLh97sDD3x"><!--pnid:BB6GHGmaQIk11ouIvHyN3u-->抢占安全性</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="TFFJNBh6TvqRPpnHvUkrZG">
+<h1 data-page-node-id="1HZbKwRSO7vdXiQG5HOxMs" id="part-f-10"><!--pnid:FXPNsUHHptwpXAmeGhYI3t-->Part F · 10 张面试速记卡（临阵磨枪）</h1>
+<ol data-page-node-id="ydgJ0ydAQwBWhtoA6Fnbw4">
+<li data-page-node-id="ZdQog7v08HMtLKsIs3hozo"><strong data-page-node-id="JPDlta5XUyAkCqBDbkIH5K"><!--pnid:bAQtOFTn08q0lombHnXokX-->一次调度 = NextPod → 快照 → PreFilter → Filter(并发) → [PostFilter 抢占] → Score → 随机选最高分 → assume(Reserve) → Permit → 异步 Bind</strong><!--pnid:MBZXsyERETiAexpW9oi3EV-->。每 profile 一个 goroutine 串行。</li>
+<li data-page-node-id="sUBzTZ8QljXUFQ47wxIiTK"><strong data-page-node-id="rxsoxGias5hHkLdwOZnwrp"><!--pnid:3YHVZb7aEmxIhAkK6UAQ92-->扩展点 13 个</strong><!--pnid:dr9XaASja3aCUIDL07tUMl-->：PreEnqueue / QueueSort / PreFilter / Filter / PostFilter / PreScore / Score / NormalizeScore / Reserve / Permit / PreBind / Bind / PostBind（+ Unreserve 回滚）。</li>
+<li data-page-node-id="bVtZYdXwbzo5ewms6rgzou"><strong data-page-node-id="cOZlJi0x625SeFPHVYbSzL"><!--pnid:RVmjAb9r3ygpXs8pgfS4mV-->队列三级</strong><!--pnid:LH5gZOzySzy4aKoIWL88YC-->：ActiveQ / BackoffQ / UnschedulableQ；UnschedulableQ 靠集群事件 + <code data-page-node-id="ng3pLKpsHHOhHihoRbI4zv" data-pnid-children="RrsUkfgbktQJeb1BjMpaNk">podMaxInUnschedulablePodsDuration</code><!--pnid:k3Xz7AYpZv0syJwGt6Gy1a--> 兜底重排。</li>
+<li data-page-node-id="CKY4Z2FdhpUfOjQdSWrcS8"><strong data-page-node-id="MvxHDB9tAaEnEoHNG8bjEQ"><!--pnid:Q2y8G6mHp6cUojoJnPL4CU-->抢占</strong><!--pnid:TTHzdSPWcnBQC4DEWD94Dw-->：只对"Filter 全失败"生效；<code data-page-node-id="UUItZfXIEpPTILlv1bp5ac" data-pnid-children="q675h0bJfQVX0GiITdW9pc">nominatedNodeName</code><!--pnid:4g7HxPWWbzKOHrGvkLkVc4--> 是预约不是绑定；PDB 会压制；默认优先级应 <code data-page-node-id="rpCTYuLNP1v0MS37A0y0A2" data-pnid-children="7iFngM8kSeLBf9iBnEREzb">preemptionPolicy: Never</code><!--pnid:5AEybaOp841zo06oXOHb1J-->。</li>
+<li data-page-node-id="h7GVu0LsAC2weOAmSdJRk4"><strong data-page-node-id="JoIUQqFiqH1b8VUWr269MR"><!--pnid:xeNA2LTZU3I3h7BjZXRdni-->调度只看 requests，不看 limits</strong><!--pnid:4SFsj5VzZu6IyHTIgCeVPJ-->。limits 是运行时的事。</li>
+<li data-page-node-id="VuZW05JlEXPezzPFpR97iM"><strong data-page-node-id="KPF2acW1wwun4WzjvMTeDW"><!--pnid:XR4knDhVyhq0ISSfdv4ucA-->ResourceQuota 是 admission 的事，不是 scheduler 的事。</strong></li>
+<li data-page-node-id="oPjPzIV3EXH7tUJaKNNGxG"><strong data-page-node-id="WEF7xQGlAjeSu8QuvUOe8z"><!--pnid:bpt4Ki4DtcOxqqs2JXGyuB-->打散用 TopologySpread，不用 podAntiAffinity</strong><!--pnid:wQzfqtHkBFjW2qh1RCxAWx-->；<code data-page-node-id="R954xuS2QaQ8oQRtHC5Gre" data-pnid-children="pSU3eDf4VtJfskeeqbLBpG">maxSkew</code><!--pnid:40wYNnyCkgMAxfpxpjkc5X--> + <code data-page-node-id="mEH1H4l3HCcdX5mKioOMUT" data-pnid-children="O7pmGW5h4gVXWUVt0OUj0w">whenUnschedulable</code><!--pnid:cAWtcAFBmviDINDcQc3G8L--> + <code data-page-node-id="6dqpgcJ9mYaoEIXLltIhwe" data-pnid-children="rFhsYqfCkchPdaSPOUQ5Rw">minDomains</code><!--pnid:rO2fwJJMQpa6QLV5MeJFeT--> 三件套。</li>
+<li data-page-node-id="dRaXNCTmkbwDnj4nXi9oCN"><strong data-page-node-id="7srKx2YlqdnLKwlkAXPx6j"><!--pnid:A6HKY0VvmAKFDoQh0g1Ccn-->大规模第一银弹 = 节点池化</strong><!--pnid:EGJ8XP3QJPK9Id4Ip6GT6D-->（缩小 N），第二才是 <code data-page-node-id="Yz1FWQhIDgWMxSSmbloiWk" data-pnid-children="1in4uLiIeHXlylWsWz5lgg">percentageOfNodesToScore</code><!--pnid:06q7GDsONO1q4f3gP1uhVj-->（牺牲最优性）。</li>
+<li data-page-node-id="Jw9Zs5rkGljAGm84RpTVhw"><strong data-page-node-id="yOd0lwR4hUHDVJVSQQMTz9"><!--pnid:ednLhYpv3IeODcQetFkKcK-->排障第一问</strong><!--pnid:AkWn3xzHpn32g8tBwzNuft-->：有没有 Event？没有 ⇒ 先看 <code data-page-node-id="cJsLGVTpmRevkEuN9GM7L5" data-pnid-children="nzHH4QkeeYfQALJlKFs0Wj">spec.schedulerName</code><!--pnid:LQSKnKMo1FN2rFKdr65GX2--> 和调度器进程活着没。</li>
+<li data-page-node-id="vSIrhmtBBb9pa4ftChZdpq"><strong data-page-node-id="C5yQuC9xISyvjfDMGmfbXX"><!--pnid:ZoMPvuOIaKZhfdopX3WqX5-->所有性能数字必须自己测</strong><!--pnid:kGgm3kJfp7RqXXqC0bNGVV-->：用 Kubemark/KWOK + scheduler-perf，按 <code data-page-node-id="dajk8mt3KKp73pFXu5vH35" data-pnid-children="nkiXstsZtzMklXKxHU03zl">scheduler_framework_plugin_duration_seconds</code><!--pnid:hcjaNMbnwMocOcB9pFJ6YB--> 分解找瓶颈。</li>
+</ol>
+<hr data-page-node-id="eCE3wZbwR92wfPFsnePsOv">
+<h2 data-page-node-id="S06CTRqPKQl8utk6k7XrKV" id="_1"><!--pnid:VBCfnew5u6M8ALcWB79YMu-->附：文档自查清单</h2>
+<ul data-page-node-id="pw9ukNK5T1hbg6kQqWSWln">
+<li data-page-node-id="KHdwEEd8PVD53NiYxXIwao"><!--pnid:oJ394R92zZ0WCI8VTo3W9r-->[x] 每条建议都给了可直接套用的配置片段或 PromQL</li>
+<li data-page-node-id="o42QxXtF97dIdyB90IXDBd"><!--pnid:6q4h1bGlIPmTF5OMCPF7rK-->[x] 所有版本号/默认值均标注"以所用版本源码或 Release Notes 为准"</li>
+<li data-page-node-id="UAGvqKnUcJJsY5SdZHs5wv"><!--pnid:K5efR1BxPKso7cUb3KnT3B-->[x] 未提供任何未经实测的性能数字，全部给出<strong data-page-node-id="v2f1ulmVFRW9xsFPb2D4V6"><!--pnid:5j0FCvmL1rlOmUiPPV9OLD-->测量方法</strong></li>
+<li data-page-node-id="2Jq7mxJMTllHVlGdvSPEVS"><!--pnid:UNtW63jKuhvhOSvicVF9tY-->[x] 反模式清单含：证据 / 等级 / 修复 / 验证</li>
+<li data-page-node-id="FWSi3dScNQZ5xCWSIo689Z"><!--pnid:DwcO5MmbHo3JmckpWPgELB-->[x] SLO 建议标注为"初始值，需实测校准"，并给出错误预算口径</li>
+<li data-page-node-id="5AAz3AD3xkxhh8DsKYvmjH"><!--pnid:hv3WrJJQ5y2hoSanuZwioW-->[x] 生产变更给出灰度比例（1%→10%→50%→100%）、回滚触发条件与回滚操作</li>
+</ul></div></body></html>

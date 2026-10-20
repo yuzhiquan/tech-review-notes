@@ -1,0 +1,1702 @@
+<!DOCTYPE html><html data-page-node-id="fXKTyP6Bf8h5rkRBdX5XWZ" lang="zh-CN"><head data-page-node-id="dWhvJnswcfXxM1Cgv5B85T">
+<script data-page-node-id="CYAvj2ojVcym1OdzzaTj9i" src="/page/page_comm/inject.js"></script><meta data-page-node-id="DxuGW1RhbEsbQlpy6NlPdk" charset="utf-8"><meta data-page-node-id="tWW23zIoVHewTASQbmG4Cg" content="width=device-width, initial-scale=1" name="viewport"><title data-page-node-id="FtqjJXHKeJ7tbyxboxXa0i" data-pnid-children="YhQQQUJqfoMAiUVXcxdz1B">Linux / 容器底层面试题全解析</title><style data-page-node-id="vPOVh74gGuhU1Twsfh60OH" data-pnid-children="DN5Bi3pIxKFY2NxAQ8r9yf">
+:root{--bg:#0f1115;--fg:#d7dae0;--muted:#8b93a1;--accent:#4aa3ff;--card:#161a21;--line:#242b36;--code:#1c222c;}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f7f8fa;--fg:#1f2329;--muted:#5b6470;--card:#ffffff;--line:#e3e7ec;--code:#f2f4f7;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px;}
+h1{font-size:30px;line-height:1.4;border-bottom:2px solid var(--accent);padding-bottom:14px;margin:0 0 8px;}
+h2{font-size:23px;margin:52px 0 16px;padding-left:12px;border-left:4px solid var(--accent);}
+h3{font-size:18px;margin:32px 0 12px;color:var(--accent);}
+p,li{margin:8px 0;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;}
+blockquote p{margin:4px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+th{background:var(--code);font-weight:600;white-space:nowrap;}
+tr:nth-child(even) td{background:rgba(127,127,127,.05);}
+code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--code);padding:16px 18px;border-radius:10px;overflow-x:auto;border:1px solid var(--line);}
+pre code{background:none;padding:0;font-size:13.5px;line-height:1.6;}
+hr{border:0;border-top:1px solid var(--line);margin:44px 0;}
+a{color:var(--accent);}
+strong{color:#ffffff;font-weight:600;}
+@media (prefers-color-scheme: light){strong{color:#0b2c52;}}
+</style></head><body data-page-node-id="8D5DOVvNQddPnJju7kjK6p"><div data-page-node-id="XCUwERS71aWpUPwLRUXLUk" class="wrap"><h1 data-page-node-id="p53YXnKhCz7kwz0D5LNGk3" id="linux"><!--pnid:BKjG07SsUm5Mtz5J9N5StM-->Linux / 容器底层面试题全解析：隔离机制篇 × 运行时故障篇 × 内核调优篇</h1>
+<blockquote data-page-node-id="p6hCLlzUmrnfQERXXyPSdA">
+<p data-page-node-id="SeXBe13vGTQZJbqBUZVFdq"><!--pnid:dy2b86COaS17j87B4HTaNh-->适用角色：SRE / 云原生运维 / 平台工程师面试（社招 3 年起 + 偏高阶）
+姊妹篇：《Scheduler 篇》《Kubelet 篇》《网络 / CNI 篇》《控制面篇》《存储 / CSI 篇》
+版本约定：以 <strong data-page-node-id="ZIz17tLmub3Usvhx1rLKz1"><!--pnid:inxR4x6PHLMwEHvm9mBxZx-->主流 5.x 内核 + systemd 245+ / cgroup v2 时代</strong><!--pnid:WcUJMp7ITF76ZBitM9Qak0-->为背景；内核参数、默认值、cgroup 文件名随内核与发行版差异很大，凡涉及具体取值处均标注"以所在环境 <code data-page-node-id="PVGrZj794fgP94fgnCmOV9" data-pnid-children="lkqQzcC48yhUwpt1X1nlLv">sysctl -a</code><!--pnid:Q1zJBnnnM6AAY44UBgSPM0--> / <code data-page-node-id="hrQZVq9JdavExHJOx4O0JT" data-pnid-children="oaCGiXlijgFROkyZBZmCqQ">/sys/fs/cgroup</code><!--pnid:cgdJCUiQyPGnyJPSfkAwr6--> 实际内容为准"。</p>
+</blockquote>
+<hr data-page-node-id="JRq6YkvHfYMiHKFzFhqQ1G">
+<h2 data-page-node-id="csndLfctZBYecVACQ62ren" id="0"><!--pnid:O9kSDYbK7ukG4TXTNcQjPv-->0. 使用说明</h2>
+<h3 data-page-node-id="zWpBq3DoWRYKnD48iM5zr6" id="01-linux"><!--pnid:VrrvHQoGAORVKKiEndyN2p-->0.1 先建立一张"Linux 如何支撑容器"的全景图</h3>
+<pre data-page-node-id="56KpuEIUQommWlOZI6eGgX"><code data-page-node-id="2MLrL1J3HNMCdWcRVdN0Ks" data-pnid-children="uSWQ7bj1WMoAyNZb7F4Hk2">┌──────────────────────── Linux Kernel ────────────────────────┐
+│                                                               │
+│  隔离（看得到什么）           限额（能用多少）                  │
+│  ├─ namespace                 ├─ cgroup v2 (unified)          │
+│  │   uts / pid / mount /      │   cpu / cpuset / memory /     │
+│  │   net / ipc / user /       │   io / pids / hugetlb /       │
+│  │   cgroup / time            │   rdma / misc                 │
+│  │                            └─ (v1: 每 subsystem 独立层级)   │
+│  ├─ capabilities（能做什么）：CAP_SYS_ADMIN / NET_RAW ...       │
+│  ├─ seccomp（能调哪些 syscall）                                │
+│  ├─ MAC：SELinux / AppArmor                                   │
+│  ├─ dev cgroup + uevent（能看到/操作哪些设备）                  │
+│  └─ overlayfs / tmpfs / bind mount（文件系统怎么给）            │
+│                                                               │
+│  网络数据面：netns + veth + bridge + netfilter(nft) + conntrack │
+│              + TC/qdisc + XDP/eBPF                            │
+└───────────────────────────────────────────────────────────────┘
+</code></pre>
+<p data-page-node-id="JBfD4JPW9LlkxFpW5XdWkW"><strong data-page-node-id="CkLPzdeBfa8ieDcQ8S1gBE"><!--pnid:3yWbZLL5735SfyMtlL3Ht2-->一句话总纲</strong><!--pnid:p7VYzKmPtuWU70F6I8HADL-->：容器不是一个"东西"，而是 <strong data-page-node-id="pzQeclU42hO4V9I2NeTQ2a"><!--pnid:mTkvUFeQSUePJQTKnpIuRt-->namespace（看得见）+ cgroup（用多少）+ capabilities/seccomp（能做什么）+ rootfs（文件系统）</strong><!--pnid:Uwb8dOaferHo9S23T4TaiZ--> 四组机制的组合。这条主线在面试开场先说出来，后面所有问题都能挂上去。</p>
+<h3 data-page-node-id="MAbhxvCK0oYVoEfjh7yYCd" id="02"><!--pnid:y8uYcKWeaVTyDHYzZJwMnO-->0.2 数值约定</h3>
+<ul data-page-node-id="1UwqpSVKXipF6dm32DaWuK">
+<li data-page-node-id="KwTRWWFH7DMjmpj3mLFej2"><strong data-page-node-id="a46n7J1sD2JwhTNhfrPSzJ"><!--pnid:MDKSKgsLgwYSCIP68vXLy6-->内核/sysctl 默认值</strong><!--pnid:DJfA7JQF5Za1C4BQ6XVMOm-->：随发行版与内核版本而变，务必现场核对；</li>
+<li data-page-node-id="bqALQ5aCn3Q1nW3Q3lfDa4"><strong data-page-node-id="x3CSkE6gdtKzEH1SYZfpW8"><!--pnid:0uUPsPj5iKGaNZxVkXAvlr-->建议值</strong><!--pnid:s0Zt48zqydlzEkbnzi43dB-->：标为 <em data-page-node-id="ftXMDzfA2MDLsnxFAtNAjM"><!--pnid:mU76lKqwEpP7Y19sUDHpzk-->建议</em><!--pnid:ntB6vU3REvzS4Lh3kv8iHJ-->，必须压测校准；</li>
+<li data-page-node-id="PMEV1syuo6fnjAER1LqVdH"><strong data-page-node-id="EuYpLkUTx8b4AtWe8rXhu5"><!--pnid:PYJJWtXV1t7dZS9F1OLEiQ-->实测值</strong><!--pnid:oiHqdjW8fiQ9BTfyh2GEoT-->：本文档不提供任何未经实测的性能数字，一律给出<strong data-page-node-id="mUHxSnCwWKGcQDJvXe7WtG"><!--pnid:yJ2n9ABtsfmcnb5UHtWCP4-->测量方法</strong><!--pnid:4REh2W3iHzS1WPUKDGcZL6-->。</li>
+</ul>
+<hr data-page-node-id="W99CLwaavV46VXT853Knyy">
+<h1 data-page-node-id="Kopj5R5Oro2GxSi6Ol05fg" id="part-a-26"><!--pnid:x5SRnbTz3Cia9B2ODmddCq-->Part A · 隔离与限额原理篇（26 题）</h1>
+<h2 data-page-node-id="vnmoUF4iV9EkYHzbq82JRH" id="a1-namespace"><!--pnid:RBKtRrDAEB1ySLLQqckdk1-->A1. namespace 有哪几类？各自隔离什么？</h2>
+<table data-page-node-id="hAPBYu8gbTd9nBmuywuN5L">
+<thead data-page-node-id="PJUdQTA4CwlRQsLXCsp06J">
+<tr data-page-node-id="kq02C4ZK0ny5lod6w0vOWZ">
+<th data-page-node-id="dyWh7nb4JCrrd2cVqimSPY"><!--pnid:K35M6nmd3kAcNEVT62l579-->Namespace</th>
+<th data-page-node-id="rbLHHwFdljnRBgLEigtPxW"><!--pnid:HGk1WcWdI3kzrRDEbcWpRI-->隔离内容</th>
+<th data-page-node-id="RNz5CRsciyrdBfPYy4UAq5"><!--pnid:nNphdPIyxVQc7yjELw3YhH-->容器中看得见的证据</th>
+</tr>
+</thead>
+<tbody data-page-node-id="7poXt7OkeKNkao3I3vbx7s">
+<tr data-page-node-id="DA2omtj0M3E9ioGvFxOdXF">
+<td data-page-node-id="goO0dP6RfoJiouuCbYKTdj"><strong data-page-node-id="WGvl6b6jlc7F5EbP0L7I9v"><!--pnid:BTnV9oi6qzO7eAuJKJhQKe-->Mount</strong><!--pnid:3K2C1uDx2i4l4MEMMt59jK--> (<code data-page-node-id="kwx9yb8DdhfurZ0JVNAyBX" data-pnid-children="C0nTIMj6njKIupDS4lHmYH">CLONE_NEWNS</code><!--pnid:JimQn7tRbQpzTQTGmtIB98-->)</td>
+<td data-page-node-id="N4uSIoQ7yyL8ixvFqMqeu4"><!--pnid:OcgsIn1T4xWnNH9AGJjVMG-->挂载点视图</td>
+<td data-page-node-id="cFHmFyg6UKbixawbtz82MQ"><!--pnid:fFLwGHdkDVyGp6PsPg9kws-->容器里有自己的 <code data-page-node-id="blgY5RDHIp4tF118ZTEssR" data-pnid-children="MvWQSBh3vP1IrdlZQlCXv6">/</code><!--pnid:ZAuJdg6GG6pbD2Pr8HuDP8-->、<code data-page-node-id="XL9QTdy2r17iziT7NwQYnb" data-pnid-children="G9xib7tSwAkuk8iBpXcDo0">/proc</code></td>
+</tr>
+<tr data-page-node-id="tsPuJrmoWsI8RNuBS2Z0tT">
+<td data-page-node-id="ONJd82j0rQrLMpYXiRXGXB"><strong data-page-node-id="SbmCFFwHH3xIWcv8z6pRGs"><!--pnid:rLZMNq0OCOmSicUGRq3f3Y-->PID</strong><!--pnid:asuHc1o068nEMQlTAdE5zt--> (<code data-page-node-id="oQ8BXWshAaojTijdF3ZDMe" data-pnid-children="OzEDKkEPdQXjqWZonfeLZF">CLONE_NEWPID</code><!--pnid:bh2LkgFpkdTre5L5skNURb-->)</td>
+<td data-page-node-id="H6muSdpwZatUsh523E62Rr"><!--pnid:9yQHkPTBdhxzT1vRdePSF5-->进程号空间</td>
+<td data-page-node-id="0Us9XzkRCA1EeWxwnd0RT3"><!--pnid:aTFiUbhzv0OGVhvvmkWctq-->容器里 <code data-page-node-id="1tV7zFLpckyTvA89YFl7bp" data-pnid-children="9grizVKpaMzQwmWRuMbaVN">ps</code><!--pnid:Mynr0vOHlJxOzrEjA17vce--> 只看到自己的进程，PID 从 1 开始</td>
+</tr>
+<tr data-page-node-id="3TMbtgDR8fcGk1c5cCwjjG">
+<td data-page-node-id="FcRK1Mv89BnWE6zBnaDhln"><strong data-page-node-id="UX80c9kEPDuYCu3Y6HSm1M"><!--pnid:6Mha8PigU9Z0uEmONeKvOh-->Net</strong><!--pnid:FZYUuIm3vWOAnszOdSrUYb--> (<code data-page-node-id="24F6LllfPhKVMy3ctnhagO" data-pnid-children="GNTNcCVOYumcwPokpurPsN">CLONE_NEWNET</code><!--pnid:1K1d6mmTDaIqfOxpvaN0Tj-->)</td>
+<td data-page-node-id="Htdi76aCNTe68uvkZTIxAi"><!--pnid:AaPswW81lM45HId7bzdwlQ-->网卡/IP/路由/iptables/端口</td>
+<td data-page-node-id="12hIpe2OJrqsXkf9DiEvG2"><!--pnid:zhYrWGdrWzzU5Kf1j4FjTN-->每个 Pod 有自己的 netns 与 IP</td>
+</tr>
+<tr data-page-node-id="qrVR2a3CzS3g8as8AjDSDX">
+<td data-page-node-id="aRfLhtO7eeGqDONeqxkNLT"><strong data-page-node-id="KYXq5wGEFKfI1dtzYXfrVn"><!--pnid:Q63CorgF04cPqyOtTRirMF-->UTS</strong><!--pnid:4DaF5p0AkT8DLxIIDEwZ8a--> (<code data-page-node-id="DRpsgIiJDcRgJd0fu9XiB1" data-pnid-children="JGZtEe3MaPuSjtKzR6DRZ7">CLONE_NEWUTS</code><!--pnid:tKV2Wr5GIUXjjwm1AL6LZU-->)</td>
+<td data-page-node-id="UqxUY8bxoPGywskYNekVz0"><!--pnid:V06batcX7Hc5QEeodJ7ceL-->hostname / domainname</td>
+<td data-page-node-id="0QcftVjbo0NtbgHLVTduHL"><!--pnid:cUQTU94ulkrmh2yxto69jd-->容器 hostname = Pod 名</td>
+</tr>
+<tr data-page-node-id="FBExe9KE5hDWsjgxnp8ceZ">
+<td data-page-node-id="K1bvR2CvvGjIyZaRAar2I9"><strong data-page-node-id="Uh6k0KqQAiSizuPUiIpyGb"><!--pnid:I8P8GsuG7MYHsi9l9MVROm-->IPC</strong><!--pnid:krJwkVbDlLTvRNsLHmpwXA--> (<code data-page-node-id="e8ZhazKpJLnL5ATl8ePCcl" data-pnid-children="H1uQDmF6J6gdz05bYI4jtH">CLONE_NEWIPC</code><!--pnid:0Uu0QY2TKdGMobV6jXmZ54-->)</td>
+<td data-page-node-id="cIJqvz1wfusngfqMMLk1x7"><!--pnid:C0KD6f7vHiJxUa5YQbqHpG-->SystemV IPC / POSIX mq</td>
+<td data-page-node-id="CclDPBOAVAoJxNs8uYlGHI"><!--pnid:N5mvQz52WCZtEC3cbzwL8M-->不同 Pod 的共享内存互不可见</td>
+</tr>
+<tr data-page-node-id="ihxEQRRfxjAjhXbQ16OC8C">
+<td data-page-node-id="7O3EdXIfTfqhqkSK4UOpEK"><strong data-page-node-id="89MmrCqgb1Mfex9Zc9dYY7"><!--pnid:6Z8mc36jpi2rkiGqKHEmF7-->User</strong><!--pnid:A6LWh6sSzPt5uEFF2McQZ4--> (<code data-page-node-id="8S1pMGjPI7XPQbvLvnnehd" data-pnid-children="Y77AprLJseQZLFxqQhcTYz">CLONE_NEWUSER</code><!--pnid:F9DC17EobJddei16DwHLNU-->)</td>
+<td data-page-node-id="zXfEu9XM4OUoXAuBszcw6y"><!--pnid:3ZRFOSwhw2HsvL4dH6KcqE-->uid/gid 映射</td>
+<td data-page-node-id="w0PTP95d1kH8q0dmbQsuWk"><!--pnid:iTGVLqlBFHARerFIIKp3GB-->容器内 root ≠ 宿主 root（<strong data-page-node-id="rtdkLdyKlwSBnNfrpvt3Dz"><!--pnid:XZIsjkp7jqQy3INl8PsjS2-->rootless 的基础</strong><!--pnid:h3YD5cQqCFcl5bZ5eUFcTG-->）</td>
+</tr>
+<tr data-page-node-id="5Nem1jXSQc368ohgq0vCv1">
+<td data-page-node-id="ZiFaXbaZrd3ijK2uNss830"><strong data-page-node-id="awDJIHz8sbNgEB7zAdIr5i"><!--pnid:v7fGDTY0Rn1eX2cQEC7te6-->Cgroup</strong><!--pnid:RvCjX62e8SVo7go1KuLICv--> (<code data-page-node-id="SC0L9BYS5bQvOgxfJh9OH7" data-pnid-children="juNItykm71cEuCmyw32uzt">CLONE_NEWCGROUP</code><!--pnid:LOolhKzqiXQJ3B1m9pfK6j-->)</td>
+<td data-page-node-id="gJU7J2pcrFIhhiKYyzigpF"><!--pnid:34NmNf0vZnRJXdBVXaHfMK-->cgroup 根视图</td>
+<td data-page-node-id="HsLD7ReGJqf2BaDCcuxTGx"><!--pnid:j487kL624MGQI5uW9Gm36B-->容器里看 <code data-page-node-id="jKu8g7fHS8LEA6cSnmqTLk" data-pnid-children="FfKrLSQWQBXxaLoEROye6y">/proc/self/cgroup</code><!--pnid:lCSkEOxGLopiBi0rBIUq3K--> 是 <code data-page-node-id="F1Xa1POfb3TRWNYw66FsX2" data-pnid-children="UTtkrQvIChT8TBpRj8Kep1">/</code></td>
+</tr>
+<tr data-page-node-id="WayU05JCBEqg3zCn4xE2Ze">
+<td data-page-node-id="WXSv0hyK0tJ5VYnisltvlc"><strong data-page-node-id="qxO9QvoMxEVyG0BbETm2PF"><!--pnid:ISaPc1KXlCBI9CgKdl9RYE-->Time</strong><!--pnid:OCGMYM2rO2PlHk8tHKHeFe-->（较新）</td>
+<td data-page-node-id="JQU8anM2ZPa3poCx1cuEeD"><!--pnid:9nifroJinfZ3DMcLgpfWvp-->部分时钟偏移</td>
+<td data-page-node-id="TZ9LH7iJEDh1LvPclCg0t2"><!--pnid:yBNOSwURmiVAyBxw1Jq7RS-->用于容器迁移/时钟虚拟化（版本相关）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="EI6V2IpgC6SUZXjFsxwUMj"><strong data-page-node-id="jtNAmNwDFc5rCsyF85MWx7"><!--pnid:nikO0fzzrsOxn5eFWVOjyJ-->必答的关键补充</strong><!--pnid:XnjbdFgalpwysQ5xvgGNr2-->：
+- 命名空间通过 <strong data-page-node-id="Z17otH6eNn4M3rMJ3YCqGT"><code data-page-node-id="NoGyiLV1DrUNncnH4CVDWP" data-pnid-children="xDNxYmDy4qDJRWWazfA4gC">/proc/&lt;pid&gt;/ns/*</code></strong><!--pnid:aOgqRLKa50AsxvhgpsZKRm--> 以文件描述符形式存在；<strong data-page-node-id="kPqC9KhxFXSvsRK6UIi6tX"><!--pnid:tXuaSO9LsV9YO4YfeWbKyQ-->只要有一个 fd 或进程持有它，namespace 就不会被销毁</strong><!--pnid:1RqxiqaZ1abAKGZWOizhom-->；
+- 进入某个容器网络命名空间的排障命令：<code data-page-node-id="z4VMzT906ZC2uHW8EnsazQ" data-pnid-children="thmi28lGvhW29TFqSe5DMu">nsenter -t &lt;pid&gt; -n &lt;cmd&gt;</code><!--pnid:mjDzx5TyS1FypsZni5mz1S-->（见 A3）。</p>
+<h2 data-page-node-id="ppHckBK20iF2XvDx17QY3w" id="a2-clone-unshare-setns"><!--pnid:Gy8dJLzYPNePr3FATDDZ5w-->A2. 三个系统调用：clone / unshare / setns 分别做什么？</h2>
+<table data-page-node-id="pMcMFcjMgE0RIpRLPsv1n4">
+<thead data-page-node-id="fBcvxgfejWROZkjgh1Or3C">
+<tr data-page-node-id="7BY2MXZsKSGthGtWpj9WF2">
+<th data-page-node-id="kAfDKolwD3AhXRweoQzDRd"><!--pnid:hOOizH8sXf7F8PcRtyg0qW-->调用</th>
+<th data-page-node-id="1sMrCISA6VOtD6FsacvgaK"><!--pnid:naereOJEUU2N8mIcqNqT1X-->作用</th>
+<th data-page-node-id="e9eSVZgkNQg3IqMLorxutV"><!--pnid:0SBqE9Me6JgKyC1WK8h7hC-->例子</th>
+</tr>
+</thead>
+<tbody data-page-node-id="XVsTdqygQJcSgy6VTbj7dF">
+<tr data-page-node-id="8T6SPcTVUFgy0MW4DwITNz">
+<td data-page-node-id="9ccHadP9l3RzhiXAoyUlkU"><strong data-page-node-id="NukW2BL3TZPfh1SAwBdvp4"><!--pnid:1JQneNmqhKJ80sLePq6kQA-->clone</strong><!--pnid:LzS44UBockmUP3faqSy9vh-->(flags)</td>
+<td data-page-node-id="TAtGKe1eNrsn9LdXVnmNt6"><!--pnid:6B9cw0ZKgztLfDHSCc6QnP-->创建新进程的同时创建新 namespace</td>
+<td data-page-node-id="w2eeRhbB741rODIAieUowV"><!--pnid:ebwQcoC4WSOmptSv4ejahG-->runc 创建容器进程</td>
+</tr>
+<tr data-page-node-id="YZDEIxsxG047zIPe9sUUzT">
+<td data-page-node-id="VQrVHLCtc3xG9zhYPMTyux"><strong data-page-node-id="VhCa4le2PsK3pC7rTrYFFB"><!--pnid:b87Y5kROCuGCFS5TJJDnU4-->unshare</strong><!--pnid:YIS3MjbW2itW8lGJHu9vo1-->(flags)</td>
+<td data-page-node-id="WQ7I97yYmVsqtCW8PyypgH"><!--pnid:LaWlUXoxv95vb634Gg8Y9h-->为<strong data-page-node-id="GGN0tTj7JZrdxxDsiDleaV"><!--pnid:2fOVRWTr7zPF7Zm6BjEmuR-->当前进程</strong><!--pnid:RAFkeDZ7fbRfGIq60H8rxr-->创建新 namespace 并加入</td>
+<td data-page-node-id="Kei9r3S1vhBEoKwF5aZfRY"><code data-page-node-id="lDRLcxsEXgPrL1wTmA33JW" data-pnid-children="qjGA3g9Ak2CQ2EManozZuR">unshare -n bash</code><!--pnid:dgZFuYmntcb2iLBHJXhi90-->（只给自己一个 netns）</td>
+</tr>
+<tr data-page-node-id="cyIrUe8mcQ3sW8j6n3yASB">
+<td data-page-node-id="lFIb1tGJ1eng3OXMF1oMGS"><strong data-page-node-id="j08FWMx49fNWdGwW0Xh2tE"><!--pnid:elKq4H2AbLrrmgukXJ0bvw-->setns</strong><!--pnid:YEhLcutUrRqlovTvzUVjJM-->(fd, nstype)</td>
+<td data-page-node-id="ZSbYmCISDd8wq4AgcCUsFr"><!--pnid:9EEVczaHg6ywFdoRmKXG2Z-->把当前进程<strong data-page-node-id="eXBzMox2fUXQS2WeAetqIR"><!--pnid:gVcbMFLA52EPpF1dnJGiSy-->加入已存在的</strong><!--pnid:gP7wECx8zyWnfjquMlrQbD--> namespace</td>
+<td data-page-node-id="jjBRa349s4MqjOcCdyLxCL"><code data-page-node-id="VIDUAs1AcDOZaAIqraZHTN" data-pnid-children="OJhA6FxwzPlVR5dBbhl35m">nsenter</code><!--pnid:KLditJtpqbRVdT3hHszIYm--> 的实现基础</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ChGt4dYeaMTPdPXkmUsjmt"><strong data-page-node-id="vFGtOPy7vxE5A21KsyCuqP"><!--pnid:Q2XGVKDPQfZ4eCU8ZKh0pN-->必答</strong><!--pnid:VtUyjiLNvz8GNpSHkfdW1Z-->：这就是为什么"进入容器"有两条路：<code data-page-node-id="AsCdghYW5DMfELp7ZK23jW" data-pnid-children="Q5kVfRApEvg9dGlsal7KOD">kubectl exec</code><!--pnid:U8QQJny2G0hvA0vatHpMoI-->（走 CRI Exec，进程还在容器 cgroup/namespace 内）与 <code data-page-node-id="rTkldHyNFXJE0hOqDcahEu" data-pnid-children="grp3nqssBpFPXFD7UWPlOR">nsenter -t &lt;宿主PID&gt;</code><!--pnid:bEq5OZKLTOvoMl599feDmY-->（从宿主进）——后者在<strong data-page-node-id="XiMytjPhNilHQDfW8mjaKe"><!--pnid:8v0rRR3ieaOWZ52OG7eBhA-->容器没有 shell / 网络已断</strong><!--pnid:nehuKce08sZsUAVDouYbB6-->时是唯一手段，也是面试加分点。</p>
+<h2 data-page-node-id="nr2yQipjLHauPRZZxwB6IG" id="a3-pid-namespace-pid-1"><!--pnid:Q6H5QU4W1bTSIzfbquaI1f-->A3. PID namespace 的特殊之处：为什么容器里的 PID 1 这么重要？</h2>
+<p data-page-node-id="LwUUGWEqecPoKEVYYJY6YI"><!--pnid:r4IfGjgf0l2zbTD9xOUa5l-->PID namespace 是<strong data-page-node-id="RASri4xm6T83HvV24Vv6Tg"><!--pnid:MxICTPkPEZVRigFqyop538-->层级</strong><!--pnid:vgVlUQbiI5wIcmW8csn0HX-->的：子 namespace 的进程在父 namespace 里也有 PID（双重身份）。</p>
+<p data-page-node-id="3AS1CpnQ2oy6GGAfukAyZm"><strong data-page-node-id="COR1ohhU1igbm92waTJe2N"><!--pnid:MlSEk9355QttJ0ez74FTyw-->PID 1 的两大职责（超高频考点）</strong><!--pnid:HdfQ52qCgQubBePqWzNUW8-->：</p>
+<ol data-page-node-id="cJu3o61jcuZDXmcj2oZzpm">
+<li data-page-node-id="swAI2ez003o6dKeHP677Gv"><strong data-page-node-id="xmjy6JbJrnQCv8QNgcXSzX"><!--pnid:lrCFSgpG27VPqKo8D7ALyJ-->必须 reap 僵尸进程</strong><!--pnid:QoCovw3A9wBvqZoPvFA8R4-->：容器孤儿进程会被 reparent 到 PID 1；如果 PID 1 不 <code data-page-node-id="5HOoFAEO9zHy91NaSOomT0" data-pnid-children="mlXkGrUAFnCmzItktJFQvs">wait()</code><!--pnid:7HO4WsIZmFyb7UNfPILHfe-->，僵尸会堆积 ⇒ <code data-page-node-id="uFB3dLeGvNHusQiT6KuV8J" data-pnid-children="VLy1c8L9Z0zpJJD8RLO9iC">ps</code><!--pnid:qAlNsfVHVtymHbV9n6Dv6M--> 里一堆 <code data-page-node-id="0JrkaQbwED9aEXx8eEXvln" data-pnid-children="6cESnLowcuBKTMVMqF5Ghp">&lt;defunct&gt;</code><!--pnid:YIVviCUlB9k1jKL0mdIcGh-->，PID 资源被占。</li>
+<li data-page-node-id="8uV28t0Sc5So6LxhYowW3i"><strong data-page-node-id="relBG7K1D3C3n0Oj0asHh7"><!--pnid:HpLq4JOLiOX1Weg24HJtlt-->信号处理的特殊性</strong><!--pnid:QmiRDVJb24JmKphZDU166d-->：在 PID namespace 中作为 PID 1 的进程，<strong data-page-node-id="Q2rd6Yh9uNAkGOpLQ26JSJ"><!--pnid:zgIIM27ltFanHw8I9tLXiQ-->未处理的终止信号（SIGTERM 等）会被内核忽略</strong><!--pnid:jlLCMBFKQinW0GkNRRJ6IT-->（除非它显式注册 handler）。这就是经典事故：<strong data-page-node-id="Hu5Sw2IbdTqtjoXmaH25RN"><!--pnid:I3uXEJfMZxHj4jgWYu9PtI-->"容器里执行 <code data-page-node-id="z1GxEXX3h66Dkdo81pkG4I" data-pnid-children="fX1lfjQCHYRsTaChBCjyOV">kill -TERM 1</code><!--pnid:v3l61blkZHDLivpxMAyrsw--> 没反应" / "应用收不到 SIGTERM，滚动更新要等 30 秒才被 SIGKILL"</strong><!--pnid:XrRHSr8ODSPGdXUcOZtRyT-->。</li>
+</ol>
+<p data-page-node-id="DqiM01e64SS63wJEqyOG0J"><strong data-page-node-id="p8Az10hkdLLXEH0rU11eqc"><!--pnid:LB2Bg2XBLP1vcEkdWcDXYR-->解法（可直接背）</strong><!--pnid:jBNdrkHRy3TzIHhjYiwiCm-->：
+- 用 <strong data-page-node-id="mt1B3SjjZLvLM8RvaUyMI5"><!--pnid:YLfy818hV2nxBmO8kf0wkP-->exec 形式</strong><!--pnid:FBYTRsVn2S0ZzrPSnurEeK--> 启动进程（<code data-page-node-id="TS62ezDqdv8mObzjMGoCm0" data-pnid-children="wr3Tmd7EkqdZnLWY39wP2C">CMD ["app"]</code><!--pnid:6LBOzGOUTGiFV7r0cHNM8Q--> 而不是 <code data-page-node-id="OyeI0iTTnaInmITVwH87cl" data-pnid-children="MciznpDXCNuKC21qa78YOD">CMD app "$@"</code><!--pnid:vjh4tWGuZUALCFcGr8GJIi--> shell 形式），让业务进程直接当 PID 1；
+- 或引入 <strong data-page-node-id="v9FqbrsveY8ubuUPO39Zac"><code data-page-node-id="Vfog6P5SYxfnL60HpaO7vn" data-pnid-children="C6miGcU5e7bkKQ0LX67Jdy">dumb-init</code><!--pnid:AL3Cgt2HiyPGSjHQBjueKO--> / <code data-page-node-id="1u6gHYqfIq0fLtlfUw9QUF" data-pnid-children="CvEqm6ymxYejJ9fGO998sa">tini</code></strong><!--pnid:ezMdtuhMeDkAHTsfg1cgAv--> 这样的小型 init，专门负责转发信号 + 回收僵尸。</p>
+<pre data-page-node-id="XHDg47SsrSbWd6kQSwxIjJ"><code data-page-node-id="VYuYRNOoeluVlHxD6nZFkR" data-pnid-children="Hqy8cIAZv9zpXY50362ZNV" class="language-dockerfile"># Dockerfile 推荐写法
+FROM debian
+RUN apt-get update &amp;&amp; apt-get install -y dumb-init
+ENTRYPOINT [&quot;/usr/bin/dumb-init&quot;, &quot;--&quot;]
+CMD [&quot;python&quot;, &quot;app.py&quot;]
+</code></pre>
+<h2 data-page-node-id="cIUq3rR4XBiLnqUWzOIAfm" id="a4-user-namespace-rootless"><!--pnid:ZzwKVBme0NOFO90ixkZ910-->A4. user namespace 与 rootless：解决了什么？</h2>
+<p data-page-node-id="pjS5KgIIhPu2q6F7w8YYxc"><strong data-page-node-id="uJzf4KzvS9AJROnt8k2ZM4"><!--pnid:0Fk9i9SMWWs6s0qKMa37CH-->核心</strong><!--pnid:QdV5EHSiMkefIES6olKfGP-->：user namespace 允许把容器内的 uid 0 映射到宿主的<strong data-page-node-id="VKn3ThaXna4VTGO4Jt440s"><!--pnid:JqaWmUH1GbKtujAy0sdnfV-->非特权 uid</strong><!--pnid:ZxxEzDKz8vgJmOGpTR70pD-->（如 100000），因此：
+- 容器里是 root，宿主上只是一个普通用户 ⇒ <strong data-page-node-id="V3hemEJvPJ66zDJ9l0FqEk"><!--pnid:qKnP1Hmdkar5V2ozS66ELw-->逃逸后的破坏面大幅下降</strong><!--pnid:06ch7xaM2eU28AeuunX6dk-->；
+- 可以在没有 root 的情况下跑容器（<strong data-page-node-id="21z0Zc4WpBfcKUSz6T5g3o"><!--pnid:x7CLNCAh0owSjvqNKDwqAC-->rootless container/runc/podman</strong><!--pnid:96RPTthzkt6kDy9ieTLghq-->）。</p>
+<p data-page-node-id="nMOaiZHwaz7GElBQfzDUqT"><strong data-page-node-id="z9H9MBomHFXa9qAIKBmLW6"><!--pnid:Me8mNejKSbE1Z9Pc2TyFfG-->代价与限制（必答）</strong><!--pnid:k2U5KDRET26SJKDWJHvdrf-->：
+- 部分文件系统（overlayfs 在某些内核/发行版组合下）在 user ns 中受限 ⇒ 常用 fuse-overlayfs；
+- 特权操作（如某些设备映射、部分网络能力）不可用；
+- Kubernetes 侧 <strong data-page-node-id="o38ASaMnnQL8p7ekl1mLmA"><!--pnid:1LUfRkYBOX1H6wVVQhbOFa-->User Namespace for Pods</strong><!--pnid:1XCj6svd7f5USh0HtHqJ4n--> 仍在演进阶段（<strong data-page-node-id="KCSip7ATLcN23Zqxx8HSYd"><!--pnid:4kPvmBogqroGwSc1cBUd9l-->请以所用版本 Release Notes 确认</strong><!--pnid:HGjkMJdyqGxhVpSsDiXF6E-->），别在面试里说成"生产默认可用"。</p>
+<h2 data-page-node-id="Ke4VXwwhFmZcs0u4CSho3c" id="a5-mount-namespace-mount-propagation"><!--pnid:5XTEeLXPR4akYlYr3bEw0w-->A5. mount namespace 与 mount propagation：为什么容器里看不到新挂载？</h2>
+<ul data-page-node-id="7s9C68QAJR3It1OfvRbiZN">
+<li data-page-node-id="XCITQrEyevr3DiCa50r90l"><!--pnid:p6joYa3A2cEheYfhxlixK2-->Mount namespace 隔离的是<strong data-page-node-id="f3mAPvuRUcht77J6zVm09O"><!--pnid:lyHWfhEHUeGEmefo8wQCFl-->挂载点视图</strong><!--pnid:oeeQBJnXzJI4PTFoWS2Jpb-->，不是数据；</li>
+<li data-page-node-id="WUaLB8PTdmLACNgXvKVt1d"><code data-page-node-id="uyAufkynqKWWaxSSXQkHTL" data-pnid-children="W7XdUh4UQrJFKWaeZYLr3S">mountPropagation</code><!--pnid:LluYXun3lQ3uuGedEjQV1B--> 决定挂载事件如何在宿者与容器间传播（详见存储篇 A21）；</li>
+<li data-page-node-id="JOP96qftUbgeNzuRrBO3j0"><strong data-page-node-id="J6XxeEYbx80S2bun0fhTno"><!--pnid:Ig8PKt2H12pDDNFgTHdOsS-->忘记 <code data-page-node-id="8aWOsew6v2Yfo7tQqQpm9F" data-pnid-children="7wOwCG1z3VF33iTuHDBylK">Bidirectional</code></strong><!--pnid:gyH2dlEDU9IcExq37LBphb--> 是 CSI 节点插件、某些块设备工具失效的根因。</li>
+</ul>
+<pre data-page-node-id="DgsNpolq7EtbmYz0ocSsbj"><code data-page-node-id="7n9rIHHshOW31aje2y7HZW" data-pnid-children="nnlbPlDXF8WHfVPkx5sECF" class="language-bash"># 宿主侧看某个进程的挂载视图差异
+cat /proc/&lt;host-pid&gt;/mountinfo | wc -l
+cat /proc/&lt;container-pid&gt;/mountinfo | wc -l
+nsenter -t &lt;pid&gt; -m mount | head
+</code></pre>
+<h2 data-page-node-id="F9niuqsd3eHQQRT9245mnB" id="a6-net-namespace-veth-pair"><!--pnid:dCA1UNUu45Xbxnvtc2yIRD-->A6. net namespace 与 veth pair 的底层（与网络篇联动）</h2>
+<pre data-page-node-id="qFoCJa5WG4a1BJv8e5Npcr"><code data-page-node-id="a8dOPVsiS0KNKmJK1lxxf3" data-pnid-children="RFmjTJr8RVcciudwG9yUm4">创建 netns → 建 veth pair（两端各一个 MAC）→ 一端放进 netns（改名 eth0）→ 另一端留在 root netns
+      → 配 IP + 路由 → 宿主侧按 CNI 决定挂 bridge 或走路由/tunnel
+</code></pre>
+<p data-page-node-id="BdfdnTpyj5tPRmtFv1AudF"><!--pnid:3THtjLm5gYk9oQSldYC5IZ-->关键点：
+- <strong data-page-node-id="mFUAIdkTs04cwWHVNUnmVZ"><!--pnid:02fkcAKlk7liFZbcTiFoZs-->每个 netns 有独立的路由表、iptables 规则、conntrack 条目、socket 端口空间</strong><!--pnid:9IXg6JYXVXIWVuMGXjGDNB--> ⇒ 这也解释了 <strong data-page-node-id="7G5Mgt4c7tTFgiCvTUTQdZ"><!--pnid:2Psvi1UxnfLPAXVx8y4K5a-->hostNetwork 的 Pod 会占用宿主端口</strong><!--pnid:r57qwUqJUIIwjO4QHxistx--> 且<strong data-page-node-id="1w7H4pXXWmIUAdyPjtp3RY"><!--pnid:uG6g1Yjj43eM3dhGuKEpq2-->看不到 Service 的 DNAT 行为差异</strong><!--pnid:dwLtq0bxievGqIuyzpuSVe-->；
+- 排障手段：<code data-page-node-id="vjfMixSXvRrCNyyjtcNNQ2" data-pnid-children="qJzMNVv7gcYvk20tr7JTqJ">ip netns</code><!--pnid:GrBPIZBaii3BtF978MFj3w-->（仅对命名 netns 有效）、更通用的是 <code data-page-node-id="jjQnYJJ5GxSK0zakF2WfPp" data-pnid-children="wOIJol8TSCzl7h1FQBiDv4">nsenter -t &lt;pid&gt; -n ip a</code><!--pnid:NQkFgSFZkZ42ItlN0anKKV-->。</p>
+<pre data-page-node-id="g1YcuiMQT05pfokEZD12Wz"><code data-page-node-id="UIbuBUD8k0d2OEK9ZKHQGo" data-pnid-children="xw4SiSBiFHVEYC34KRoJcP" class="language-bash"># 找到某个容器 pause 进程在宿主上的 PID
+crictl inspectp &lt;sandbox-id&gt; | jq .info.pid
+# 进入它的网络命名空间
+nsenter -t &lt;pid&gt; -n ip addr
+nsenter -t &lt;pid&gt; -n ss -lntp
+nsenter -t &lt;pid&gt; -n tcpdump -i eth0 -nn host 10.0.0.1
+</code></pre>
+<h2 data-page-node-id="IumoeLpI8tKTffST7I3vXH" id="a7-cgroup-v1-cgroup-v2"><!--pnid:X0c9Ugp2jQQMv2R3jIfTbD-->A7. cgroup v1 与 cgroup v2 的本质区别？为什么社区在迁移？</h2>
+<table data-page-node-id="Dhjwmqdlpi7TbM83woa2AA">
+<thead data-page-node-id="4XfBg58wjoFBevZ4FxL9I2">
+<tr data-page-node-id="8w9iYRG4t3jRwMuFuEpxgr">
+<th data-page-node-id="Kx96A9BCVTm7WXx9vcRwiH"><!--pnid:r8T0GKPjm53JKJRBxR0CiT-->维度</th>
+<th data-page-node-id="oBfPeFtQf7f5dNPPNSXngC"><!--pnid:BZICuInZ11sYShAD4QH6Rf-->cgroup v1</th>
+<th data-page-node-id="vy6qKQynKosFoTeTiTzEZy"><strong data-page-node-id="jGHx2mfcgcGd4iwK4K6ZzN"><!--pnid:0OO8bulzd61tBJa4M88p9s-->cgroup v2</strong></th>
+</tr>
+</thead>
+<tbody data-page-node-id="mkIAeEii0cWN6ycDZlwpEf">
+<tr data-page-node-id="M1q6c0ibptohQwFyn4r868">
+<td data-page-node-id="dsVF8xbnO6pgzItK2YdDl3"><!--pnid:l9PcH7RcKlclVocSYCNxsr-->层级</td>
+<td data-page-node-id="FdO4EPNJIvJZkF0UMwrRUZ"><!--pnid:TnfNY7G26NOOXy2BMh6yW3-->每个 subsystem 一棵独立树，容易混乱</td>
+<td data-page-node-id="yTCVtyyLkcqJuOexinPFEo"><strong data-page-node-id="NslPllS0ehSTPoLm6Uuby4"><!--pnid:5uP8x1pEB5QVzj7v593FaW-->单一 unified 层级</strong><!--pnid:5zeF77eP0FdgIhNYbg5gkV-->，所有控制器同一棵树</td>
+</tr>
+<tr data-page-node-id="RMSMWomzdNpjPd2OSEKW6c">
+<td data-page-node-id="qqANf9BRYTG9yxnpkM6OAD"><!--pnid:FpyiIfNuDlKwSGKfFvWDcX-->内存语义</td>
+<td data-page-node-id="urxhk9fJxKMGoLZ5CF69eB"><!--pnid:eDCuNVoMjgNFXswIM91bO4-->memory 与 memsw、kmem 账目复杂</td>
+<td data-page-node-id="XViuqVhFWXxos0RtHIRk93"><!--pnid:IOttaJWqjTemCMZmR5FNQp-->统一一套 <code data-page-node-id="cfkl8BNZLRyXm4x0PjxTtF" data-pnid-children="qznpiE4V69W9fD68hJlnTa">memory.*</code><!--pnid:sZ2ZT5DSE16YZ4EzpwbQOH-->，支持 <code data-page-node-id="5j5r6c1QbeFrnOHyQJe2Wp" data-pnid-children="VuHg6MyTeSpJOxAKrHDB0E">memory.min/low/high/max</code></td>
+</tr>
+<tr data-page-node-id="dYsLZ7i1YKIKRlRcgoj7Mk">
+<td data-page-node-id="vZ2ZkNGtGB1fJsBe4TLdZi"><!--pnid:5CCX0tVQXisdTJ6zEGMGZd-->委托（delegation）</td>
+<td data-page-node-id="IJPjZZhEYNO0ciNwaFswVp"><!--pnid:Kfv8DTWNTCIZxtKwPftCaA-->困难</td>
+<td data-page-node-id="QLUXy5RLL6KNRJYpttgk0W"><!--pnid:KmBOMVundKrkB1BvsvqJkV-->原生支持（容器内再分层）</td>
+</tr>
+<tr data-page-node-id="52sOsXuYIBWIgBFBIWIn01">
+<td data-page-node-id="qsxWnsQbjq2gyoNaHTZ93o"><!--pnid:B1PrKy4BtR8LgXM1t4y8jx-->PSI</td>
+<td data-page-node-id="pNw4H9WZnEILx5HKXKeIif"><!--pnid:1kCNQENwfRaFJqYU8fskM3-->无</td>
+<td data-page-node-id="5YzMMiH1fHFrFgstR7xzXL"><!--pnid:N0VWhBgdzsTU87Y1vjnEX6-->有 <code data-page-node-id="AIrTw379mQdzc6owPt6MZp" data-pnid-children="AVlI9VRvv7JMaxrd1Em9sY">/proc/pressure/*</code><!--pnid:GcrUvrw1H0mMgsCjLVKKXh-->（见 C13）</td>
+</tr>
+<tr data-page-node-id="EXIVbM0lK5KXER8JXINbPb">
+<td data-page-node-id="dK7BWU0iwhMtashelRsnp7"><!--pnid:byzJpKzgZsHNiwCL9dSjnK-->IO 控制</td>
+<td data-page-node-id="2vgR06aqAgnxgvSF4w6lBR"><code data-page-node-id="VgMkRVddwp0ktvNsSPCt7H" data-pnid-children="umZfmesL4uks2Ua0bPzeFS">blkio</code><!--pnid:2ab4c6D2Cmka9mUcmc4QcM--> 权重/限流语义混乱</td>
+<td data-page-node-id="TRIsTxhDp7UUQpEfsh8PvK"><code data-page-node-id="ZLqv4mf22Fc7bO0x0LZhy5" data-pnid-children="usVFlOizdyKtHXspc9RB4I">io.weight</code><!--pnid:lv5tBxvuvCOrdbMZ9BUGMQ--> / <code data-page-node-id="yQZZQKLeY0NTLSg44WiF6T" data-pnid-children="MhrlkfLu1Hpn7QXqZKKvpb">io.max</code><!--pnid:D9yBfFNxAsFzNaFGt7DTKE--> 语义清晰</td>
+</tr>
+<tr data-page-node-id="A2CpnsoXklnvEVNk0HxIFW">
+<td data-page-node-id="qynH0WmrjRZdP9XFxfTe2o"><!--pnid:vlJ3cZ9AUnKxQpCTHf8kXP-->K8s 支持</td>
+<td data-page-node-id="20rqSaqQPZRIQdRr6GGPiV"><!--pnid:mO4jUcExuVnvh3Bl26H98g-->传统</td>
+<td data-page-node-id="janB3czvACTHVtiB4MqrXH"><!--pnid:033LSxWZ7ptACxgbgNrYZj-->新版本逐步成为推荐路径（<strong data-page-node-id="Ps8bqRmdRkKX8a8NMekKLy"><!--pnid:RGaRtY7XqR8p7ZUOZ9TErC-->具体支持矩阵以所用版本为准</strong><!--pnid:oJb5S4l6viSxImClt42c1U-->）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="I0TM5o5A74wozIh7yRf6dI"><strong data-page-node-id="xr7txapSvyHTuBmcQHfzkN"><!--pnid:mFFmyzzf1ozmmxFC3bBY1z-->面试答法</strong><!--pnid:Qyn7vmKcfdNkpdVBbx1gQs-->：迁移 v2 的收益是"<strong data-page-node-id="XURzYwRMHEbOvN9xvjW2tn"><!--pnid:SV5dkSpm39t8dOR3gEmCNA-->统一层级 + 更准确的资源账 + PSI 可观测</strong><!--pnid:g0tvEaGvbwU1lNekKAi7kC-->"，代价是 host OS/容器运行时/监控组件的兼容性要全部核对（<strong data-page-node-id="nRYBPfxb08xRWhbkcXKk5G"><!--pnid:la13aMdW1J5YMELRnPu8Xn-->这是一次高风险的节点级变更，必须按节点池灰度</strong><!--pnid:9cN76BBpQua2G8jH8yViIk-->）。</p>
+<h2 data-page-node-id="yslGiMdWoRSrtlDhAiTX9y" id="a8-cpu-cgroup-throttling"><!--pnid:TVgIuabraEdFXIDYav9uKy-->A8. CPU cgroup 的三个参数，以及最经典的 Throttling 事故</h2>
+<p data-page-node-id="PLLZc7CrefqJWM4kgELLuR"><strong data-page-node-id="R1etAPVbNidMTjZ2hFnzHu"><!--pnid:WYwjWHVvElvJV1fDjP3RkD-->v1</strong><!--pnid:k6lJ0ayTWpy4Falyg9il4D-->：<code data-page-node-id="JdnLfEhxPxxGqeGEEJR38I" data-pnid-children="Hm89eFEKVjeOuXU4wOixjg">cpu.shares</code><!--pnid:NNSlaRcXhslFO6tI4SOwW5-->（相对权重）、<code data-page-node-id="Fm17PJFLq4uDoDu179BzJ9" data-pnid-children="r0lvXUw0co8ieIB6thUtQk">cpu.cfs_period_us</code><!--pnid:Qkn33AQqzkellTeQJdIYqk-->（周期，常见 100ms）、<code data-page-node-id="XMBOow8s0thhnAayOdQXWj" data-pnid-children="zLSETBRXqdL8tbqP6AYDJT">cpu.cfs_quota_us</code><!--pnid:LR9Hpfaj3cqaLdIhkVr8KS-->（周期内可用 CPU 时间）
+<strong data-page-node-id="wVxBEWNR6HRb6p04yhspz9"><!--pnid:XUFQx8I3HIZ6RTJ7BpJr1Y-->v2</strong><!--pnid:6E7GLmi0lJEYOyb0NdmeyG-->：<code data-page-node-id="LKPgrsibu24e4LveK8lNpJ" data-pnid-children="gcOP4L4urK55zHuLZlxfgp">cpu.weight</code><!--pnid:x3i2OzPdrTn47O1D3MnYuf-->、<code data-page-node-id="VmXSWsh9351n6tV0BqXZzK" data-pnid-children="jLcU8OLFyAfNCPdjEIae3f">cpu.max</code><!--pnid:T1rGEgJHLIBhFiJ4kvYJsY-->（<code data-page-node-id="O6mDgZsZT3jxGJrp7MAz4F" data-pnid-children="a6rV7qBYSmHTRqz1XqE6UI">$quota $period</code><!--pnid:DYFKjedduURQf21yMdaqRI--> 或 <code data-page-node-id="11E8UTqGOzCIEuTwvNjAji" data-pnid-children="dE2AAwc8cqWZpsoZ1clOAJ">max</code><!--pnid:8yvigPbPFc0hZ6CAc246IK-->）</p>
+<pre data-page-node-id="WSFHQJWpxZb1IKcBZ8HGny"><code data-page-node-id="SSbhQNNrOXd423qffXkw6w" data-pnid-children="eJzhvojMBszOosZh8Px24i">cpu.max = 200000 100000     # 等价于 2 个核（200ms/100ms）
+</code></pre>
+<p data-page-node-id="F3LGTw7yldHsm6jNLbaxTh"><strong data-page-node-id="x69pzMQkdcWiPca2mDgMVO"><!--pnid:MZ3yGD9Sc5jfyHGXYVlP7t-->K8s 的映射</strong><!--pnid:UnaZYXHhq0PkmxuBE3lbLa-->：<code data-page-node-id="wUXcW5Y4ahaxJ7DFz03IFQ" data-pnid-children="lTdSNrela5W6REuMKcS89U">resources.limits.cpu: 2</code><!--pnid:uHNfBZTVt1UvuaOmFz2TNl--> ⇒ <code data-page-node-id="Mn2TgOafIWZVcCu4y2mDkk" data-pnid-children="k9JkRnStRUbvTnnrgZueBd">cpu.max = 200000 100000</code><!--pnid:lVBpU2bMv41bHP61FaA7NY-->；<code data-page-node-id="tw1cI3y2vGrAZ7ZSGMWjxl" data-pnid-children="fR30BEdGN4O1TfnOH1fMHx">requests.cpu: 1</code><!--pnid:xXtetQmSDBrGgPNNeARtpL--> ⇒ 主要转换为 <strong data-page-node-id="YWe0xjOPlfMNXYLgY30xUF"><code data-page-node-id="2jNKLgCuEGohdaDmVnvmlS" data-pnid-children="UxOsHydMDrIdMh4CxAodoW">cpu.weight</code></strong><!--pnid:SnS0wLRnDZSeaFLFlRpykx-->（v2，范围 1~10000）或 v1 的 <code data-page-node-id="zSkCAzeoz82V1n80o8uoSn" data-pnid-children="Mbs0MbJkNYkg26JepAOKJy">cpu.shares</code><!--pnid:qM22DxrN3jYYCRCDABoGSI-->（1024 基准）。</p>
+<p data-page-node-id="DsDXI2cOK6OeLcv3EE4DNb"><strong data-page-node-id="LWaoWsUZU492s9C9aiC7yH"><!--pnid:xaNjtOIGNdqip3zcDaMFor-->经典事故（CPUThrottlingHigh，必考）</strong><!--pnid:huXCIbhoNdDj90TGmeWSMS-->：</p>
+<pre data-page-node-id="rhXcN3qHDGrBGk9DXs6Q5E"><code data-page-node-id="octGhyIlMd4ara6MGIGhRe" data-pnid-children="mqUUPKAkTplt5rQDGyxiw1">现象：容器 CPU 使用率并不高，但 P99 延迟很差、RT 抖动
+原因：在一个 100ms 周期里，进程前 20ms 就把配额用完 ⇒ 剩下 80ms 被**限流（throttle）**，
+      表现为停顿。平均使用率低 ≠ 没有被限流！
+</code></pre>
+<p data-page-node-id="fofHLII6nGeWXLaDXPcRoL"><strong data-page-node-id="Ks9YpxKR8n73JcxrvOmBOx"><!--pnid:SqWwNGpOOzD00i4IYZDY12-->证据字段</strong><!--pnid:5kuvhUgSRVjmxMiAmXJ6vm-->：</p>
+<pre data-page-node-id="JqQgeDi86EnloR9qA3rv1P"><code data-page-node-id="6CmREEfdipwKAfhhtze6uS" data-pnid-children="YQr65kPmcNSwSOi09FYqrL" class="language-bash"># v2
+cat /sys/fs/cgroup/&lt;path&gt;/cpu.stat        # nr_throttled, throttled_usec（累计)
+# v1
+cat /sys/fs/cgroup/cpu/.../cpu.stat       # nr_periods, nr_throttled, throttled_time
+</code></pre>
+<pre data-page-node-id="4Txxm5yzRZ0yzIaZm8Bkg3"><code data-page-node-id="XFpAWRA76l0EgsmfHKezH8" data-pnid-children="OhZgOIUMjpjX41AQM0t5VA" class="language-promql"># 容器级别 throttling（cAdvisor 暴露，指标名以实际环境为准）
+sum by (pod, container) (rate(container_cpu_cfs_throttled_seconds_total[5m]))
+# throttled 占比 = throttled_periods / total_periods
+sum by (pod) (rate(container_cpu_cfs_throttled_periods_total[5m]))
+  / clamp_min(sum by (pod) (rate(container_cpu_cfs_periods_total[5m])), 0.001) &gt; 0.1
+</code></pre>
+<p data-page-node-id="gd7gtBI4P79SCDsNI7jBqU"><strong data-page-node-id="2kqHlolYEY2dvVu0O5CbSr"><!--pnid:zOR5Y2ayuWR4SVm06ngQRs-->治理建议（需压测校准）</strong><!--pnid:hmemLokyWyJ7g5nEfN233E-->：
+1. <strong data-page-node-id="1mO5sFvPvbb8PzRdFYc79j"><!--pnid:EzbnwZuq8Kj88CxHAdNJRP-->延迟敏感服务不要设 CPU limit</strong><!--pnid:P9MorlrtMyhkXgqywwAOBR-->（只设 request），避免 quota 造成的毛刺；代价是失去"硬上限保护"⇒ 用节点配额/隔离补；
+2. 若必须设：<strong data-page-node-id="H9U6W2zuPPka9SSYcbRAt5"><!--pnid:5YCDgb7ly2gAMMu9Ie5w7C-->把 limit 放大到 request 的 2~4 倍</strong><!--pnid:Ms6rd6zN54kLIWFTPUE8tQ-->作为"突发上限"，而不是等于 request；
+3. 部分版本支持调整 <code data-page-node-id="UPzWVgx1KGrjlg5rmuxhYg" data-pnid-children="MbuigIPDjreYjk28DkNDTJ">cpuCFSQuotaPeriod</code><!--pnid:TJ9BeOS9IQLrBj9VXQUSHb-->（<strong data-page-node-id="Yr2ykCOYnNIzeWGG17igfc"><!--pnid:0sJPKKSSyL6NTUVkpN1SKl-->feature gate 阶段，请以版本为准</strong><!--pnid:ZBTRZ95lvTnRfCogltpfAc-->）来降低抖动频率，但这是演进特性，生产要谨慎；
+4. 绑核场景用 <code data-page-node-id="bPPYS3s8Lw3eikjNObCECg" data-pnid-children="1gdaiv3eZEpgonurHeluEM">cpuManagerPolicy: static</code><!--pnid:CLCBUk9nvMpv3Rw54TJ0mX-->（见 A10）。</p>
+<h2 data-page-node-id="IkwyXuxPFUywUdbdHRqG2Y" id="a9-cpuset-cpu-manager-numa"><!--pnid:KpYEIyyzeCzKavUbwwdeEz-->A9. cpuset / CPU manager / NUMA：什么时候该绑核？</h2>
+<table data-page-node-id="7k8uq8SaSTih9GKJw1thdp">
+<thead data-page-node-id="8xq1sGtUVMMv8heHj7ScFL">
+<tr data-page-node-id="f0v5HMzOfMiyFEx6irCbKj">
+<th data-page-node-id="arEZVtrCgmmtSrKeOzE8LW"><!--pnid:bj2gW2ghDmEtkIayRYGpoP-->概念</th>
+<th data-page-node-id="9oXJVzgo7bogejy7eKMYxw"><!--pnid:X79W66xn7HtZl68NkvCFZH-->作用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="usMMkX0XJQPWU4OsTBCRaw">
+<tr data-page-node-id="tLKUwrdZr1DFQaLULd30P5">
+<td data-page-node-id="gsXgs5AxK31CLQw9flNP9A"><code data-page-node-id="ZVvVnWegUjZiNBuDbbsecK" data-pnid-children="TbABJYt5Prv224wNOrI3F9">cpuset.cpus</code><!--pnid:rdnRezc2FtUKJIA9oKCKjf--> (v1) / <code data-page-node-id="eaShxQAoYwg4CtHuGeIPeC" data-pnid-children="yVBX4FHmtXSGS030oij17h">cpuset.cpus.effective</code><!--pnid:J1qQkcI5qpFrSwRIE6jgft--> (v2)</td>
+<td data-page-node-id="U4qEJ1XyiJu5ketkASLJl0"><!--pnid:58kQStEjGIvR601tU6tzTZ-->允许进程在哪些 CPU 上运行</td>
+</tr>
+<tr data-page-node-id="GrYjMCArtV0sYyCxAILkDz">
+<td data-page-node-id="RGXxoVN6M0SYokvKfTz1mf"><!--pnid:K1RIC6R5yVObdHUNUVoQpM-->Kubernetes <code data-page-node-id="gTPNzaxG5qW3HrzOG89Tul" data-pnid-children="XijmGLhJIMfFk1XXo34qO6">cpuManagerPolicy: static</code></td>
+<td data-page-node-id="Kz5X7iCvXk7NymmPmiNQmA"><!--pnid:mC0oDv63yY02dsvJII1ffp-->满足条件（Guaranteed + 整数 CPU）时给 Pod <strong data-page-node-id="tRHHQM9DfGXmYNF1rWYN5C"><!--pnid:JhpsR9ye8qz9bKq6opnTN9-->独占核</strong><!--pnid:qfDr8Ujp25eFOW6EWhfKIC-->，其余 Pod 被从这些核上剔除</td>
+</tr>
+<tr data-page-node-id="HNbKJ18xL0fdorqnwhGxq5">
+<td data-page-node-id="SMnNjn7Kys8DsrW3ImdxEv"><code data-page-node-id="4IT4AFGDnuM9W1QfglytWt" data-pnid-children="P5sGdnvGqiNb9VsOaLvQ3I">TopologyManager</code></td>
+<td data-page-node-id="IHhWzmT06KVMigtghv67qp"><!--pnid:h8KhKFggLPjUuRl0igjX2j-->让 CPU/设备/内存在 <strong data-page-node-id="CJEUAAcZVEzzYMsJHNBgvR"><!--pnid:v1YOi0IwDGTmt8iQAlA4iv-->同一 NUMA 节点</strong><!--pnid:jm1OamcpAJHi3ZF7Zy6FQk-->上分配</td>
+</tr>
+<tr data-page-node-id="2wsGJbliW7r3op9gND2CX2">
+<td data-page-node-id="Q5zbqtR4dLUiGC6pyXh8E7"><!--pnid:lAYbFcBQ0uS7TBpMc3Pmq1-->NUMA 本地性</td>
+<td data-page-node-id="mKrOxlbKgLk1O9uIa5gxJk"><!--pnid:taGQXonMSvpNlA3AOUSVPx-->跨 NUMA 访问内存延迟与带宽都更差</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="h1xuC4IC6m6GACcpRFAqxb"><strong data-page-node-id="SqIbpXYtUMVRzi6BP0Y2m2"><!--pnid:fCpPXzVilOyg9rS6v60imP-->实践要点</strong><!--pnid:hwqHXsefu10pjLDqOyweZH-->：
+- 必须配 <code data-page-node-id="dqfdg8DNiY49vkvLBEGe6j" data-pnid-children="jykvn2MiRVc6nk5nvVL3gy">reservedSystemCPUs</code><!--pnid:I9CNAsuJJte2b70eBOJrYq-->（否则系统进程与 kubelet 会被挤到共享核上抖动）；
+- 独占核<strong data-page-node-id="ziqsXieAq9rt31YsHqCztd"><!--pnid:pNWXRLUFAHlzPepcTC54Iv-->降低调度灵活性</strong><!--pnid:HPiYPWIomks47XBZhn9upL-->，可能让节点出现"看着有资源但 Pod 放不下" ⇒ 需要对排不上队的事件做监控；
+- HPC/低延迟网络类负载才需要，一般 Web 服务不必绑核。</p>
+<pre data-page-node-id="G67f1Xn3zeZp0eAT3V4OGo"><code data-page-node-id="TbJmgbF8UbmDlnc9nVkVo0" data-pnid-children="nzwLihlcvjFsDXwRACGOgZ" class="language-bash">numactl -H                       # 看 NUMA 拓扑
+cat /sys/fs/cgroup/cpuset.cpus.effective
+taskset -pc &lt;pid&gt;                # 看进程允许跑在哪些核
+</code></pre>
+<h2 data-page-node-id="7grW5l5a9YL6MUJWXA15zn" id="a10-cgroup-limit-oom"><!--pnid:LFpikX2yKZsj7Ys6bmgXl6-->A10. 内存 cgroup：为什么"进程没超 limit 却被 OOM"？（超经典）</h2>
+<p data-page-node-id="k2vGgibz4WszDC40LpHwgY"><strong data-page-node-id="1h8WU8n0x8HLTLjsugdNh4"><!--pnid:U762FEZBGlmk6iQbjZFB9d-->关键：cgroup 统计的内存包含 page cache。</strong></p>
+<pre data-page-node-id="cthBlz6ZDOGRYmF3t27Haw"><code data-page-node-id="vq1Crj3x5RUlla8ldiXMNk" data-pnid-children="6G7pENw2SDbcivqtIRYQqS">memory.current（v2） / memory.usage_in_bytes（v1）
+    = RSS（匿名页，如堆内存）
+    + page cache（文件页缓存，容器读写文件时产生）
+    + slab / kernel memory（部分版本/配置下）
+    + swap
+</code></pre>
+<p data-page-node-id="STbIePikCLWqRpPCJsFVuw"><strong data-page-node-id="ovcbbGpw6TZvOj9kBUM3Ja"><!--pnid:W89PsK5cRqj9UJcE5hZNLE-->典型事故链</strong><!--pnid:Ee8ssWJWnwl88dHbFMva3Z-->：</p>
+<pre data-page-node-id="G1ev0c2XwOk7q3mssfhQyE"><code data-page-node-id="PhAtcJlsAdN7LwI8S2SgQB" data-pnid-children="FBY2pKyWLWQbrXtwoZLxUF">容器内大量写/读文件（日志、临时文件、备份导出）
+   → page cache 暴涨
+   → 计入 cgroup memory.usage
+   → 触及 limit
+   → cgroup OOM ⇒ 容器被杀，退出码 137
+容器内 `free` 看到的 cache 虽然理论上是&quot;可回收的&quot;，但**内核回收不及时就会被判定为超限而触发 cgroup OOM**。
+</code></pre>
+<p data-page-node-id="MfDWFj7kEQGqzzI49WnnDQ"><strong data-page-node-id="PEYSALqyKaqWIwR58nSXCy"><!--pnid:Sjr1RmQwY6vHRzVfGIh0Rx-->排障字段</strong><!--pnid:p1HTquQthlQKnAo3WKeN6A-->：</p>
+<pre data-page-node-id="nS5VRbFiaH68sXiAqvXQFt"><code data-page-node-id="LGh6TfyubTZEOwi2MvA6Ft" data-pnid-children="dZEFiZJi8QEmvrKnoJHPHU" class="language-bash"># v2
+cat /sys/fs/cgroup/&lt;path&gt;/memory.stat
+#   anon / file / slab / sock / shmem / file_dirty / file_writeback / inactive_file / active_file
+cat /sys/fs/cgroup/&lt;path&gt;/memory.events        # oom_kill 计数！（最直接的证据）
+cat /sys/fs/cgroup/&lt;path&gt;/memory.max           # 限制值
+cat /sys/fs/cgroup/&lt;path&gt;/memory.current
+# v1
+cat /sys/fs/cgroup/memory/.../memory.usage_in_bytes
+cat /sys/fs/cgroup/memory/.../memory.oom_control      # oom_kill 计数
+</code></pre>
+<pre data-page-node-id="tf0lCIOSpH7oZWOYvhoITg"><code data-page-node-id="eZD8ZT4FAOEcCdgKrNoiI2" data-pnid-children="SePwNGQQeT86S0vv92cW0K" class="language-promql"># 容器 OOMKill（依赖 kube-state-metrics / cAdvisor）
+increase(kube_pod_container_status_terminated_reason{reason=&quot;OOMKilled&quot;}[15m])
+# 工作集用量接近 limit
+sum by (pod, container) (container_memory_working_set_bytes)
+  / sum by (pod, container) (kube_pod_container_resource_limits{resource=&quot;memory&quot;}) &gt; 0.9
+</code></pre>
+<p data-page-node-id="0sgUoriIZ9yuetwjoMeEoF"><strong data-page-node-id="uA4HBYun4DcUHfeD9zfZoH"><!--pnid:OSMj9mIPcreFmvd6YMHWb7-->治理</strong><!--pnid:12XtWCK0g3P1sAWR4a3ZVc-->：
+1. 明确"<strong data-page-node-id="MYEJwpO4d31woelVXxiKpn"><!--pnid:MIbhyKIjMn7FDHoeW7DFCv-->cgroup 内存 = 应用内存 + page cache</strong><!--pnid:ervtXIHiwyziXiEiaWH9Ad-->"，给 Java/有磁盘 IO 的服务留出余量；
+2. 大量 IO 的临时文件放 <strong data-page-node-id="nfk7bhBDge0Lg1EXy3vpdq"><code data-page-node-id="yhXoA4W4D833huQJ9TipKv" data-pnid-children="RXrMApv1el1fpSe8Z8aMFo">emptyDir</code><!--pnid:2SlPaKVfn4B8ngJgRYSosM-->（或 memory medium）</strong><!--pnid:tH6X4YTx5p0gZc6w1cyPKK--> 并配 <code data-page-node-id="ZhwuwF6SFTtliKQvocAQnA" data-pnid-children="R8TtmNaYVkAz8pjPf47rKW">ephemeral-storage</code><!--pnid:iDPLXgJZg1UyvfnNxUhDaZ--> limits，避免污染 page cache；
+3. 容器侧 <code data-page-node-id="tDAKHiyXn7y1VR5iYGTytA" data-pnid-children="X4FXiwaotHYpFc8sjqsd3y">limit</code><!--pnid:sbXIoXZ72L9WOybSqUrpDN--> 要基于<strong data-page-node-id="MIiXdQ4azIC7sInG6zeWgy"><!--pnid:neUkr7xl7coNMxX0EFg7Do-->含 cache 的峰值</strong><!--pnid:zoCwJd8nm3yQPAVR7cGsm1-->设定（实测），不能只看 RSS；
+4. 用 <code data-page-node-id="22ub7Fl9yndLxUOkvCkxop" data-pnid-children="oclcBDTGTTsiSWdFvp90og">memory.events</code><!--pnid:6aA8XT9cz95CuWecBPfYTy--> 的 <code data-page-node-id="6eF2FxPU9YLfJQGFakQS9s" data-pnid-children="cnlMRnQ7ME1OQSdXklzLkZ">max</code><!--pnid:lkaVmWoRpZUNXUjcBmRmFu-->/<code data-page-node-id="pKifBxmaAkd6AzkuTsbMzd" data-pnid-children="UZDnSoGXoLWaVysmzkrEcv">oom</code><!--pnid:Flhpmm3P4Qurq4u02EeOX0--> 计数做告警，而不是等业务报 137。</p>
+<h2 data-page-node-id="UsSIr4zMXg8Klr0aWw9iWG" id="a11-oom-killer-cgroup"><!--pnid:lTj6DKw650eLfJH3mje0NU-->A11. OOM Killer 在 cgroup 场景怎么选进程？</h2>
+<p data-page-node-id="JaCGNkRopT63ljBrYjwEoB"><!--pnid:pI2DZGgtwyrhOrrXEMV1qW-->两条通道：</p>
+<table data-page-node-id="fScuQbptvGaEbXKvqIBvXP">
+<thead data-page-node-id="gqtnWbZj3gixSvGCQSnFZh">
+<tr data-page-node-id="uHE1MVOWOAcS4EAddbP6X0">
+<th data-page-node-id="dpfML1QrWc4tMNzztL5WDJ"><!--pnid:H704z5G5zHI6KYtuK8Uis8-->场景</th>
+<th data-page-node-id="0Au1j48o0y83du5grPYxod"><!--pnid:FHe9iHjuUtI3wnETK9k2rf-->谁动手</th>
+<th data-page-node-id="cyVulcvULk2TWxATmXjmiC"><!--pnid:z5ABQpE7cWcZIoLUIw0siN-->依据</th>
+</tr>
+</thead>
+<tbody data-page-node-id="uHzrNZVYxjFmZEVNh9k3vc">
+<tr data-page-node-id="SDcWcaDxaQz1M9Ax1pMR3r">
+<td data-page-node-id="a2ZhE4il5LzspV6VP7Fw0e"><strong data-page-node-id="Y6KKaQ8EAvkAjOVrlf92hZ"><!--pnid:78XdHx60UYN1mkr63havzS-->容器内超过自身 limit</strong></td>
+<td data-page-node-id="IY6d4jS8V0wXP1ApBRIDmH"><strong data-page-node-id="uaAyI1DnEtU6fHtTaAUf4D"><!--pnid:EBY5IGfUaoKCR6OauHB1YW-->cgroup 级 OOM</strong><!--pnid:0L5GZIUCaJKQbNRCcXOFeH-->（杀该 cgroup 内的进程）</td>
+<td data-page-node-id="4S2GYAjRHqVQ92FpJRjJVI"><!--pnid:CJyjJJTRG8wIhFiqhuJFgR-->选该 cgroup 内 oom_score 最高者</td>
+</tr>
+<tr data-page-node-id="O2jjfAgGIGGwTbcHbfdekY">
+<td data-page-node-id="46HJzTiDgqxLjnWy1hFkfo"><strong data-page-node-id="HxazUfi5g9KiSzFoPbDo19"><!--pnid:WpLmixM6s24S1lPETtHYvv-->节点整体内存不足</strong></td>
+<td data-page-node-id="9dVP1djMRvd0U6Cw6OGTk9"><strong data-page-node-id="ypmUUWYEcBFqLug66rPw0E"><!--pnid:m0lsd0nML1G85UUqO1D7rt-->全局 OOM killer</strong></td>
+<td data-page-node-id="vQDcr497kroZ41gdb8IC1j"><strong data-page-node-id="fk2yC29wO39IWn8elDv8Z1"><!--pnid:o9zPvonenQ9z52buJ5a1K1-->各进程的 <code data-page-node-id="aPQKnFDWZTpQnIZySy9xXS" data-pnid-children="qcHT53LkxCWlzFySqcb4hr">oom_score_adj</code></strong></td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="e8VczoVWEM1ebuMCwUqfMW"><code data-page-node-id="pz4Xpg2wqM8vRPzCWGEbqX" data-pnid-children="X8RVbXRQLhwNfXGQBVfQh3">oom_score_adj</code><!--pnid:7LHjEJsGI0URUFgF1vqK50--> 由 kubelet 按 QoS 设置（详见 Kubelet 篇 Q14）：</p>
+<table data-page-node-id="Xi2GHhZ3NIDBnm0CUyB6kp">
+<thead data-page-node-id="pTxYYRgfrxWWePtHkWhXbs">
+<tr data-page-node-id="bT1jnNripWj33LM52JnQyk">
+<th data-page-node-id="hqw1PRM2wrUunzuMgMkoz7"><!--pnid:Rr4KaiXa7Pkf6imBKvwGzr-->QoS</th>
+<th data-page-node-id="EKkejJWW3OVCUqfdBfHUFR"><!--pnid:XX2Ur5eyVqOnn069i2T5Vt-->oom_score_adj 量级</th>
+</tr>
+</thead>
+<tbody data-page-node-id="SigYzyB742r73bVy4isZmk">
+<tr data-page-node-id="FHoeeBG2GOk4HoJezqSDfi">
+<td data-page-node-id="HXYy7eDgu9hayKmvPjXDkA"><!--pnid:Ro8Ft5TJ2vCgAoKCUFQjnn-->Guaranteed</td>
+<td data-page-node-id="BCDdFHzuG7WTHKrRVm4nsn"><!--pnid:YQaJ9RiOKuBvb2zab6GlDO-->−997（几乎不会被全局 OOM 选中）</td>
+</tr>
+<tr data-page-node-id="2Z4JL8WvpahmVrdtBjLu1L">
+<td data-page-node-id="aRiIMNXJXMqLku8K1tBBoY"><!--pnid:a8uyduizyI7cO1RiF2WcGB-->Burstable</td>
+<td data-page-node-id="6SXLr697o29JRQnfZbgDhc"><!--pnid:xOH3E484tasjusOpCAXtpO-->依 request/allocatable 计算（通常是负数到正数区间）</td>
+</tr>
+<tr data-page-node-id="42AiluArV2ViYASxWwNEJc">
+<td data-page-node-id="op9o5tyQHzhjSAVys0RZNn"><!--pnid:qO6ZrPeXFsETcDNdbkSTRX-->BestEffort</td>
+<td data-page-node-id="YfHYSrwNAOAiKWk7Ecsp0s"><!--pnid:EqyomUXZ4T6x1xZ8NeJCkX-->1000（最先被杀）</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="noL4y1pSm7OXf1DR2L7Qnu"><code data-page-node-id="fDYoz1flDXgfXtYwvFVR2j" data-pnid-children="L2FSzcvWeb9Wbv1fiVZyv5" class="language-bash"># 查看某进程的 oom 倾向
+cat /proc/&lt;pid&gt;/oom_score
+cat /proc/&lt;pid&gt;/oom_score_adj
+# 内核留下的证据
+dmesg -T | grep -i &quot;Out of memory&quot;
+journalctl -k | grep -i oom
+</code></pre>
+<blockquote data-page-node-id="ljcLvL1zbmzvaUBbL7e6xf">
+<p data-page-node-id="wFiGfQPo1iKrb2umQfhTvM"><strong data-page-node-id="71xdeAmfnnj4XaVCdbQWBW"><!--pnid:loO0gFYtJhdxs4go0j2gMh-->必答</strong><!--pnid:MO7E0fTpL5E0zBzb7I7bSV-->：<strong data-page-node-id="OqMTC7AInVbcEwmSRiw8k1"><!--pnid:dsVIWsKom6j42SBaYVQcsp-->容器 OOM 的现场最可信证据是内核日志（memcg oom: killed + 进程列表）与 <code data-page-node-id="WESb7CBFDSMoEEZVfCL4Bk" data-pnid-children="1XN2nekfrPMNHsSAEMzgaB">memory.events</code><!--pnid:LThZdrytv8B2IEN3VGucdd--> 的 oom 计数</strong><!--pnid:X3tCYIF7dTrVPJirOwU5la-->，而不是"猜哪个进程占了内存"。</p>
+</blockquote>
+<h2 data-page-node-id="JLf3CZe3LSA75pnmoTdwYR" id="a12-blkio-io-cgroup-k8s-io-api"><!--pnid:THJgihTsGed8qJbp8SxbkN-->A12. blkio / io cgroup：为什么 K8s 一直没有稳定的"IO 限速" API？</h2>
+<table data-page-node-id="50x9tQT8Oe2hFX9Ccm0P2g">
+<thead data-page-node-id="hzsf41WrLVSntlQ7iMR0qr">
+<tr data-page-node-id="cP0fDxmtiZFo7Zg3L0ReDh">
+<th data-page-node-id="9RWpP4prMYacJPPGMe9c0H"><!--pnid:IgRqI2WalDeL2dUot9xCvJ-->层</th>
+<th data-page-node-id="xGSVhLMf2bVevFGFJ8O9Lg"><!--pnid:iwQl1FQhIaieabGMX4dMZ5-->v1</th>
+<th data-page-node-id="XXqbEy4Tyud9jyvyBy2UUc"><!--pnid:9e7qHoYvG0RoKpfCjGTWq4-->v2</th>
+</tr>
+</thead>
+<tbody data-page-node-id="SzA1d9qJ6PsyNLG293mWYZ">
+<tr data-page-node-id="jfUASFfSfuSguPiMxzF8iM">
+<td data-page-node-id="elhfM8dSZuKm5QgyYWaz1U"><!--pnid:OiA1TYeqfLvH6NHBwQs03N-->权重</td>
+<td data-page-node-id="3C83QCzletQfikQcTUewGp"><code data-page-node-id="VtoBEJM9HjpM0FoghAmBdp" data-pnid-children="p7Y7TXqiBcYtThYlSxFVsB">blkio.weight</code><!--pnid:or12WGuGfm7VFCYYJAQFz5--> / <code data-page-node-id="0ivVJdboVfd0VBrFgQ7xhW" data-pnid-children="2CN8EDux9DnKotEPYMf4SK">blkio.bfq.weight</code></td>
+<td data-page-node-id="lb4GptPSzkUMb5OVgM4UFO"><code data-page-node-id="OBAyPqEvqkBWrADpmUhWLr" data-pnid-children="5x01Gvju30tOhSIPzpWVqB">io.weight</code></td>
+</tr>
+<tr data-page-node-id="CusM6ImJgcoReXt2tRbapB">
+<td data-page-node-id="13RFVMY0ZoJEb92ZudUjuL"><!--pnid:WU7HtT5IP9RZO7TtwXAYI8-->上限</td>
+<td data-page-node-id="b7NhwGChhuE058e3lgNnhX"><code data-page-node-id="cVS2BiL1kj94OXR3LBrxBB" data-pnid-children="rgrHsvwvOxZqF9bWDGSAVB">blkio.throttle.read_bps_device</code><!--pnid:YxAmxV62qa2IyoU1IcS03A--> / <code data-page-node-id="jITgKK8EQu6gT1I6inblwJ" data-pnid-children="5WNfcXfV1jz9WCICcw67fI">write_iops_device</code></td>
+<td data-page-node-id="77cvnokqvcdiXueDxRn3Jw"><code data-page-node-id="ESEm0jef6E3FCe7ERrUhCd" data-pnid-children="v39PsUYiLEp5ktZ0jB0RFr">io.max</code><!--pnid:5X0E86Xgjt45iZsuvav3O4-->（<code data-page-node-id="j0UN1TNbcQz0G7OgpEcuT9" data-pnid-children="Nr0mvB3L1VhgAPh7IkFSRg">rbps/wbps/riops/wiops</code><!--pnid:5HyZfWCq4mc4fga7xUdoH9-->）</td>
+</tr>
+<tr data-page-node-id="JFUo3cdaiRC38lW7379Fmd">
+<td data-page-node-id="Mxj2n3YDd2jKyPpzwLbiO5"><!--pnid:RBFk9BkKwgIl7eP4Pn9fwD-->限制</td>
+<td data-page-node-id="bS7opSVzkEjWZpOGwbJtJ6"><!--pnid:n6RNjV0eWinV2dBwjw71sq-->只对某些 I/O 调度器有效；CFQ 时代已过</td>
+<td data-page-node-id="q0NTLoiGMYvCLwQsUwWaxF"><!--pnid:3WYCEX38ju5hFSkYC8iYhD-->依赖支持 blkcg 的调度器（bfq/mq-deadline 等）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="6cGdDv8VIF4E1TZq1Ve68M"><strong data-page-node-id="E98WTmop6ojXJ26q3RRh8U"><!--pnid:NG5cuGJBe9URWZQx659oMl-->为什么难标准化（必答）</strong><!--pnid:Ylc8XBUqJMg3XRFNn5PZD0-->：
+1. 需要内核 IO 栈支持，且<strong data-page-node-id="WQEWPqhHK6FvWog9dS6FP9"><!--pnid:gHGMBPMjSIgMcsOA4KjaBc-->不同设备类型（HDD/NVMe）、不同调度器行为不一致</strong><!--pnid:GFaCQlDAWJcZHewQcLDx9U-->；
+2. <strong data-page-node-id="TfwbBmh5ONRZOTEAV9hTH3"><!--pnid:L4JXkFXoDwUdePt1XxLArx-->buffer IO 的写入可能被"别人"记账</strong><!--pnid:40pyskTebk5wKu38DVQwBO-->（回写时进程上下文已变）⇒ 归属不清；
+3. K8s 目前稳定提供的是 <strong data-page-node-id="xvDBAZm9h5KHeUPloc7iT3"><code data-page-node-id="4RNStLZuL192W8oueCCRhX" data-pnid-children="nuwuNRNDBnnEx3liglge8h">ephemeral-storage</code><!--pnid:tMNEDO3rHPyUXxwrVRoJMQ--> 的容量限制</strong><!--pnid:PHa4nQdYyxW2oCD8ESVwJ6-->，不是 IOPS/带宽限制；
+4. 因此生产上 IO 隔离更多依赖 <strong data-page-node-id="qRUXk2fyh80zYLEBH14z9I"><!--pnid:fFJqjZ5VmIJCrAAnliGzEP-->专用节点池 / 存储侧 QoS / cgroup v2 手工配置</strong><!--pnid:Q80qT3nm2XgsWXZnV3Swjt-->（见 C10）。</p>
+<h2 data-page-node-id="x1Rdc3VB5lB9EtWIkLEvQu" id="a13-pids-cgroupfork-bomb"><!--pnid:B4ycVNb5ts6iGiBbuSyAH4-->A13. pids cgroup：fork bomb 怎么防？</h2>
+<ul data-page-node-id="ZL32a8g4Rpcp9UNNMs7Dn1">
+<li data-page-node-id="5DZWZBDMWsJ1B3cd0KMnrW"><code data-page-node-id="L2ymVmsd6pHgpxJOjznBzZ" data-pnid-children="WnY2IZYnPoJ6bGAS0R78IJ">pids.max</code><!--pnid:1J1s2Lisi7RhozMMegq26e--> 限制该 cgroup 内的最大进程/线程数 ⇒ 超限的表现是 <strong data-page-node-id="Jlc0e7vj0KapxISl0KTDF1"><code data-page-node-id="Mowy1oEosGRRYpUy4K6Jjz" data-pnid-children="JsoQSFOkoRK0R5l9CFPIds">resource temporarily unavailable</code><!--pnid:nnoWJn6xn0anOKb0fZfdVr-->（fork 失败）</strong><!--pnid:3EETPtD81jAWiatYu2Df6o-->，而不是 OOM；</li>
+<li data-page-node-id="YIfD7t0qWkrXOwNQUa4kUK"><!--pnid:2GXEFn4xopR98Efkmus3u1-->K8s 侧通过 kubelet 的 <strong data-page-node-id="mngaZrJkc7DDNyRL1wPjrR"><code data-page-node-id="KMCPGvoajY3TNOfJ6my3qT" data-pnid-children="4zfKH2BBgFCwa7Iga4PMsC">--pod-max-pids</code></strong><!--pnid:ZCbwuqKRxWNUCHu91gP5AU--> 给 Pod 设 pid 限制（结合 <code data-page-node-id="XA7tLBXbx4wvDbxKOIuKJJ" data-pnid-children="OYvmEut60XfTrcFtaP5y3Z">--pod-pids-limit</code><!--pnid:kVcQ68BQvwtLbN15fN4hp9-->，请按版本核对 flag 名）；</li>
+<li data-page-node-id="RVrfmlTHOawQInR7UBHtNV"><!--pnid:WpfU7rGwqkcrAJ0GaXk41I-->Node level: <code data-page-node-id="COy7nVoyC2JmRCIavfVRvU" data-pnid-children="lFiOAPHlhrWahcXmTqgA8s">kernel.pid_max</code><!--pnid:MapPyHdPOp4irCyNTCApD5--> / <code data-page-node-id="gmnE9GxxwenEacZpZFskO5" data-pnid-children="1t7TvdYgnOFTpln5Dv3UGK">threads-max</code><!--pnid:7LFYfQFzZEncc74oyE0cda--> 是宿主上限；</li>
+<li data-page-node-id="amt9J2cyX7gEyiP3fmKkRr"><strong data-page-node-id="fPtsZdyK9UupEcjcq0qvOI"><!--pnid:o6KCX4Ej58VZdRCP8mMBrv-->排障</strong><!--pnid:IBiI5y2J8UviqjcLxzVGHd-->：<code data-page-node-id="2QsyG8q9iTcEgRuKkflGF1" data-pnid-children="ZCgYnp3C3uOO17z5qfEiuT">ps -eLf | grep -c &lt;app&gt;</code><!--pnid:XTcqFBRZimLlqBguj7pXMr--> 看线程数；<code data-page-node-id="y4y4p1uroXNTvqwITzlGMU" data-pnid-children="eBa0QOAd3gcLnGYaVtzd2v">cat /proc/&lt;pid&gt;/status | grep Threads</code><!--pnid:CKAfW0E1bdFwcn9Wlg4xgd-->。</li>
+</ul>
+<h2 data-page-node-id="JdugL8yMYoAoAhSY79Dqpp" id="a14-devices-cgroup-gpu"><!--pnid:ULoZ2XkszlqSGCH3z9s6Hy-->A14. devices cgroup 与设备直通：GPU 是怎么给到容器的？</h2>
+<ul data-page-node-id="9uXVIncejdUIO4xMw0gve2">
+<li data-page-node-id="AN5V6PCNVWWPUDUKkDy55G"><code data-page-node-id="Ajj0Mc9ZAhQUzejFnjhSoV" data-pnid-children="bUwerHLnfghRqkH23bxnm9">devices</code><!--pnid:XGWxbJw3fp988odFPO3Lry--> cgroup 控制 <strong data-page-node-id="1CCwnjoKfyJjjvITnAMFgv"><!--pnid:sLoGzS1aEwNvea82smfO7k-->能否 mknod / 读写某个设备节点</strong><!--pnid:YNj8V9WHFULHeVRg4A2MEG-->（黑名单式）；</li>
+<li data-page-node-id="5QcugOPlfUDkuVQ9wQfllK"><!--pnid:27m2XoXpuIeBmqqbc8hF2I-->容器运行时创建容器时把设备<strong data-page-node-id="cLSaNHl2Dx9dgsECgQ0h9r"><!--pnid:buIeWj9gcOlMMQBSEtaLuH-->挂载进容器的 <code data-page-node-id="yz5cXQbY5fzpGThf5CHTy2" data-pnid-children="D7rP7A4M5UV6nMWtcfYIrO">/dev</code></strong><!--pnid:CDrdQBUAIBMWoPXDevCbei-->，并把 cgroup devices 规则放行；</li>
+<li data-page-node-id="5CIDyuuwsFg4swKBvk5BNS"><!--pnid:EyTVxXADUdvyvx6ndKXt6m-->GPU 场景的完整链路：device plugin 上报资源 → kubelet 申请 → <strong data-page-node-id="g6tXxBWrmfZZTVBj20aoPv"><!--pnid:0UyWnqglYDQkFZsZbVlZEq-->运行时 <code data-page-node-id="O7w5Te2r0PNlXdqYFwbeps" data-pnid-children="g49EamLlTFkZJdLJAK8IJN">CreateContainer</code><!--pnid:fGoku8Fg1yv1GuksV3JCwI--> 里带上 devices/env/mounts</strong><!--pnid:VZT6sDAandg3vD9ObwG8eT--> → 容器里看到 <code data-page-node-id="WGtqOqUQsXSVRL7emvL3RU" data-pnid-children="Btydy9M0xQeav5ZEKlMMtx">/dev/nvidia0</code><!--pnid:J316mRv9IqfwiGMTKq6aon-->。</li>
+</ul>
+<pre data-page-node-id="ltNMwxmCbMYQqYtWbbiUaG"><code data-page-node-id="BOm0AcU41gikfpADhcn94V" data-pnid-children="ir2XkcC8APwdTABbFSrK6u" class="language-bash">crictl inspect &lt;ctr&gt; | jq '.info.runtimeSpec.linux.devices'
+</code></pre>
+<h2 data-page-node-id="s4QP2vGOvdvhMZV0MEY615" id="a15-capabilities-cap_sys_admin"><!--pnid:kvn4Ku8JT12GFxpJuqrfJb-->A15. Capabilities：为什么容器不该给 CAP_SYS_ADMIN？</h2>
+<p data-page-node-id="cpl4XQNabZ9cGuwFD6jIrJ"><!--pnid:4oGiLPnrJXSUATzZBgaMM0-->Linux 把 root 的特权拆成了几十个 capability。容器<strong data-page-node-id="6G3RWiwbCSTujiAZly7gxU"><!--pnid:b1nOsEAAeCMIGJ8RI0KaC5-->默认只保留一小部分</strong><!--pnid:sEuTGRmbwTSblMvtyjbzjc-->（如 <code data-page-node-id="yqPGXiIK1rrj6nTHhb6j9M" data-pnid-children="yefOan4P7KJpdBAwasuBlN">CHOWN</code><!--pnid:hleszk03XsNBGguimvfMcV-->、<code data-page-node-id="fGh6BN1UPM1xmfgaDkSZGH" data-pnid-children="iHYGBwkzxsNoAQ4UI4iY0p">SETUID</code><!--pnid:wIMW5Oix8HZpylHsibyOYc-->、<code data-page-node-id="z1TBCv7DgOBBRPfmLp1MGe" data-pnid-children="Je2nIWLz5ibCfQGihZIRsu">NET_BIND_SERVICE</code><!--pnid:1yzoG2Lrb5d8flG8iWndTF--> 等），去掉了：<code data-page-node-id="hyMLhlwRag2IFGfdL9ngMA" data-pnid-children="PzW5S6DaeaZpOoBmAXMY68">SYS_ADMIN</code><!--pnid:xg8VwaoZJmCwCi784bd4Qz-->、<code data-page-node-id="xYkfjK30O9e93FqwdaGqvB" data-pnid-children="w5eoXDQCV2Fg6oTJ4nszJN">SYS_MODULE</code><!--pnid:rgkuPpmmSQl8uHSyNWiJl7-->、<code data-page-node-id="yyRwWAorhQGn8FrsnAlogP" data-pnid-children="p2T1Ve37rML0NzLJspFUJf">SYS_TIME</code><!--pnid:3yLmE6YctAF37z88bFRbfH-->、<code data-page-node-id="AMDoyrbBRALoW7MGYRQlcw" data-pnid-children="p5G1bM7uOCeJPGC0tDDel2">NET_ADMIN</code><!--pnid:a0fTJJ50IeWQT3DLRaA2Bu-->、<code data-page-node-id="bnF1KFGSHTDcBboiAX6Uqq" data-pnid-children="DdGLSclf7Hw7e1yUU22UW4">SYS_PTRACE</code><!--pnid:GUlULK25bvFjctkcNA0Wi3-->… </p>
+<p data-page-node-id="rRfl46JXoHklzSbj0aOM72"><strong data-page-node-id="mwqmND7tGmYUDEnQAUYQCQ"><!--pnid:hnpn2PfDPRtqD2f1gvrLhI-->必答要点</strong><!--pnid:aiJkSFGfwUZLB6wLJSG6M2-->：
+| 场景 | 说明 |
+|---|---|
+| <strong data-page-node-id="TBA111FGHGPqqEqXu6SqYV"><code data-page-node-id="p26IUeerGvCmbVrGZ1137i" data-pnid-children="huL4nFdHxgPsUh9ODV76MT">privileged: true</code></strong><!--pnid:ZUGMeqjoYLK5Brhatq1JoQ--> | 几乎给全所有 capability + 挂载宿主 <code data-page-node-id="DBIgtdJiiptL5HkSmtGspE" data-pnid-children="ExtxKm7GlaD0dkUMjzhadq">/dev</code><!--pnid:uiAaJk2Rzdraxwsol5xZor--> + 关闭部分隔离 ⇒ <strong data-page-node-id="AOmG240J4FeUlSyBzwuEkZ"><!--pnid:Iy4PLBmDVxR6qPBi7LgYJt-->等价于宿主 root</strong><!--pnid:OsZ5CX4DMYIZ26MjonMqjk-->，只在极特殊场景（如 CNI DaemonSet、部分 CSI Node）使用 |
+| 只想抓包 | 加 <code data-page-node-id="BpGEOKxUisSiFpGJfB79uw" data-pnid-children="4ks8IBUE2RVRjNKH8ZBqnh">NET_ADMIN</code><!--pnid:ZM7Pkm1AAhKivy145mOuGz--> + <code data-page-node-id="7vJL8v7uIHenINluiVJlOT" data-pnid-children="E3AwDIsgbmxXW6S0bCwmXK">NET_RAW</code><!--pnid:nRkWGEAFxsiNHgRjnv5ox0--> 即可，不必 privileged |
+| 想 ping / 绑低端口 | <code data-page-node-id="CHnwaONHUYRCt9De6hkNoo" data-pnid-children="5GYyBMy7t1oXiNBm0kIHB8">NET_RAW</code><!--pnid:hC26Pq2mASHvtjdBswYkzZ--> / <code data-page-node-id="sfE6gGoECy7LNZWql1DK80" data-pnid-children="OlYowg0hj8LbA6obFSL9up">NET_BIND_SERVICE</code><!--pnid:M73HP1JFfjo15P0g8y9hb4-->（另注意 <code data-page-node-id="FMNSs6p2IZ4iExgtNdHFXK" data-pnid-children="aMeggx9j83QDCKXGxsGPqY">net.ipv4.ping_group_range</code><!--pnid:hNxk98Bkpo10bIk8W6Xu9a-->） |
+| 想 mount | <code data-page-node-id="YpaIJG6H64dX7LdxtGljXZ" data-pnid-children="1PMl4URnC3upRN1zez9tdN">SYS_ADMIN</code><!--pnid:hexn0B3GPeOAtaPTbMTyts-->（<strong data-page-node-id="JAsuQozVf19cKeJCrACmjJ"><!--pnid:UarLe0jwf373A4a0QY78C2-->高危</strong><!--pnid:gCDn48rtdruuLp070PPr9h-->，配合 mount propagation 等于能接触宿主 FS） |</p>
+<pre data-page-node-id="hZik05beZHC3GTXvffeFUv"><code data-page-node-id="nDd3S1h1pXgIPsx5VqJ1BV" data-pnid-children="HtALu98ahV2mLGysmK5vkz" class="language-yaml">securityContext:
+  capabilities:
+    drop: [&quot;ALL&quot;]                # 强烈建议：先全丢
+    add: [&quot;NET_BIND_SERVICE&quot;]
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+</code></pre>
+<h2 data-page-node-id="KDhHeSeKZ2IJBw7C8BMNG0" id="a16-seccomp-operation-not-permitted"><!--pnid:LP6rVhmEJoNzkosWwaSXBk-->A16. seccomp：容器为什么有时会 "Operation not permitted"？</h2>
+<p data-page-node-id="JzHoVRnq0BnQ4ZLNaAcElP"><!--pnid:PyO6BhuMgrZzg5xy6hJOx9-->seccomp 通过 <strong data-page-node-id="a34AXluIDXvFC7zq2wA9FV"><!--pnid:70WuR648qwj0rajlqJsdRR-->BPF 规则</strong><!--pnid:HUEc80eDWE03o1zyrAIj9n-->限定进程可调用的 syscall 集合。</p>
+<p data-page-node-id="eJUgpcpFSOm3K0lvBDjKVi"><!--pnid:DIT8ClyAH7zbtzmsouV3zY-->K8s 侧三种策略：<code data-page-node-id="KH2rCMKF8wAGs72UiSzDT4" data-pnid-children="Ky6mJMFWkVJnbty8rcBza8">RuntimeDefault</code><!--pnid:Y4y1rVmztuMf2JRqQ9V4br--> / <code data-page-node-id="9NanJqOz28Utvr1QOwZbKj" data-pnid-children="SyZafUx1Qt9zppc50HuAcL">Localhost</code><!--pnid:1LqzWgnOPIv2NoicpQNGny--> / <code data-page-node-id="E0JH4SoMjNaI9LzeuyaYrL" data-pnid-children="5EGTRKj1a5MGkDkqt5tJJq">Unconfined</code><!--pnid:lMb1Ani1saMMwONwC2A1Kk-->（默认策略随版本演进，请以所用版本为准；建议显式声明而不要依赖默认）。</p>
+<p data-page-node-id="1HwdGK0JM3qQWAmY2p9p1Y"><strong data-page-node-id="SCOKwWZ7qpaDbmxjVlovRS"><!--pnid:l9jQ0cCm7tSnYc11KaZFBU-->经典事故（必考题）</strong><!--pnid:MHh6amMdbExJNxRD5OaNLd-->：</p>
+<pre data-page-node-id="6rvrjfsEBoPgMjSRZa5WaB"><code data-page-node-id="WGTuwKSChkIJfAXfIiY10D" data-pnid-children="xxK5bWzIKkwLpHOIKVqq7J">现象：某个新镜像（或升级了 glibc/内核后）在旧节点上跑不起来：
+      &quot;unable to start container process: ... clone3: operation not permitted&quot;
+原因：较老的 seccomp 实现/容器运行时的 profile 里没有 `clone3` 这个 syscall，
+      但新 glibc 的 pthread_create 会调用它。
+解决：升级运行时与 seccomp 支持版本；或临时降级 profile（不推荐长期使用）。
+</code></pre>
+<p data-page-node-id="6GpDH38sDB1RdwhlKiOREe"><strong data-page-node-id="z6KIhBnGNlBzbvIJSt46uJ"><!--pnid:SlzPFOOMwt82vEmbpS0T11-->排查</strong><!--pnid:6nfjjIOmEATfhIOxO8pw9B-->：</p>
+<pre data-page-node-id="LF9mRWMDa3TZx1T6cbw362"><code data-page-node-id="bJ2VLayXQfix22dDF4Ml4V" data-pnid-children="F0TTLjisomAP8lWyh4DYq0" class="language-bash">grep -i seccomp /proc/&lt;pid&gt;/status        # Seccomp 字段：0/1/2
+cat /proc/&lt;pid&gt;/status | grep -i cap      # CapEff / CapPrm
+docker/crictl inspect | jq '..|.seccompProfile'
+</code></pre>
+<blockquote data-page-node-id="MaT1yMZ9kvv3HA11ZDO6bG">
+<p data-page-node-id="WhAIMGteOVHxwxRohYmVmI"><!--pnid:uugBkirXx0vvNSIVs5m8LW-->这道题的价值：它把"内核 / glibc / 运行时 / profile"四者的版本耦合讲清楚了。</p>
+</blockquote>
+<h2 data-page-node-id="QrCEUYrAlVy7BV9tUMCttk" id="a17-selinux-apparmor"><!--pnid:h0ugNnR6VfxdlnVLZiQgtU-->A17. SELinux 与 AppArmor 的区别？在容器里怎么起作用？</h2>
+<table data-page-node-id="9cBuEdXPDh7bGOXkkoqrVV">
+<thead data-page-node-id="xGsUWjmeAK9G2Vkvnc9zxG">
+<tr data-page-node-id="9J6SmhINOwYYi6v9QSfBwU">
+<th data-page-node-id="o10rGtZNCceNoSBoJTJ7AN"><!--pnid:fiWemZQ2SwI3yzI0fBOTXY-->维度</th>
+<th data-page-node-id="y7tSFpcsFlwJImLOaL3tzD"><!--pnid:ot2tDNwrqzsubTDFUYbQak-->SELinux</th>
+<th data-page-node-id="pZGkl3sWcm2TXqHd8NeGmu"><!--pnid:uszWDFclqydZhR6diE1EOk-->AppArmor</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ws3eJDe7zotSPYGhEx4xgf">
+<tr data-page-node-id="k8hBgOmVmhP8QeDNQxFfcl">
+<td data-page-node-id="OCxc0XtIuATLKgUrGCU0mq"><!--pnid:1FBOQpiMHTu9q1EWzNinKw-->实现</td>
+<td data-page-node-id="SI3vOpxojpfUMgaF9asDOH"><!--pnid:QLtETLAclQeh7uPsjb4IJE-->内核 LSM，基于标签（label/type enforcement）</td>
+<td data-page-node-id="pZCqvNTn9gwPD47DRuSp5W"><!--pnid:uCCidwngzPXG0Efq6kLN4v-->内核 LSM，基于路径的 profile</td>
+</tr>
+<tr data-page-node-id="Ukroc2IWhL614bCGvyDCj8">
+<td data-page-node-id="ju9Zd0f0q7IFEttiAiGWvb"><!--pnid:dI7WW4GFIchI9Ow3kT4wdD-->主流发行版</td>
+<td data-page-node-id="Z5dRq0UhTdWN0EZufVREJo"><!--pnid:34YNoiTLwmKYKZVFofPlG6-->RHEL/CentOS/Rocky 系</td>
+<td data-page-node-id="ANPOtbII2F7yTJ42Wtc9zc"><!--pnid:4g1ZFVTW9NfE5cDYmQIHZ6-->Ubuntu/Debian 系</td>
+</tr>
+<tr data-page-node-id="d0WrpcOBH1GaxpUFTkqf1L">
+<td data-page-node-id="UOrkr3WC70zfC0qVZD2kEB"><!--pnid:B79ONkDypyJEm8CCFeRiAe-->容器用法</td>
+<td data-page-node-id="SfN4H1uTigidgw7LocJEHV"><code data-page-node-id="75ZXXx89ntq5eWkxAdH8VC" data-pnid-children="1dEpdozzyMuSZCqAwVfMTZ">-Z</code><!--pnid:y9D9APNpwZ5nNNdZGGtU84-->/config 给容器打标签；持久化卷要正确 relabel（<code data-page-node-id="xSuf1WFBNtmTbCpqKj4I0y" data-pnid-children="7wgZvKj0e4cSOUwRmr5TwU">:Z</code><!--pnid:QlX2jHtuDfrzmlEcxyqZvi-->/<code data-page-node-id="AkpIS0mey6B0Yz0vyDbsSy" data-pnid-children="QA7CKedPEFrnow9f6ATnt5">:z</code><!--pnid:PgYZFKVdDsab6t4amvPbIK-->）</td>
+<td data-page-node-id="MBvQenbor5ldqqxiDhxabA"><code data-page-node-id="McjjHO7WfeZ1aj2RtpYM9p" data-pnid-children="mlnfsuVhzM8ZLsrSAWrcWA">--security-opt apparmor=&lt;profile&gt;</code></td>
+</tr>
+<tr data-page-node-id="aQ8y9AcTikUPWFPzwMerM5">
+<td data-page-node-id="r08kCSspobf69Qrfd8VjNS"><!--pnid:13yodZh57p4cDhqhsNW11E-->K8s 用法</td>
+<td data-page-node-id="J51HDobPzwIJlTAeD5aWJx"><code data-page-node-id="7CXGfLj1JGlLRi24WQwVf7" data-pnid-children="tnGjI2g5xTf43t1In6I3cH">securityContext.seLinuxOptions</code></td>
+<td data-page-node-id="ZYHQoCEFJU0nGkNu1Snp1X"><code data-page-node-id="qfLeWOfVqZr2qSokFm0MNC" data-pnid-children="Xz9Fbd9H5NSQyFtYrigzze">securityContext.appArmorProfile</code><!--pnid:24zByBu0o8HSJpulNiJbEa-->（较新的 API；老版本用 annotation）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="Pm2yRkHf8hwmrmFQejBJAs"><strong data-page-node-id="kFvnNFza14kXwFinenWIqH"><!--pnid:s8ED58z54DoOcBY3CZ2s0P-->常见坑</strong><!--pnid:OfBRgB6A8tgMVfFXteWNL5-->：<strong data-page-node-id="4Vi97jDY5rMwmBsb7CAe20"><!--pnid:caNu5i3R3Ty0OV0bigh3eK-->挂载卷后容器报 permission denied</strong><!--pnid:Kd26AOw6kC0x8DG5LHBFsp-->，很可能是 SELinux 标签不对（而很多人第一反应是 chmod 777 —— 这是错的，会掩盖真正的问题）。</p>
+<h2 data-page-node-id="rhU9HTaKEoWclr0gVUfCJo" id="a18-overlayfs"><!--pnid:L9UnXFl1F0aftYB32q0Vdd-->A18. overlayfs：容器镜像是怎么"叠"起来的？</h2>
+<pre data-page-node-id="swjxPHhGPlsFeHekL1I3kb"><code data-page-node-id="5nsHflZnRkXsg3rQZyuEvU" data-pnid-children="AArQdTd5l97Zb3KtMNGtAA">merged（容器看到的根目录）
+   ↑
+union mount
+   ↑                    ↑
+upperdir（可写层）     lowerdir（镜像各层，只读）
+workdir（中间态）
+</code></pre>
+<p data-page-node-id="qth0YMNvRSpxOrV72PCxKf"><strong data-page-node-id="xh4F8T2Tu2tmqmMoAms2f8"><!--pnid:UM18eyD9yXSIkmI9g27pxN-->写时复制（Copy-up）规则</strong><!--pnid:s92kUAOzEkYtGSzAzM0uUe-->：
+- 读文件 → 从 lower 层找；
+- 改文件 → <strong data-page-node-id="XvyDB5EdKPdpUajDCbvLQA"><!--pnid:DOd7OfncXDYYo8488R03yY-->把整个文件复制到 upper 层再改</strong><!--pnid:61c1omJJ5qUGMMQWDfRfQm-->（大文件一次改动成本高！）；
+- 删文件 → 在 upper 层建 <strong data-page-node-id="xjsTX4gp2jaYZkSqq5FMUo"><!--pnid:eag2d1ii2gtLQcTjHgnyXq-->whiteout</strong><!--pnid:Q2Sb08mDzVfSwQ9BJj1aS2--> 标记，不真删 lower 层；
+- 删目录 → <strong data-page-node-id="yo9R0xo7DVLqQYOWmfe9vk"><!--pnid:CLiPMAASh6VOcn7mi73syi-->opaque whiteout</strong><!--pnid:j1iWhgGIbSPEBXiK6ZBnrK-->。</p>
+<p data-page-node-id="afn4vN2cSPvTP9BN4x1Rl6"><strong data-page-node-id="naX3pG9jPeWi8DG1QKswt1"><!--pnid:DWqiUjcpfInhoChMnqwaAv-->由此产生的两个大规模坑（必答）</strong><!--pnid:EZLNbVbw2RHA12rPEZJj1Z-->：
+1. <strong data-page-node-id="LmV4J7ujY9gpuVCW8nVWuF"><!--pnid:hfeZWCgaQTlsR2DtG3hLjK-->inode 消耗翻倍/累积</strong><!--pnid:fUwIwWfsns36i5Z5uH7mtd-->：每个 lower 层的每个文件都会占 inode；镜像层多 + 文件多 ⇒ <code data-page-node-id="rWyiiQxGyAChFCVq8jwhxb" data-pnid-children="WX08l7rwB4WRFpnuVATCTk">df -i</code><!--pnid:0n5mNhgO483Qxx9dfq1jBq--> 爆掉（表现为"No space left on device"但 <code data-page-node-id="SMTqXuhtZQNbVT3IEvU9QK" data-pnid-children="Ukaurhjq2TkjEGxcjYJpQi">df -h</code><!--pnid:YBKp4QXyHupiuQS8gw0Ksk--> 还有空间）；
+2. <strong data-page-node-id="yzt9ALmhJemTbuoV2LqvMP"><code data-page-node-id="N5c8LpUPDcN0aJ4ZVwLphu" data-pnid-children="z1y41RszQtrTZEybHiK1Ef">df</code><!--pnid:NrSxrya7Hf2csWqIIWY3bh--> 释放滞后</strong><!--pnid:KoZabF9ozvlVuJ6kZtF5qk-->：容器删了，宿主上被清理 soon, 但若有进程仍持有已删除文件的 fd，<strong data-page-node-id="Bd90Gs6eid02MugOHdo1NT"><!--pnid:IUDrZxKJxyrr0hBA2NE60o-->空间不会释放</strong><!--pnid:D9oQvYP9pjJF7IcsvcGMwb-->：</p>
+<pre data-page-node-id="UgQEbU40Keh40G4QKzSUQ1"><code data-page-node-id="tPOYaginisn2nbKTJxdwII" data-pnid-children="SwmfRGDsoDspQCRRKZ1iWr" class="language-bash">lsof -n | grep -i deleted          # 找出持有已删除文件的进程
+df -i                              # inode 使用率
+du -sh /var/lib/containerd /var/lib/docker
+</code></pre>
+<h2 data-page-node-id="8hAExu09vu72K5NP2y00Ze" id="a19-devshm"><!--pnid:xcYMCLHn1qJssHVaQ60VhU-->A19. /dev/shm 为什么总是不够？（容器经典题）</h2>
+<p data-page-node-id="nqmtvbrTXjioitW1qAS5m3"><!--pnid:bFMH2tB6TJHGj6O3LJvmix-->容器运行时给每个容器默认的 <code data-page-node-id="lL64MVFoMKkaerkeinMlLs" data-pnid-children="fnLD4Fh2FEllw2t8wUYr2g">/dev/shm</code> <strong data-page-node-id="57wmfAkh7VltMiqqEaxxsT"><!--pnid:kFJJlAkt57N004YirggI5A-->常常只有 64MiB</strong><!--pnid:aeCeNldBlkbJmlWLkDsMH6-->（默认 <code data-page-node-id="eWRL69ZlFUoqHDMM1xicB4" data-pnid-children="qeLIcN07c1rTeqAnaHDdv8">shm-size</code><!--pnid:ZC2tPcXIg769hVwgIqDRxh--> 较小，具体默认值随运行时而异）。</p>
+<p data-page-node-id="XHGgY09tO5uFA2oe63Z98l"><strong data-page-node-id="6Qh6E4FW0DHxQPHCzWbLeI"><!--pnid:2QTnQaJsPU4Hm70jlZ4Z8t-->典型表现</strong><!--pnid:Gkp8sqEDYX3hkWnZCLgLEK-->：
+- Chrome/Chromium/Selenium：<code data-page-node-id="A6fC37KYpcMw8SZi2TAMVU" data-pnid-children="EdUEhLkXfhy4r5OSUdCbl8">Failed to create shared memory / bus error</code><!--pnid:R0EbkZ3i4AMrGxOEqF72HE-->
+- PostgreSQL / Oracle / 某些 JVM：<code data-page-node-id="14mxymDZZZ90lon8kD4bLz" data-pnid-children="gldXNAcZuGPmy5koYaweDS">No space left on device</code><!--pnid:3L2VdH9Ma6uLDfpTVezZmz-->（但 <code data-page-node-id="k1TdnMOpAoDw6O14lWHEho" data-pnid-children="qilK5jdkzVmzYArNRMIVFj">df</code><!--pnid:GoIGLkpEYQjLfs0SNSwowA--> 显示有空间！因为 <code data-page-node-id="pZVBCWzb8ZruszKsmzXwbH" data-pnid-children="7bTmCJnTxA2CEL8Jq0cK0n">df</code><!--pnid:59AidrE6TZj3eoUMzvqU8c--> 看的是根，不是 <code data-page-node-id="4geKTT74mCzCOxA8gE62OT" data-pnid-children="gXG2OY4t0mikoeod3Te9FW">/dev/shm</code><!--pnid:4fRT4upfLSsweipnISHd7F-->）
+- PyTorch DataLoader 多 worker：<code data-page-node-id="azUQktlXiZ22jNJVROlDJx" data-pnid-children="FD7HtyLqKRV8sBqgqoIC44">unexpected EOF / bus error</code></p>
+<p data-page-node-id="1agCZ3vODFDbZe4bnpcYDP"><strong data-page-node-id="WEpOXa2U1QokX1b5dhxDWl"><!--pnid:xX2KlMUqre9dR0NULDfKm3-->解法</strong><!--pnid:sLR2DTdIebLz6y1mrdvvr9-->：</p>
+<pre data-page-node-id="ITpm2b0adz1156tV0LAUFM"><code data-page-node-id="NhjjCFh4F7A8yrrzw8YjDC" data-pnid-children="cxxQcdsHqWvMWZYeFJVCQm" class="language-yaml">volumes:
+  - name: dshm
+    emptyDir:
+      medium: Memory         # tmpfs
+      sizeLimit: 2Gi         # 建议按业务实测设定；注意它计入容器/Pod 的内存账
+volumeMounts:
+  - name: dshm
+    mountPath: /dev/shm
+</code></pre>
+<blockquote data-page-node-id="H1Gr6AkH2gsqGLI1J8VSci">
+<p data-page-node-id="mlnBl4vhdJKaQayRbaBjQV"><strong data-page-node-id="NFxydUqLKj56HwX6XOwnb5"><!--pnid:0M0fZZM0mHAhnH4iQx4fSa-->注意</strong><!--pnid:X9iItYRcktwkcHjFCVxHd9-->：tmpfs 内容计入 <strong data-page-node-id="HigTbtuf8ZlNbwptuHVt02"><!--pnid:Q3cXeYReF2Rx6YzQSjMkW1-->memory cgroup</strong><!--pnid:kkTQMIkNfKbtRpMFHRw85Q-->（anonymous page），所以要一并提高 memory limit，否则会把内存打爆。</p>
+</blockquote>
+<h2 data-page-node-id="vwonBrgZkXuxqN3b6MH0xd" id="a20-ulimit"><!--pnid:4tQLpBwOwRr1xUcBcmUYJx-->A20. ulimit 与文件描述符：三层限制分别是什么？</h2>
+<pre data-page-node-id="10IDrZLH5BPodIkSoWmb2v"><code data-page-node-id="Drfh3vY3WHNXKrSgjyPjIS" data-pnid-children="XRTEeCRjxaRAbhkrgcWer4">① 系统级：/proc/sys/fs/file-max（全部进程打开 fd 总数上限）
+          /proc/sys/fs/nr_open（单个进程 fd 上限的内核侧上限）
+② 用户/会话级：/etc/security/limits.conf、systemd DefaultLimitNOFILE
+③ 容器/进程级：运行时创建容器时设置的 RLIMIT_NOFILE
+</code></pre>
+<p data-page-node-id="I3sljAZILM08eAtpOdrLos"><strong data-page-node-id="ORcwFGXg8fmWQVqJh3onst"><!--pnid:cyJjBiahVeUCfeRT1eyuI2-->必答的 K8s 陷阱</strong><!--pnid:r2pC3OxpOfJlzlpgLIj4uQ-->：
+- <strong data-page-node-id="HY8agE5KbAe0YtXGJT4K3K"><!--pnid:xglAhY4evUSEPSdUMiJTBy-->Pod spec 里没有稳定的 ulimit 字段</strong><!--pnid:3wB8CqIVXea0ozEdCnibqz-->（社区曾多次提案，状态请以版本为准）⇒ 实践中只能在<strong data-page-node-id="Xgq2R3uTBgrUvGuLeMVLtL"><!--pnid:6Di2TTeHXliahrSUvWmSHm-->容器运行时层</strong><!--pnid:wi16NTJ9Lk9QeVUVzJbkjX-->配默认值（如 containerd CRI 配置或 <code data-page-node-id="s4DKVw3bAxn5Mj0SpRduOY" data-pnid-children="4AZ1euscHgZkq3iAEbBwdP">-systemd/open files</code><!--pnid:h7SG48esOhEFldymuLffy2-->），或者依赖 systemd slice；
+- "too many open files" 时要分清是 <strong data-page-node-id="aOs2ORGP99favkBgtBvTHk"><!--pnid:xSMp5TNEnNVhjS73LQM8Oi-->fd 耗尽</strong><!--pnid:ba2GkRx1Aac3piXncRB7kw--> 还是 <strong data-page-node-id="kXfEPY9TRoPAtXDmLfebxS"><!--pnid:aqPHx0qjnFQKT9vLfvqFFk-->inotify watches 耗尽</strong><!--pnid:qpw4BjA1KuiOLfELR4j11d-->（后者见 C5），两者报错容易被混淆。</p>
+<pre data-page-node-id="GGBjCcBPaIXCaaK6oR6ff6"><code data-page-node-id="Gnhw0rlgRnaXIkReGEUZ8l" data-pnid-children="Bfc1lF6CCxr0IqG9hAo0Vc" class="language-bash">cat /proc/&lt;pid&gt;/limits | grep -i &quot;open files&quot;
+ls /proc/&lt;pid&gt;/fd | wc -l
+cat /proc/sys/fs/file-nr
+</code></pre>
+<h2 data-page-node-id="QrDm0Y4BASVXk3YdvLHa7M" id="a21-top-free"><!--pnid:5FTs1HeZbZxS70sAJQqwHI-->A21. 为什么容器里的 <code data-page-node-id="qgJk12KbE2sd1MQRrTplqa" data-pnid-children="0fayZrfIfCfdosVsmBToM4">top</code><!--pnid:GKOoD7uS2yxumNVpyPPWNB--> / <code data-page-node-id="D0yL0FPaRFfyQeZKXtZbN7" data-pnid-children="NrBAW4RKFrWBNnttdNyYC4">free</code><!--pnid:mYapWyD586LSthQzSevgRr--> 看到的是宿主机的数值？（经典）</h2>
+<p data-page-node-id="YoGss2wnrwIQYDcAwUQ4S9"><!--pnid:4tBsA0qzB6z4SkfSUVeper-->因为 <code data-page-node-id="f5PdRkZG8NJ52yngLgFKVR" data-pnid-children="W5VmRQ3Nqg9OJsEy3XCSZH">/proc/meminfo</code><!--pnid:d0Hq1w4xh5S47SW1TMpsvJ-->、<code data-page-node-id="0kBg7NCgDMDlGEJyot2qin" data-pnid-children="NKDkqr81yFUpvWeCNK02N0">/proc/stat</code><!--pnid:2de3eTE01CyTKJAYBOlUcU-->、<code data-page-node-id="1CM9LdQ8WAmJw4CrTTtUzZ" data-pnid-children="qpBCofSzHZTqgl8fVph76e">/proc/cpuinfo</code> <strong data-page-node-id="7EKxlHOHm4YhXb5biNfiFo"><!--pnid:zEFHPdfiN6wqlvOZVOVvEd-->默认不受 namespace 隔离</strong><!--pnid:f4hG2SdPNWbZIrY0d6x1Es-->（它们属于 procfs，不是 cgroup）。</p>
+<p data-page-node-id="3y4dfy885zb7YOKNBc9kSN"><strong data-page-node-id="OEzNiZ39kLZyHjnHwl6DFb"><!--pnid:jJMiAN7yEoeZjDRFpfzIEg-->后果</strong><!--pnid:bMY9Iq1F9EY8Ax5VsZw3AE-->：
+- Java/Python 应用在容器里"看到的可用内存/CPU 核数"是宿主的 ⇒ 线程池、堆参数算错 ⇒ OOM/超卖；
+- <code data-page-node-id="PB9DeRMjhsndSaNM5W0waT" data-pnid-children="F1oAoJEXKpnJHHNWBlkFly">kubectl top</code><!--pnid:pMpt9XW5zl48Sr9uImHaO8--> 与容器内 <code data-page-node-id="NoKUmGWdxp5tIncfVrycS3" data-pnid-children="fqSlIoQWd7Qr6c4QAkIx6G">free</code><!--pnid:Aq3L42wExzlqDAMjq0lSGS--> 数值不一致（<strong data-page-node-id="B000MmJ4vyWDN5h5I1Py6C"><!--pnid:ZVKAqHE79w71CoUkLJUgiB-->前者来自 cgroup 统计，是对的</strong><!--pnid:4DUEUIz4xSzU4gJ9kqTloI-->）。</p>
+<p data-page-node-id="6d3d9ACkKtgAccix5zdy4r"><strong data-page-node-id="eKT082RMs8vBSlFMgqHaJY"><!--pnid:Y2HZGt92LJVDAcdZjzmMKQ-->治理</strong><!--pnid:YLhk41oCOiGQG4xpmQUHPJ-->：
+1. <strong data-page-node-id="CViOYi3IeP35i5dY8DNOVF"><!--pnid:PCCI2hyFa4xB7cyMHH4wx8-->应用侧显式读 cgroup</strong><!--pnid:PKEp369wlF2vjQl32ScB2m-->（现代 JVM/Go/Node 已原生支持 cgroup-aware）：
+   <code data-page-node-id="Wig8YP3ryh2QZjxbKTsl7J" data-pnid-children="RLjLHtOm9CwEM8A77NUOnV">bash
+   cat /sys/fs/cgroup/memory.max          # 可用上限
+   cat /sys/fs/cgroup/cpu.max             # CPU 配额</code><!--pnid:qLF6YsyUcuWnnvHh1cYe6E-->
+2. 或挂 <strong data-page-node-id="z27iWwMUzYawcVgEaiigEZ"><!--pnid:svDiF5IsfG2MLdM1psoeKY-->lxcfs</strong><!--pnid:oW0ObuVTYUWVvhtd5ad5HU--> 提供容器化的 <code data-page-node-id="HjJiiGivPRasQOGeliWPJI" data-pnid-children="eQCWS4bFYmxm62SWYgmh3D">/proc</code><!--pnid:QMCCxLmnVAew2aFQxeFF8W--> 视图（适合遗留应用）；
+3. 始终明确：<strong data-page-node-id="r1qcZdpiyyvYZe0mdr0qZm"><!--pnid:wPR5D24JYpERy4G3e4rFce-->权威的资源用量来源应该是 cgroup（<code data-page-node-id="oGYZLOWQdMNSeX4FwOrzhE" data-pnid-children="tDeTsrjML6WKPoK1Peq2mU">cpu.stat</code><!--pnid:6zBDRoSiX5BdhrimZvAWkp-->、<code data-page-node-id="rRzVZSp0b7dROT5lAtUQf9" data-pnid-children="udMFENUcYRI8UNp9a3I9Ik">memory.stat</code><!--pnid:MSJo8mhqS8QX0W8yBOBZ1f-->），而不是 procfs</strong><!--pnid:y9MALi1ahfhKQdLA45syms-->。</p>
+<h2 data-page-node-id="JZJ11CsUUjsiYbPOWsaVLC" id="a22-cgroup-driver-systemd-k8s"><!--pnid:amRJDEqJBeH6VIBjD8WuEo-->A22. cgroup driver 为什么要和 systemd 一致？（K8s 经典故障）</h2>
+<p data-page-node-id="uibWzvEkD7qEZYsLX710P8"><strong data-page-node-id="ovX7mRumaJMbUSI8yBLMlb"><!--pnid:rmUJuP0l9DOZm0F2i1X6d5-->问题现象</strong><!--pnid:q9cFSvtGTGUvf1ua6AZhPe-->：</p>
+<pre data-page-node-id="JENmkdd3rHoKFUgG705gym"><code data-page-node-id="N6gAKmCLnTH18VasnGHZa2" data-pnid-children="gnpIOcDjgXCvaH6g8AaqTS">节点上存在两套 cgroup 路径：
+  systemd 管理的一方：/sys/fs/cgroup/system.slice/...  (由 systemd 创建)
+  cgroupfs 的一方：   /sys/fs/cgroup/kubepods.slice/... (由 kubelet/runtime 直接创建)
+两者互不知情 ⇒ 资源统计错位、limit 不生效、甚至节点内存失控
+</code></pre>
+<p data-page-node-id="A7ClsEyYr7DWMSumXIXM8e"><strong data-page-node-id="WDCNluTUwsi7H7LKb8E9Ux"><!--pnid:PLpLPZGWBU6MdX8LjhHi7U-->规则</strong><!--pnid:UfZwW0m6DlxKzqGFnU2C8c-->：<strong data-page-node-id="K92lsEcL960ABSalJbg9Pf"><!--pnid:8dbICBVBoqlhpoX3Pi6yZ8-->kubelet 的 <code data-page-node-id="ctSZCvnlgkUooQdiwTZ989" data-pnid-children="G11ko82EhvPKnBAf8y3QgQ">cgroupDriver</code><!--pnid:XjdLOD9Vsj2R6nALwCjxtq--> 必须与容器运行时保持一致</strong><!--pnid:9hCv89ohBCi0vGIZk6eIId-->，通常统一为 <strong data-page-node-id="xWK9bxzLTnFSsc64M8odA9"><code data-page-node-id="emdl3GNOnvNiYaqEqGeO0Z" data-pnid-children="Gq60XpWzRoolHC5VIZOIoa">systemd</code></strong><!--pnid:MyuYQ8589bBtHkcvNzYRSK-->。</p>
+<pre data-page-node-id="SJ361DC7CeIa8qcnmmRisy"><code data-page-node-id="6MJS5sGQG6EQtomj29WitN" data-pnid-children="WrPHzBbZGllXUP1DtgzEkC" class="language-yaml"># kubelet
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+</code></pre>
+<pre data-page-node-id="mQ7QXq1x8KCNDBGI6Z9pVA"><code data-page-node-id="VTAa2zXbpSF2MMy4RY9ipk" data-pnid-children="6WTNZpGvd2gY4c21KPuoZR" class="language-toml"># containerd (CRI 配置片段，版本相关)
+[plugins.&quot;io.containerd.grpc.v1.cri&quot;]
+  systemd_cgroup = true
+</code></pre>
+<p data-page-node-id="ZRlPIzF0zLwI7e9VX3becp"><strong data-page-node-id="ggHK8RU4hAFPfXx1Ew3z9q"><!--pnid:27IivI9fvUb1YxjlM8rD7k-->检查方式</strong><!--pnid:BkkVE0QI7cWCUm3MErbFbx-->：</p>
+<pre data-page-node-id="wSKPT7otAodI2LxBN2fYpv"><code data-page-node-id="DNWGiiTezKMVk0XLg5zufo" data-pnid-children="08uedKzM9Gwhy0OrUUMpvx" class="language-bash">systemctl status kubelet | grep -i cgroup
+systemd-cgls                             # 看 systemd 视角的层级
+cat /sys/fs/cgroup/cgroup.controllers    # v2 顶层
+</code></pre>
+<blockquote data-page-node-id="0FgGkv5ZMbaGOOL7HQnDeW">
+<p data-page-node-id="M5szz63PnzbzaheLRmCa7f"><strong data-page-node-id="GFWJmY0pekJ93AM5vfqCk2"><!--pnid:NggOOVf1nzpPiPwkiNjHGb-->这是"改了不生效"类问题的头号嫌疑对象</strong><!--pnid:kp5zM8zWE7j6t5dsk2FMq9-->，改完必须<strong data-page-node-id="gTpftIfl5SQJH6DBeLyTIz"><!--pnid:QF8CtREX9UHkrzNad46dZy-->重启 kubelet 并驱逐/重建节点上的 Pod</strong><!--pnid:bFtVSxKNayqgAwuUTm7cXN--> 才彻底生效（属重操作，务必按节点池灰度）。</p>
+</blockquote>
+<h2 data-page-node-id="kNsKrMUU3eXSCYFxZ5DKpe" id="a23-systemd-slice"><!--pnid:5aqSVS7RrrVVyftRUAMS7n-->A23. systemd slice 层级长什么样？</h2>
+<pre data-page-node-id="kMDDqhMXoHlAvxhBIoimMy"><code data-page-node-id="DYN7li5s2PCT2PXqfMoFZX" data-pnid-children="SXHGsgw81LyicZeV5U7ZYG">-.slice
+└── kubepods.slice                       # 所有 Pod 的总父
+    ├── kubepods-burstable.slice
+    │    └── kubepods-burstable-pod&lt;uid&gt;.slice
+    │         ├── cri-containerd-&lt;cid&gt;.scope     # 每个容器一个 scope
+    └── kubepods-besteffort.slice
+    ...
+system.slice                             # 系统服务（含 kubelet、containerd）
+</code></pre>
+<pre data-page-node-id="RHzV3T6XmHKVYCP8uJlkGC"><code data-page-node-id="2IeoHMwH7Bx2RUImcHvsJ5" data-pnid-children="MOsBpuAJBN2wgPnff7ckvS" class="language-bash">systemd-cgls -u kubepods.slice | head -40
+systemctl status kubepods-burstable-pod&lt;uid&gt;.slice
+systemd-cgtop -m                         # 按 cgroup 看资源占用
+systemd-run --scope -p MemoryMax=1G sleep 60      # 排障时临时用 systemd 限个小任务
+</code></pre>
+<p data-page-node-id="oJbSZrWGRvqHXToqYxKwfa"><strong data-page-node-id="mCah1ak7PqMUfsM1XZHVCK"><!--pnid:15erjWnkENLrwIuJPoYsic-->必答</strong><!--pnid:B1diDSyuloeidIttQT57YJ-->：理解这个层级，才能解释"<code data-page-node-id="W7zTIDTpfRHIYN18g3tP9g" data-pnid-children="UjWu0WlVlr09S5U8aNNNoL">kubeReserved</code><!--pnid:sLiPVi8bb2J8KZxgfXqsCl--> 需要指定 cgroup 路径"的原因（见 Kubelet 篇 Q13）——<strong data-page-node-id="DqrN8T3Gduk76kDbaCf7aM"><!--pnid:rEka0Q5MMkCoGl5BOBHo1W-->路径写错，预留就白配</strong><!--pnid:HTeUsYzyEJwYtQlJbo2ZxN-->。</p>
+<h2 data-page-node-id="qL7CDkpUfmHsDMZ5wsf6WL" id="a24-ebpf"><!--pnid:Sz3ll9UpJJOf6TL6PgQymx-->A24. eBPF 到底能做什么？在容器场景的典型用法？</h2>
+<p data-page-node-id="04AukM4bgqxRTgOjlbJ3Ty"><!--pnid:KbXB87ePcnd8qZIXYSH999-->它是一个在<strong data-page-node-id="iCKIqaZ97JbFhqTE2t2UTN"><!--pnid:eBx7UFz7CpNhte6L4OfCI1-->内核虚拟机</strong><!--pnid:qQ0xwQIwa2bOb629W4PnXl-->里安全执行用户程序的机制，通过钩子点挂载：</p>
+<table data-page-node-id="P9AemU4KcOZiM5xVM1GBpF">
+<thead data-page-node-id="tjosaqJWm4XoNCCOAXVjEF">
+<tr data-page-node-id="cIY9sgXg2t56KuNjekyFSN">
+<th data-page-node-id="Qh4lkc0KRo4Ri97rYXiRvA"><!--pnid:K3GYEZxKR6KFmkJlgR0qi9-->钩子</th>
+<th data-page-node-id="dgx4K8nGuREUz1AYyT6uKn"><!--pnid:IC885rxtE0qXu4Ndi5SdZB-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="KLLjJvEAdD0wFkcewT7EHw">
+<tr data-page-node-id="G0osU0It3TvchK42rk2X5Q">
+<td data-page-node-id="fKGA0koiPOZOlXi3Ub0Tim"><code data-page-node-id="Zw9kc0x41uVDhmXRZXdwD3" data-pnid-children="1by4uyuuKDWys1jHZfpwvI">kprobe</code><!--pnid:PdYLAtdhwuFgvKwgzgUKmk--> / <code data-page-node-id="VMLhmS0DcOWjy4TENu3RcG" data-pnid-children="VwaXywRvCzZG0j5PTjI5hp">kretprobe</code></td>
+<td data-page-node-id="rIL38gZd9rapGrztEmpjkG"><!--pnid:t7ROEGQqsnzW8rUS53gNww-->追踪内核函数（如定位慢 IO、调度延迟）</td>
+</tr>
+<tr data-page-node-id="CYYE1nzwuCZtUddQwuZyjU">
+<td data-page-node-id="ZSAESF33McnFfmQreeh2wA"><code data-page-node-id="rvq034VlwlzVMPU9xbRJFT" data-pnid-children="D19AyyNR90YNrk28sbUMiR">uprobe</code></td>
+<td data-page-node-id="yULefHr6guYPkoKrYIVTHF"><!--pnid:5Ud9LBf11o6lYPnG1YlC5N-->追踪用户态函数</td>
+</tr>
+<tr data-page-node-id="FNizvnGYeNOx58sKGe86Kz">
+<td data-page-node-id="iQP0qRTAEUyovLiX706ZuB"><code data-page-node-id="3J0cQRgrfn88gyT9vgOpqn" data-pnid-children="e9JXVZrm0VEqwfCcqO09F5">tracepoint</code><!--pnid:mZ5maajEpRDRZMPY84QzvD--> / raw tracepoint</td>
+<td data-page-node-id="s1lia8mCYFn2G1oPGz65Su"><!--pnid:kf9AIBn0F0P2bKfgX5UrRj-->稳定内核事件点</td>
+</tr>
+<tr data-page-node-id="YtYT9gyPC9e8nhLEjiva44">
+<td data-page-node-id="rOrbCDFCrLmRS6tbMzhyyI"><strong data-page-node-id="MmxLvhtngBXzZS7WB66iwQ"><!--pnid:B7gecj80iqs9CZ5xmox88G-->TC ingress/egress</strong></td>
+<td data-page-node-id="ZDwZp9QXEZN3JPMplXq8TU"><!--pnid:Vz25iTfnwc9GlOkYkRDzbg-->容器网络转发、策略（Cilium 的数据面）</td>
+</tr>
+<tr data-page-node-id="ZJychomQIqpS0sBqubR9Pm">
+<td data-page-node-id="4RZ6xqsEf6xmEN0TIS8Ubu"><strong data-page-node-id="MmKGHPG0HRN3yHKppecdEk"><!--pnid:7G0X01avzLBTVSBIVIk3rx-->XDP</strong></td>
+<td data-page-node-id="MR4jkWMvFzLkzL76FjU2g8"><!--pnid:YsIiCPD0sWa0vvRKgkBnMd-->网卡驱动层，最高性能（DDoS 防护、负载均衡）</td>
+</tr>
+<tr data-page-node-id="fglDbAiNwFEi1abRV31Pyu">
+<td data-page-node-id="8xvN5aCg7jnZiUIv4uo2bt"><strong data-page-node-id="P2JzzzJ48aCj6jUUW2rohK"><!--pnid:IGmLVvitUvDYhAQXbLpdiu-->cgroup 钩子</strong></td>
+<td data-page-node-id="nwa0fLw0dK1SHjy5c71FEu"><!--pnid:SfhbmoMmIX92RXQIePE6LF-->按 cgroup 做 socket 层处理（Cilium socket-LB 的基础）</td>
+</tr>
+<tr data-page-node-id="aJkb6cFNen3wrxTDA9bCZ5">
+<td data-page-node-id="o1215xlGe5JO3S6IlYikDm"><code data-page-node-id="iBPIUO5zmw5H95vyxMuSPO" data-pnid-children="Fg50rC3YdrQ3a1kwIAQjma">LSM</code><!--pnid:rIanYWdHYEUqVIFzxGSZgj--> 钩子</td>
+<td data-page-node-id="eFTm2r3VPDsuzzIfMhzHa7"><!--pnid:ljihgm8nULsBD1Ow4lyaIg-->安全审计/阻断（Tetragon 等）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ZtiiJDCBSjgjA7zDELETWj"><strong data-page-node-id="HO21GUjHt9itbZi7iUcNDC"><!--pnid:e8tFPsqAlk7qjzWGUSpZUz-->工具链</strong><!--pnid:dytqysy0ENUJunGKUCkrD7-->：bcc、bpftrace、libbpf/CO-RE、Cilium/Hubble、Tetragon、Inspektor Gadget、Pixie。</p>
+<pre data-page-node-id="DdAM3faKvcrl16wMbANxiP"><code data-page-node-id="v716Kst9nph7j72GK538Op" data-pnid-children="rkHUkwLy3mrSb91U5brHFh" class="language-bash"># 快速定位谁在执行 execve / 谁在制造短连接
+execsnoop-bpfcc
+tcpconnect-bpfcc
+biolatency-bpfcc -m
+funclatency-bpfcc 'vfs_*'
+</code></pre>
+<blockquote data-page-node-id="nMVJai6tV3onZlwvPOKMx5">
+<p data-page-node-id="U3k16577BAU4kB6K9v6GB5"><strong data-page-node-id="xgOxXMHUKf3e3zR5nnMKkY"><!--pnid:6tx4JhzgagueCHF0Ega7DP-->面试加分</strong><!--pnid:RN6EeUL0j0iTUardeLE3R4-->：eBPF 让"不重启、不改内核、不侵入应用"的可观测与安全成为可能，也是当前网络/安全方案的主流底座（与网络篇 Cilium 章节呼应）。</p>
+</blockquote>
+<h2 data-page-node-id="9O2NIzSokBHRr84fUyV50e" id="a25"><!--pnid:9Q5OY0KQCwdNPR4545IbSv-->A25. 容器里的时间、时区与时钟漂移</h2>
+<ul data-page-node-id="EgVlPT9w2gIUaehfxVDd3W">
+<li data-page-node-id="IGGqrrxZyga8PIJX6yQ1Hi"><!--pnid:dFZRgGgqnYadXsjj5qxBMz-->容器默认<strong data-page-node-id="ghdBHd5mHxqtlEabqDaekv"><!--pnid:Ew6juAWa2k9Uh13aK9EWaW-->共享宿主内核的时钟</strong><!--pnid:ypKI7pdwERjVJC762NAciW-->（time namespace 隔离部分于 newer kernels），所以"改容器时间"通常是在改宿主时间（危险）；</li>
+<li data-page-node-id="EKlvFSF24EV78YV6fv8skE"><strong data-page-node-id="NQVwwWRG0QN0gsxRTneCAn"><!--pnid:0o9bkA9BA9q0iKlpN9pzxT-->时区</strong><!--pnid:46Rtz1Tfp2EfBGEldHYbEA-->由 <code data-page-node-id="DnXH4yeuwFfd4cR6riOdTk" data-pnid-children="0FHAE8eEM7psAIeGupVTV3">/etc/localtime</code><!--pnid:kFNMRZJPSgFZtViCEtMTfC--> 决定 ⇒ 挂载宿主文件或在镜像里 <code data-page-node-id="3RQPxgO61rV3li8Kbga1eu" data-pnid-children="90qkuNT8plBU1SQLZ7NsW3">TZ=Asia/Shanghai</code><!--pnid:2yBvEETk77s6jJ3OntpFCP-->；</li>
+<li data-page-node-id="lFpfSgrXbJNuJ180yxekK6"><strong data-page-node-id="eHPGYmViEBzdcSFKzPE62Q"><!--pnid:8EBNYb3PAn89vrOcNGVqz4-->时钟同步</strong><!--pnid:GJs1nfM1owi4ffXbFYEJqA-->由宿主的 chrony/ntpd 保证；<strong data-page-node-id="xPN7v5shaA4u2fUJE67sId"><!--pnid:w6hAg8VKQmdUTkZHfaJGgK-->时钟漂移会导致证书校验失败、日志错序、 leases 失效</strong><!--pnid:CyLrpz9JPFpJJa1nPBc6tL--> ⇒ 必须监控。</li>
+</ul>
+<pre data-page-node-id="5ZW3THNCOHbe76V1SsHIsf"><code data-page-node-id="vDgHDV3IpfWHAhjj9h9d65" data-pnid-children="MtIsGgSntk6dsSYjAlBlyy" class="language-promql"># 节点时钟偏移（node_exporter 的 timex collector 需开启）
+abs(node_timex_offset_seconds) &gt; 0.05
+</code></pre>
+<h2 data-page-node-id="u0oLxSlEJOkkh372MEHKCe" id="a26-linux"><!--pnid:6ZC5OsmDEH7hwaGyeJCamE-->A26. Linux 网络栈层的容器相关要点（与网络篇联动）</h2>
+<p data-page-node-id="2A6KAC6QMMyhVawW6uEcsf"><!--pnid:QdSuOaiOSf5zZ71TEG5X0b-->只在 Linux 层需要记住的三件事：</p>
+<ol data-page-node-id="McKYtLd9c5Rs55MbCjJXPB">
+<li data-page-node-id="ijHb8fI53iCgEvmM8qwyOV"><strong data-page-node-id="mOEBHVvJP4nAOMfkNY0hTf"><!--pnid:lOROEE8b7R2XMqvhu7VRTo-->必须开启 IP 转发</strong><!--pnid:nov8EeuprPUlyL3yy8VZUB-->：<code data-page-node-id="KcjrJi0LamkcDKB7E0t6UD" data-pnid-children="rBuolbpsEFupGm7VVSsASk">net.ipv4.ip_forward = 1</code><!--pnid:oZyL6kPTKWH6eGs2HVNrN9-->（否则跨节点/跨网卡转发全废）；</li>
+<li data-page-node-id="xCJGWpjEVgL0N9OU4AGYar"><strong data-page-node-id="arQQCnXhNrrlBsyjzyQiT6"><code data-page-node-id="PjcBYSbYOs7Yrzxi12TnBs" data-pnid-children="jBmmQ6YnkD5DKJzcBD3gzA">net.bridge.bridge-nf-call-iptables = 1</code></strong><!--pnid:Mj6DbiYNYsHgEC7PvR3lBh-->：让<strong data-page-node-id="dfSDOm2vlN1WxZdTotwYoM"><!--pnid:Pyv2ihBnHCvLFS0rHCL4fw-->经过网桥的流量也走 iptables</strong><!--pnid:yEih6FOHEXbJX9udEZLO7q-->（Service 的 DNAT 才能对 Pod 流量生效）——这是 CNI 报错排查里的经典项；</li>
+<li data-page-node-id="htCbkZplWEM8Y7H7CHzjBP"><strong data-page-node-id="iq6XzrZzjOJGaMjGcsLve5"><!--pnid:6Myksf9KT8kJ8GMgvriHzB-->conntrack 机制</strong><!--pnid:MCOfo1MSFcYeFJA1tUrNEI-->：所有 NAT（Service nodePort/masquerade）依赖 conntrack 表（<strong data-page-node-id="db7KhOxtSezwDobkBnsYSv"><!--pnid:xRHU1iNngpnXXRrRfLOpiD-->见网络篇 A18，此处不再展开</strong><!--pnid:4mhwMHl1yGNZNHveIY4EXv-->）。</li>
+</ol>
+<p data-page-node-id="PwKmIG5uWjbiyHTr0aAb9x"><!--pnid:h7w5YvEH5MqAoaFzN2jveW-->顺带两个常被问的参数：
+- <code data-page-node-id="6HNsZzeSC4mMzZZKy7KJOS" data-pnid-children="AgU06osO79LH3thubqmBza">net.ipv4.conf.all.rp_filter</code><!--pnid:9Dw9FKKSDOMJWJXCIA8V94-->：反向路径过滤，某些 CNI（如 Calico 的部分模式）会要求放松 ⇒ <strong data-page-node-id="WW06nRNIz39zOCGAlGgvLp"><!--pnid:htQCmC4depgIg3CCwr7oj2-->按 CNI 官方要求设，不要求 newbies 别乱改</strong><!--pnid:m9iRS8PDsXY6vBzshO5hl6-->；
+- <code data-page-node-id="Zy7AQI1pjr6GnKRCYPOGBy" data-pnid-children="XBxFzZa8ZjOF2oPZCYsB01">net.core.bpf_jit_enable</code><!--pnid:NcpP73T6dsTR3SxcXiJyo8-->、<code data-page-node-id="EdIpa53NChl028Z3l0w8kb" data-pnid-children="jAeqys3O7retkyfDZMGT5w">kernel.unprivileged_bpf_disabled</code><!--pnid:CaLoNCoS2jTZ5o15sNEErN-->：与 eBPF 安全相关。</p>
+<h1 data-page-node-id="Wbtk2cGoq41JsFNIKPNgXl" id="part-b-14"><!--pnid:Hwjm7fQvf00kTUq46g7QAh-->Part B · 容器运行时与经典故障专项篇（14 题）</h1>
+<h2 data-page-node-id="N84AQByltNQcRdLIwx0aVX" id="b1-containerd-cri-o-runc-shim"><!--pnid:mjtyWhWKOakDcofCqooA4F-->B1. containerd / CRI-O / runc / shim 分别是什么？</h2>
+<pre data-page-node-id="qEH16k1Z5RyncIRYcOXP8v"><code data-page-node-id="cdaaaB66LIxiPDnrBcL95x" data-pnid-children="PEOLN2sWtzfBrIzU0rAejL">kubelet ──CRI(gRPC)──► containerd / CRI-O       （高层：镜像、容器生命周期、CRI API）
+                              │
+                              └─► containerd-shim-runc-v2 ──► runc create/start
+                                        │                        │
+                                   持有容器 stdio 与退出状态      真正 clone namespaces + 设 cgroup + exec
+                                   （所以 containerd 重启不影响运行中的容器）
+</code></pre>
+<p data-page-node-id="6hhOYU6cXDapNi3FoZlLec"><strong data-page-node-id="qnmlIVySKgV3110k63TMbo"><!--pnid:rzGvHjvWI2FEiSunfKaU0T-->必答</strong><!--pnid:Kfn8TBk0OL4FlgRTqQlSUh-->：
+- <strong data-page-node-id="8LOVsDVLC0m4NAaOdVhcqV"><!--pnid:AEOv6ov501UKgBAmH01Wdj-->runc</strong><!--pnid:ZGlKJFGVH263CqC7OmOhJ4--> 是真正"启动容器进程"的 OCI 运行时，<strong data-page-node-id="8nazxbbMMWrn3Toj2eGYmA"><!--pnid:f8iAMxzitvndE4wcJubJGh-->一次性命令</strong><!--pnid:XHzfMFUXl9zjShss2lPfIA-->，启动完就退出；
+- <strong data-page-node-id="WlYoDcNSO1L3amFdxOHl4v"><!--pnid:UXNAiZjDPDYSDnPFEUs9RE-->shim</strong><!--pnid:I0mrcEPDVfoGsAhXHL9ZgF--> 是常驻的"监护人"，负责 stdio 转发、exit code 收集，让 containerd 自身可以重启而不影响业务；
+- <strong data-page-node-id="x4NpP66Z9qOZ8sJ1kdnG9m"><!--pnid:wlNetAwLrwjY9LamHKBU0i-->shim 泄漏</strong><!--pnid:wlqRrsLhgZ9C0fpNqLDUmQ-->（成千上万个 shim 进程）会让节点 PID/内存吃紧，是高密度节点的经典问题。</p>
+<pre data-page-node-id="pQkdxUMvuzk4QfDdyymd7F"><code data-page-node-id="0HH9jHc0k7NIZZ3PSH3ZZ0" data-pnid-children="4XiinEcJVYCfaRM6yZ1NKa" class="language-bash">ps -ef | grep containerd-shim | wc -l
+crictl ps -a | wc -l
+# 两者数量应该大致匹配；显著偏多 ⟹ shim 泄漏嫌疑
+</code></pre>
+<h2 data-page-node-id="r4nWrnrFg9Eciw32Wt9oxG" id="b2-kata-gvisor"><!--pnid:cpBmsLqeJTAkdqB6g8gMBM-->B2. 安全容器（Kata / gVisor）什么时候用？代价是什么？</h2>
+<table data-page-node-id="fepvwKPa4ziyPSdpxChtiZ">
+<thead data-page-node-id="t38W2PaEvXocgZrTyQmyN6">
+<tr data-page-node-id="dsmRzTMSJoQlGwvjKqHW14">
+<th data-page-node-id="Cha7o1P3k1PLzrNUGic7zy"><!--pnid:xhGpH7Wa96yKtBk2WZDDgo-->方案</th>
+<th data-page-node-id="vle3FVXB8pnXzvnHIEAwoj"><!--pnid:W9MMUvx5AyOWVzo5DPrWt4-->隔离强度</th>
+<th data-page-node-id="LfwoU9o5JTsvpOx6ZVAxqt"><!--pnid:SCVnOAk71yRrVm2ujCzY3O-->性能开销</th>
+<th data-page-node-id="rBpRhiTpAnjfrbOwowZe8c"><!--pnid:qvMptcqiCPYmqViDDRa34x-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="4c0wFosAEW2KoIeRMiIMtn">
+<tr data-page-node-id="bgFGA3NIk0X3Z9yXaw9tLm">
+<td data-page-node-id="9FzofrFcfoYlTdlzynQd1e"><strong data-page-node-id="Vy2pzd8Szx1oSBDD3WeETh"><!--pnid:VqqSIadqKIIOeWLwy6t14D-->runc</strong><!--pnid:DVnxPBvSkFDXUn4Kg2Zhmg-->（默认）</td>
+<td data-page-node-id="z7Qjdycj9cXBDy5l2MFKzD"><!--pnid:mKUYB0FFAAPcfehi4E3kjm-->共享内核（namespace+cgroup）</td>
+<td data-page-node-id="OrqmvbIGDW1dFE2GNQnRbq"><!--pnid:Zo5mUwAvJRXMR7zgPHd29s-->最小</td>
+<td data-page-node-id="rPYjSx95m1GIJCjAIOxRcY"><!--pnid:LeKSBLEhNy5AESBYFnlzaI-->绝大多数</td>
+</tr>
+<tr data-page-node-id="dI8aZxBGwVzufWZFUarc3W">
+<td data-page-node-id="GbYWjK10dfobaoR5Eh36Gg"><strong data-page-node-id="DnioV1kuDpQoz3ikgBO4HC"><!--pnid:iaq4Tsfu3LRgZdaxOyF6RX-->gVisor (runsc)</strong></td>
+<td data-page-node-id="HDdn268IKHUie7Ih7yL2wq"><!--pnid:KgJJVHZK0joKCJw0MWcbEZ-->用户态内核拦截 syscall</td>
+<td data-page-node-id="8Qk6hnOxrNHGokxFEudkf0"><!--pnid:yFiPxcqRfyeHE09ILbmveC-->中（syscall 密集场景明显）</td>
+<td data-page-node-id="czjHLOeSqDanQGvPDlKaaJ"><!--pnid:m7XpEZpY1lRW4lzdP5X768-->多租户 SaaS、不可信代码</td>
+</tr>
+<tr data-page-node-id="w6liT7DOiV2uUpV2womuZL">
+<td data-page-node-id="WHvpe21sYrsVUsySxOPmUC"><strong data-page-node-id="HMEHWzr22DHJug7sJqj5o7"><!--pnid:LPpbWvSCeCSZHnDtAVIWbG-->Kata Containers</strong></td>
+<td data-page-node-id="QUseFcRFYZFvZcslqdh4xC"><strong data-page-node-id="WRegfYfhoYi3rXnkVYjmwo"><!--pnid:CGZcK945qzRedxPyDpT6Zs-->轻量虚拟机</strong><!--pnid:80AJlryHOZKO1P9gm9uNAD-->（独立内核）</td>
+<td data-page-node-id="W4PfzvlzKQ5UqB4QoLkzxd"><!--pnid:nsrtHMdWAFrPu0GfNTUgC5-->启动慢一些、内存有额外开销</td>
+<td data-page-node-id="hb2ZQIG5H6HS7kdr6IzKFk"><!--pnid:2rrmCbFJZMxvZ8zl2KV3mg-->强隔离、合规要求</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="BkncakpDEwwr2M914wBy0W"><strong data-page-node-id="aajZZ4VVWm744bKoJJBUms"><!--pnid:mq7mdsaaqITt2gMCz4dtvb-->必答</strong><!--pnid:XuUZlfazUkFyb9a7Gvskr2-->：K8s 侧通过 <strong data-page-node-id="rr9uKRZd8XLYFgb5UrTnNR"><!--pnid:GLMzdnRgTEg002TFul1weY-->RuntimeClass</strong><!--pnid:2PBTiOorcPR7IvKLsj4WD0--> 选择：</p>
+<pre data-page-node-id="QJKr0bNM02aNwAglLegUKo"><code data-page-node-id="iiuzQYt8hbK0C24rQxrYTm" data-pnid-children="OBJURhoZ8dGiIKHhfqKBRE" class="language-yaml">apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata
+scheduling:
+  nodeSelector:
+    runtime: kata        # 只在支持该运行时的节点池调度
+</code></pre>
+<pre data-page-node-id="hM1xwZnCIl96rtHwCZdXVa"><code data-page-node-id="Fvfi5e2pABPB8FSdFMRuWd" data-pnid-children="TOvCarg6eB89uknCnOH2Ra" class="language-yaml">spec:
+  runtimeClassName: kata
+</code></pre>
+<h2 data-page-node-id="iEy8Q1DdNE7UytbMuEwSEu" id="b3"><!--pnid:Frt8vaOeFGZQcYuoDPycOB-->B3. 容器逃逸的常见面有多大？（安全必答题）</h2>
+<table data-page-node-id="Nxx0KSw04ugJk1eLuhLG2Z">
+<thead data-page-node-id="LwTWqpJPxo86eAxNIebXIq">
+<tr data-page-node-id="nP5AeHYKAYqQK0JM8x0e3j">
+<th data-page-node-id="LQCSdExpAN4Pu1lHK2Xys2"><!--pnid:FjDlFX6ZzGfnsz4GlGRtef-->风险项</th>
+<th data-page-node-id="DSmgVce81W0smiMNO5AA1K"><!--pnid:wFOupb5iYpRUwXcDL6qtgd-->说明</th>
+<th data-page-node-id="07bRc7aEav9sejiLbwI1BJ"><!--pnid:E0YowYYKefek6wYO9bQcAq-->缓解</th>
+</tr>
+</thead>
+<tbody data-page-node-id="MU8lfRexgbNmDrtS4C2Kw9">
+<tr data-page-node-id="FLTwCKDhErrPQASJglrmR2">
+<td data-page-node-id="Tu0eh2s6hVpnWdDqdQPHvL"><code data-page-node-id="mZhaYUS4vxSHwGVCcmLXmj" data-pnid-children="FthvfMniDeSmyQ0cCXQXIM">privileged: true</code></td>
+<td data-page-node-id="OGxMwEXutrPwDGleC1Bmo0"><!--pnid:VSkzJ9pFtBEOG7znGiDHZn-->几乎等于宿主 root</td>
+<td data-page-node-id="sTF1xHFSW5rpV9vWz4jpLE"><strong data-page-node-id="0iQQpKvgpyUFLEHpAmYzBM"><!--pnid:N9xNxV6cN9e9FhEXkpvyG8-->禁止</strong><!--pnid:lCTK8b2bIYYNh6o3qxI1Og-->（除极少数系统 DaemonSet）</td>
+</tr>
+<tr data-page-node-id="jej3rwkC0XzF8N7Qmg3buc">
+<td data-page-node-id="tpYhxUkJdKrKOh5jexAcdq"><!--pnid:R7DRufxbT6dEkkXTXZAXkx-->挂载宿主 <code data-page-node-id="Cgxl4Ykz5PDCjiJ9rsrb7F" data-pnid-children="UPC8r9pk8BhzGavkD7cusG">/</code><!--pnid:KBu0MUPokmQgoI57BpOhYb-->（hostPath）</td>
+<td data-page-node-id="9AlNONW2XLENwXE0vRmvOI"><!--pnid:pgCYsbnFL7PRGIUJbQmnO1-->可改宿主文件/crontab</td>
+<td data-page-node-id="r02M4W3NOrr7DYgryslaHA"><!--pnid:6QWKfe6nA2UqWM72GMR1yT-->策略引擎禁危险 hostPath</td>
+</tr>
+<tr data-page-node-id="8DeXEYBQGTAPmJsJ6xMltz">
+<td data-page-node-id="aC8OdjwCDvj6qwvBzyWNMb"><!--pnid:9BsXnEnkprfwNOleNJI5kO-->挂载 <code data-page-node-id="lpCciYPk4h12vpqGX2CI2q" data-pnid-children="xy2yiWu0VMKuIEA0RTfHMY">/var/run/docker.sock</code></td>
+<td data-page-node-id="8QKOg3qO5qNmUjGKuh2iBX"><!--pnid:ftRfob88lfzfewAvwYyoNf-->直接控制宿主容器</td>
+<td data-page-node-id="MsjDzcrFueGCQrIyT1GR2Y"><strong data-page-node-id="l27WdnywuKY1KgcAd7QsDJ"><!--pnid:l1Ky1skhavd8ueXyyT1pe7-->绝对禁止</strong></td>
+</tr>
+<tr data-page-node-id="YxVtZiqeVuwghoThttS98N">
+<td data-page-node-id="qMVvFa2iUgkwbKZJohkWlG"><code data-page-node-id="uyc8DWe45ZL0izFIiuccpr" data-pnid-children="1Xjb1mOFQgG7JNG0QE9qTh">CAP_SYS_ADMIN</code><!--pnid:jnjmICDVZzvUPJEdGjnvUP--> + writable cgroup</td>
+<td data-page-node-id="Y064WvynApdak5ELuS6oMi"><!--pnid:5Knd8IjzSuDVT6xFzNuVVF-->可利用 <code data-page-node-id="i76US3am3tX1D2zI5guYLZ" data-pnid-children="12vrIPdpPbnoag77zpWtvH">release_agent</code><!--pnid:SZz0CWZFWdmPX77ipNIZKu--> 提权</td>
+<td data-page-node-id="Cc3QhpS5M95sSA4BRfjO98"><!--pnid:BsvpBQJwKxNHLH2ylwwKpX-->drop ALL + <code data-page-node-id="iPQdFcGUB4PGVoXdtSfnJL" data-pnid-children="LA4MfbsaTkaS9qS1mzTCoq">allowPrivilegeEscalation: false</code></td>
+</tr>
+<tr data-page-node-id="8tn5YbP9A3ixcHN2PI9FFN">
+<td data-page-node-id="OYFa2HPBM65NJ5FdRYV5vs"><!--pnid:e7xI9XzchljZ6NRdwigWwO-->可写 <code data-page-node-id="13cHAFUgfSnRvoirGhogb4" data-pnid-children="oEmjGtkOysk0qio2dIW3lv">/proc/sys</code><!--pnid:9AkJStZGdPOQSVAB5NW1pF-->、<code data-page-node-id="4lsujZccM8jz5dibP2K1HH" data-pnid-children="ZcjknqpWENRHtLTMTEfqws">/sys</code></td>
+<td data-page-node-id="AkA6gV0i7ZZl0OmyRS3qRf"><!--pnid:fIZFXUhIrjsdfz997YH8BR-->改内核参数影响全节点</td>
+<td data-page-node-id="b3JdwbwECbuaytDC2iqGWx"><!--pnid:B1SmdzVEsTIgbYov76xFd6-->只读挂载 + 限制 sysctl</td>
+</tr>
+<tr data-page-node-id="tHJcLKs0hXcA6E74MPBeyR">
+<td data-page-node-id="vcT6tJKumnLmnJh3wniNVH"><!--pnid:KcK3luArCXpxsARI820I2J-->宿主内核漏洞</td>
+<td data-page-node-id="Z8khybqXcCMOlskCljCFeV"><!--pnid:Bqli6gFdVPMRpzlZmb1PlC-->共享内核是原罪</td>
+<td data-page-node-id="Lv98y5Uo03SkvhF2jR8hq8"><!--pnid:zykE4sTya3ZQVhZp3ZraDq-->及时打补丁、必要时上安全容器</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="qsNTBYfVamYuwuI6zj6tHx"><strong data-page-node-id="C8KlJ5yc6k2CiGWReKXFrx"><!--pnid:UPpQZC03UxjMzEgxpJrdOh-->K8s 侧的组合防线</strong><!--pnid:ony3GOir1E1zqbND1hlUtf-->：
+- <strong data-page-node-id="jfuI3ipkya5uzoNwCEKj4c"><!--pnid:Thnk6g6r8BhI89BEyxi9RZ-->Pod Security Admission（baseline / restricted）</strong><!--pnid:M3t8RqKpFd2p98BPB7S9Yw-->；
+- <code data-page-node-id="860kDwuWcnzu4yS6E5DVHx" data-pnid-children="8BHKcLJzxYMhKHNwIlzJNm">securityContext</code><!--pnid:n0Mn7gmZfC5U3cpk1J1II5-->：runAsNonRoot + readOnlyRootFilesystem + drop ALL + seccomp RuntimeDefault；
+- OPA/Kyverno 做自定义策略；
+- 运行时行为监控（Falco / Tetragon）。</p>
+<pre data-page-node-id="H5zE1PEjLXfvW4wnnahPk4"><code data-page-node-id="zIThzK9i9g7Xwlx9gkQd6e" data-pnid-children="ii7y32QzVhjk8fWkC3wBoD" class="language-yaml">apiVersion: v1
+kind: Pod
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: [&quot;ALL&quot;]}
+</code></pre>
+<h2 data-page-node-id="ivTrxDrGeynBrw8CjLdoF3" id="b4-15"><!--pnid:S0Mhv6I4KkO9yIzPvvFZsl-->B4. 经典容器"玄学故障"15 例（面试杀手锏，建议直接背）</h2>
+<table data-page-node-id="mU5v5PZubLNJPdgquJKHJd">
+<thead data-page-node-id="fRakhyVsk5TRVpftNwd4FR">
+<tr data-page-node-id="A9Es22bUy3AIjkP875EfI3">
+<th data-page-node-id="wYIGoLV91LDlb1W6EMH9i1"><!--pnid:aGKquCTw4clMmUDFmnLK7d-->#</th>
+<th data-page-node-id="EDKFblFIsBzGTE5xLMLcsF"><!--pnid:wjj6zIUuwkNeTfqrk3idaf-->现象</th>
+<th data-page-node-id="32lbd9nH2Z50c09BKMd8NI"><!--pnid:Xjk0Hqs9VMUXO4rGzVDk8h-->根因</th>
+<th data-page-node-id="1JYRxbceMBOxnBd5JuYmWv"><!--pnid:R0a8a4PssJcHayfclj7aJ9-->处置</th>
+</tr>
+</thead>
+<tbody data-page-node-id="5bW8sivU4e1lHkJbUywzLc">
+<tr data-page-node-id="Bk5xaRZhL7a9fL34UNuWjd">
+<td data-page-node-id="Hvtiw1CljnVgEkmWFMk3ez"><!--pnid:L4owRcmsaSoiLFWtENzGSF-->1</td>
+<td data-page-node-id="Og1tCrIYy66kBTwLWozujQ"><!--pnid:JYVVBdvnMmFxWajY928a5K-->容器内 <code data-page-node-id="LsVL6wVCBdcFZUPScm5MKo" data-pnid-children="HGu92Vyk2LwVUHcntD5Y5z">kill -TERM 1</code><!--pnid:SXNkSaoJlxdlrIfJLTRkO0--> 无反应</td>
+<td data-page-node-id="R2fB5PviktP9e1nqQDOiVB"><!--pnid:BAuGzImkBMxluuk6M2QtYG-->PID 1 的未处理终止信号被忽略</td>
+<td data-page-node-id="iE9JNregE9N2lIkeu0cNtl"><!--pnid:h1e07gjMs4iBtK3ZqfKpMT-->exec 形式入口 / dumb-init</td>
+</tr>
+<tr data-page-node-id="FQRoEeKKXSabgOjMFxUUpF">
+<td data-page-node-id="j1dgSpjlnxEBZeYk6qmgnX"><!--pnid:uoTiUXgLwycETsf6Z3sXtJ-->2</td>
+<td data-page-node-id="nimI8U15ECn2a0TQLIZex0"><!--pnid:4fNSmRK0SiUtT9v8Bpkby4-->Pod 里一堆 <code data-page-node-id="y4c8vvsPP9q3sgTKUzMYAA" data-pnid-children="Jdom56HfY5wvFyNEEjdfZq">&lt;defunct&gt;</code></td>
+<td data-page-node-id="RisbIcO1HQC368yLCEIPNg"><!--pnid:uXMEpj6nIP6jaMWF0Ivewo-->PID 1 不 reap 僵尸</td>
+<td data-page-node-id="63FCaXEhVNnDrkYuvawUIr"><!--pnid:uQSzG1ycEDy4H31CIn4x2V-->tini/dumb-init</td>
+</tr>
+<tr data-page-node-id="4KHv4rN4yJ0NQM74biSfja">
+<td data-page-node-id="seX5nfDOoeQOT57xKRfKrD"><!--pnid:NMl1gJP0MP15B5Teq3Mxo0-->3</td>
+<td data-page-node-id="VnT8X9uCjSDszrYc1Qazwy"><code data-page-node-id="58tYpbPPO7uvDnpghNreMu" data-pnid-children="aYUMX5aYoBlZr2JoJvEWqV">No space left on device</code><!--pnid:slQCANq4hVOifc08ORYPn7--> 但 <code data-page-node-id="GpnraXxSEL4uQO5diEGfNn" data-pnid-children="pFavXGpQNnOuNSASsXo1LW">df -h</code><!--pnid:cgb0G4TDCm2As1Ms2r0kGU--> 有空间</td>
+<td data-page-node-id="Yfg1SAkLCCNhlvccAnac0V"><strong data-page-node-id="MCI1S73zCOgLxntQSf3s0W"><!--pnid:GqMsoE1Yzem0KKgh9EcnDb-->inode 耗尽</strong><!--pnid:3S7jaQ5SIsOLyLyiDWUmzW--> 或 <code data-page-node-id="CX973mHbXBtA7DCaBvbVhe" data-pnid-children="rQEOrRQXE15ZudZpL9xQxZ">/dev/shm</code><!--pnid:73cNWFcpEDHhsdtBe7jjAt--> 太小</td>
+<td data-page-node-id="MndoEDMC8A18GcijJZ0sYs"><code data-page-node-id="LXXHkB8CHRRY809mm5xBNk" data-pnid-children="buUroG0fTZYXGW4sA0XJBQ">df -i</code><!--pnid:UPOb5z2oqLp8OA6K92HFii-->；扩 <code data-page-node-id="ABIDT7F4zuShnX7mxGMFar" data-pnid-children="gP6Lw4TWmVC6FE7Jzn2wjQ">/dev/shm</code></td>
+</tr>
+<tr data-page-node-id="f5HYVrxKkicVRinY6uLYT6">
+<td data-page-node-id="ITivKML3GnUrloc8BQILx5"><!--pnid:43Dd1vOEcGSKvXJhVVCqxD-->4</td>
+<td data-page-node-id="10qVayRjiQeUdGq9ggVlsX"><!--pnid:LDeP5YlVapoJQtzo8EnRzW-->删了容器/大文件磁盘没释放</td>
+<td data-page-node-id="VTyoLSUezp8yuQQyrFwHeQ"><!--pnid:LVlhMS8PCi20Jb5EhIOjMe-->有进程持有已删除文件的 fd</td>
+<td data-page-node-id="ORfd1YhXTAUEcvjhszTGmw"><code data-page-node-id="7fhCBbgAiAtxRTKgKtx8LK" data-pnid-children="K2uaiTH0zBvCT6roRFf6v5">lsof \| grep deleted</code></td>
+</tr>
+<tr data-page-node-id="JETDoPLk7CBh8lLksE7P8c">
+<td data-page-node-id="VFxC4sNmL0Tv15n0gBDHYF"><!--pnid:9pJb0gOwsq7K6Lk3KcgA1Y-->5</td>
+<td data-page-node-id="mgLnAnIL6gD9txnaMPRCmx"><!--pnid:Ep8kn4I46XBnJWgysad519-->JVM 服务无事 OOM</td>
+<td data-page-node-id="Cu05Y9n4ylnfWnSCJUJe1u"><!--pnid:tY9vgjqRttrVfzOflNS1yb-->cgroup memory 含 page cache</td>
+<td data-page-node-id="co4bHvnaYWLgORkSip9hsu"><code data-page-node-id="BerAZlKpBpjjKJroOEbt2B" data-pnid-children="N7VChUAEOgQNgANcI5Y9fy">memory.stat</code><!--pnid:BsBWKHBzHFTJ3ukYbYvLQd-->；调 limit</td>
+</tr>
+<tr data-page-node-id="n5viPINMiFWm6lpLULlqgJ">
+<td data-page-node-id="Y6OM83xX7UhXTO1ntusv3T"><!--pnid:ShPhVXIGK66OoPavH8TZqX-->6</td>
+<td data-page-node-id="kKZdUnoyBYvv735OVsK8jk"><!--pnid:zDtN7kyFJig2noHd9NVT1a-->CPU 使用率不高但 RT 抖</td>
+<td data-page-node-id="oF5ZpPW1eZQ7YZw98H3Ym8"><strong data-page-node-id="ITIn8Z7PlOHYc8S9b8Q24D"><!--pnid:rhWLOkQm1mvIX1BPL4EFCx-->CFS throttling</strong></td>
+<td data-page-node-id="Bz2vkxCQtoRpLMrvzz4znt"><code data-page-node-id="th78NaShQ8h8lH1dPjYdX5" data-pnid-children="B0N2yTrHhOHczIF9QicYzo">cpu.stat nr_throttled</code><!--pnid:ZOgzqK1BLX7QkIXzibMV58-->；放大 limit</td>
+</tr>
+<tr data-page-node-id="f45z6GuR4r0Tji4yNE3RtU">
+<td data-page-node-id="kyXLpOL4mR7le8uPIVQwVZ"><!--pnid:x2Xf9vSavyUNAyMhVlfcfj-->7</td>
+<td data-page-node-id="zA3IOamTgwCKuRdu02uzvB"><!--pnid:b8pYVRvFv3ImYkt4OgSRK8-->容器内 <code data-page-node-id="xQXqTKXujI7wNXoV6V3JKm" data-pnid-children="cZEmxwNsZdJk62qvxbI046">free</code><!--pnid:5IdxuyOPX0eyL5wM0grnUI--> 看到宿主内存</td>
+<td data-page-node-id="4yFWzcRGPVwjzDlLD2xbZo"><!--pnid:7bEAPAwI7HPLcrvP8fOC9q-->procfs 不隔离</td>
+<td data-page-node-id="haW8Y88r4x9xqHSdn7AqeM"><!--pnid:3lgmSa4Ob8xvm8ElS5KRO8-->用 cgroup 数值；必要时 lxcfs</td>
+</tr>
+<tr data-page-node-id="3KFhQOVvwCPYTdV514Ibqk">
+<td data-page-node-id="AHx3wxluXoXoYZ0DxxJoCv"><!--pnid:fUChp4gP9eJGoA0EWB1L8i-->8</td>
+<td data-page-node-id="KhjUjGracyr2voJIjoXjnU"><code data-page-node-id="rDaPAwGT44VLM1FiQ7VlyB" data-pnid-children="hM63DFbDxV7lub8bKzAcz3">ping: operation not permitted</code></td>
+<td data-page-node-id="4u4DDld39WwAcvXtj1V0dY"><!--pnid:h9qEPKS9LKcNhg5tSr3r4b-->缺 <code data-page-node-id="IhycWSIpanB2ROH0fPBFmj" data-pnid-children="9v9VELhhzHibxa5B5AGCet">NET_RAW</code><!--pnid:TAVHpLNnznfq9oeMsW7oFb--> + <code data-page-node-id="6xOqJVaNCzaz6OBll0Asac" data-pnid-children="vnND5lgZkzWmqileA0fgmT">ping_group_range</code></td>
+<td data-page-node-id="DboSJzOHTKUiA7DwMOYeF1"><!--pnid:QBqlKwd1anYIuJngnfYAyj-->加 cap 或调参</td>
+</tr>
+<tr data-page-node-id="OQWjGeMFyNff3W9da0Bdef">
+<td data-page-node-id="bzJtJViAlhUdN41FdhYNdO"><!--pnid:cYyg6zVNHHSw9TNwjcTbbQ-->9</td>
+<td data-page-node-id="5Td8AOXw63qITePNXYByvE"><!--pnid:DgwH834pGZ6JVEodiIqGiG-->容器内 ulimit 不对</td>
+<td data-page-node-id="oxgaBpcZTCI0whwwVtDKwt"><!--pnid:IkfONLvO6euLb1xqSoI2uk-->Pod spec 无稳定 ulimit API</td>
+<td data-page-node-id="hBT1HectithWq8Xny2K8Jk"><!--pnid:Y8EgDdwNI3AOVFhcMA2fiV-->运行时侧默认 + systemd</td>
+</tr>
+<tr data-page-node-id="OrNFTYntYnAHW7PUuxC5ci">
+<td data-page-node-id="BRk6WDG5vrfkGvnlIXkAxE"><!--pnid:xv9h8UN1jsGxeutLiZNsSA-->10</td>
+<td data-page-node-id="oGGrFlbJrLtsMu4lueYsnJ"><code data-page-node-id="BMTUxpd8RC3W9qLqIXqA9f" data-pnid-children="c77iG1CJqaHlkJmJAVd4gW">too many open files</code></td>
+<td data-page-node-id="5UwrKPCnu0iCyuvUjfkYZC"><!--pnid:Ijdp2TiFRC1sSOHjFGpHG5-->fd 耗尽 <strong data-page-node-id="DyUBqXXpgXwCIIOJXYZhRV"><!--pnid:LLE4zZGqTmhQ5vihLvUP9y-->或</strong><!--pnid:06R6ZjN8tIjRwFvXWCpGTR--> inotify watches 耗尽</td>
+<td data-page-node-id="j0NlZCHFlmSTZA8BL1IgIu"><code data-page-node-id="DCVjWPPtrhNEqoCqTw74LA" data-pnid-children="E2pkHhotXI4lG8fQSfLWeR">/proc/&lt;pid&gt;/limits</code><!--pnid:YpfURXfMK60hokGDBky0We-->、<code data-page-node-id="Nb5eirFUC0xkrd6OMnsa6l" data-pnid-children="nqax0BNNTgMrDR8yMkAtqK">/proc/sys/fs/inotify/*</code></td>
+</tr>
+<tr data-page-node-id="dUR27jl6X1dQPspFSIi5pZ">
+<td data-page-node-id="loho91l40hzVWaC8s7rkBv"><!--pnid:JCp63r1i99PMo2QZyJZOZr-->11</td>
+<td data-page-node-id="j2bVJMWWgwZOtH6BnbKhv2"><!--pnid:vPjSZHMc5Bts0xlwwKwhpj-->滚动更新时应用收不到信号</td>
+<td data-page-node-id="kslgXh3RDOSedbXugECYpm"><!--pnid:ruH4alZInKGo6HPcU3RcKr-->shell 形式入口 + preStop 未配</td>
+<td data-page-node-id="zAarDVnTWhM0Va3WHOt94A"><!--pnid:7AKNGU2o81qxVTej3OlIgL-->exec 形式 + preStop</td>
+</tr>
+<tr data-page-node-id="HkSYN2tKhpmbHL6KvwZcoV">
+<td data-page-node-id="4hjzt9HAsnsC3OVDQyYmJx"><!--pnid:DKzezHqol5JE7nD6ZZtAw8-->12</td>
+<td data-page-node-id="y3hO3zYD38JmjLCZU9v8h1"><!--pnid:RyhGf9hIPCINiR0ukpwBkj-->Java 线程数突然失败</td>
+<td data-page-node-id="5uwS2jTmfgDhTjtUv23WoP"><strong data-page-node-id="o0yxXC4Ur98YXkrrLKs8OR"><!--pnid:oC7NkkShUUtbbnjwJfs5Pq-->pids cgroup</strong><!--pnid:bmjSB12e1JBcYPaNLhp3ss--> 超限</td>
+<td data-page-node-id="vPYd01yTQbwAme1LPr73mU"><code data-page-node-id="3CYpEIjJqnttaX0ezGaAi3" data-pnid-children="IlzOhwHDq2TowuAywV4pBM">pids.max</code><!--pnid:4F41H6EmUfK0mkihVLm2wA--> / <code data-page-node-id="VSnO8xoUsF5mwuD3yfQQM5" data-pnid-children="TKs4n4RmUuH6McASMg5jNU">--pod-max-pids</code></td>
+</tr>
+<tr data-page-node-id="IZqwcnfcY1BLXmI11iCWIh">
+<td data-page-node-id="ANCAIysQ0ERMVNHj1AZAAO"><!--pnid:aIjbtLQuYStU3Xum5RicZu-->13</td>
+<td data-page-node-id="T9Gj3QMTOziV9dVIpvhTco"><!--pnid:KvCpn9wtezswYowzgaDQ2v-->容器内时区错</td>
+<td data-page-node-id="UKhyEOzEnG3M1MZVS1hNYl"><code data-page-node-id="N7mykyEvmAKA8v7Ed8xyzx" data-pnid-children="fsyuAqjOiLmvyObfyU5XFA">/etc/localtime</code><!--pnid:G8T2NrhTyGx1fyQTg9h17e--> 未挂载</td>
+<td data-page-node-id="dpk0K0ZapFPF6AcfDIeK3Q"><!--pnid:oE1yJ3nRTV40oZHgfPY6GW-->挂 hosts path 或设 TZ</td>
+</tr>
+<tr data-page-node-id="Hrp6o2znCHs6NLibmC12Pl">
+<td data-page-node-id="ywEbZG1hNvyamMArWZl0qD"><!--pnid:OYmKp7bPqjPeWEX9o0Wd0n-->14</td>
+<td data-page-node-id="itl5aFbyYTLhovJyOrSelY"><!--pnid:DkIjZF57jxv315zqCN6puO-->挂载卷后 permission denied</td>
+<td data-page-node-id="qN6WmrvuWK15EcjcX6S1ZD"><!--pnid:XWXqOWXR6wsvK1Ub0Bcb9m-->SELinux 标签/fsGroup 未处理</td>
+<td data-page-node-id="meZtAMGTSrq3q8OOg1AjVZ"><!--pnid:prftaMdr6Xd38y5vChqRGy-->relabel / 配 fsGroup（<strong data-page-node-id="sO2oPBO4T5wy85uBnshvDK"><!--pnid:CT2zrUDTX8bvvU6i0lNIBd-->别 chmod 777 糊过去</strong><!--pnid:Kklq0kvq48Uz6GYBZxLj6r-->）</td>
+</tr>
+<tr data-page-node-id="esEY2ZkPY5UmN1u8Epz5b9">
+<td data-page-node-id="TrpwyKDf4WF9tuVMYTPAYu"><!--pnid:DkSFSLRMBOKE1hgTckrHpZ-->15</td>
+<td data-page-node-id="d3R2CMmyHbRcuAhU40eRQm"><code data-page-node-id="0HZCNVXiLS8YdhUCbKuKOU" data-pnid-children="U9CoKhjskT8Ju72KQQq7Vu">read-only file system</code><!--pnid:bxZiDZQVVPlMPAyFTqMXxS--> 写报错</td>
+<td data-page-node-id="mq8tC7rNMN6k9leCWhwMlb"><code data-page-node-id="laWsKR368mBovI9g40SE5Q" data-pnid-children="BDLXY5KGsRYQNC0b6fzfnF">readOnlyRootFilesystem: true</code></td>
+<td data-page-node-id="3zVv3ZmEsmXzAK8TZt85qV"><!--pnid:PBf6S3vMWbXKvEBWyeKxpY-->给需要写的目录挂 emptyDir</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="6DrWpqSApzJSThWdAAgU8y" id="b5-topfreedf"><!--pnid:74CAVCKmcZK0CVCc0k7UiX-->B5. 为什么"容器内 top/free/df 不准"会引发级联问题？</h2>
+<p data-page-node-id="3VwOSoTJWz1TpeqcLXCCti"><!--pnid:GRC2c6MpsJT6lH7C7yEpA7-->见 A21。核心危害是<strong data-page-node-id="H2gtdHreHnbuOBbQqFRbq1"><!--pnid:GY0KWfJiRtGH1Z3uYj6GMc-->应用按宿主资源做自我限流决策</strong><!--pnid:f9aN7h4Uqiw6mPlc093Rff-->（线程池大小、JVM 堆、Go GOMAXPROCS），结果是"超卖 + OOM"。所以：
+- JVM 需 <code data-page-node-id="alcv4ucGmwPxbJRimbxCa3" data-pnid-children="SE8r4zC0WTm1sQmmuoQMv6">-XX:+UseContainerSupport</code><!--pnid:VNCanE63iuqztRRIqwFIS3-->（现代 JDK 默认）；
+- Go runtime 默认 GOMAXPROCS=CPU limit 相关行为随版本演进，<strong data-page-node-id="M4E8H4H8mpPmywohnK1TZh"><!--pnid:OjBzXWbHgRUhECns5R3OO7-->高并发服务建议显式确认或设置</strong><!--pnid:lIqIPRZvajNxrsx6NePPQV-->；
+- 中间件（Nginx <code data-page-node-id="TVjGoMn3gvvS0W5gMpWyur" data-pnid-children="3wsOpvcJ7McNWr7jYCsFbz">worker_processes auto</code><!--pnid:D5nvrLcNYasYl2WBCQVRay-->、MySQL <code data-page-node-id="jTJJbaChWXJwU2fTkAVUp9" data-pnid-children="l92uGI96mq4ev9toleLWtQ">innodb_buffer_pool_size</code><!--pnid:P9BbCPIrw26SzUmpJH2RfY-->）同样要按 cgroup 校准。</p>
+<h2 data-page-node-id="agf0D5XLUgZyOI4yHZQ613" id="b6-cgroup-v1-kmem-accounting"><!--pnid:UdjJP4K6kEEssKQJaQl5kO-->B6. cgroup v1 的 kmem accounting 泄漏（深度事故题）</h2>
+<p data-page-node-id="UxdJKSHfXm7NrPITgpXXHx"><strong data-page-node-id="c8FeJCx0xYJtKkeHPXjnBf"><!--pnid:H2bnLclaayruCDpqp9moeX-->现象</strong><!--pnid:Dhjuo7JgvK9slB7vlBgQnU-->：节点运行一段时间后出现莫名其妙的内存占用、<code data-page-node-id="J6NQ8nqiVy26KXXzfXBFIK" data-pnid-children="do9e7tEB4tphf6ADATFSBz">cgroup limit exceeded</code><!--pnid:RSgxVARJFgZlT0KIInjTqd--> 或 <code data-page-node-id="ZHeZo6W718lcGiYETWnCZi" data-pnid-children="TSiCv9aiFjom4cYwOdxrDG">cannot allocate memory</code><!--pnid:6382RXkCc06aokJNU8ztYS-->，且账面（<code data-page-node-id="uuIL82gx4OKCgLpAj3xWb1" data-pnid-children="9ULffyb8GXk6Pipp6J6dwA">memory.usage_in_bytes</code><!--pnid:JJJGRsoVKH4WHNOz3zysBu-->）对不上。</p>
+<p data-page-node-id="mk5DQRR2yhvGzMT5NF8XYP"><strong data-page-node-id="YK2WkfLUnOuD4KbqGgkiqP"><!--pnid:ew4mTJwhXZ4Oh4QGj0WPEV-->根因</strong><!--pnid:NbQPhUtLcROXwdMT4EHPn8-->：某些内核版本 + cgroup v1 的 <strong data-page-node-id="VUA0lHQ6NjTDvJZdnBXJkC"><!--pnid:ZEk0vdiIAAQzEuHTKei1o1-->kmem accounting</strong><!--pnid:YGjALhgqGM95VAqvH6yijJ-->（对 slab/dentry/inode 记账）在容器删除后<strong data-page-node-id="7F69PEgvJHHUBXxn5LvSbd"><!--pnid:XBjUYYt0u539IKBPiDafeI-->没有释放</strong><!--pnid:5u9BracBKSATjIjhLxI9CJ-->（当时的内核 kmem 计费 bug），累积到一定程度会耗尽父 cgroup 甚至占满宿主的账面 memory ⇒ 连带全局 OOM。</p>
+<p data-page-node-id="x5FcqIBy5YS9q6FgUR4FlQ"><strong data-page-node-id="OUGLULjWS1T4p5CRb07yu8"><!--pnid:q4sdLXYaLoOTkaoANjT7ED-->处置与预防</strong><!--pnid:JgNfkDJlhtiP93sCldoBWh-->：
+- 升级到修复版本的内核；
+- 或在内核启动参数关闭：<code data-page-node-id="s2OCVZM14VAGI13fTbndfu" data-pnid-children="cFPnNO0WJ1gz2SF89rgeNs">cgroup.memory=nokmem</code><!--pnid:1mIiWFnhIm2AkCBKaKXM1P-->（<strong data-page-node-id="oCNFO0YTd95fRqbjeah5yW"><!--pnid:2POxLTMqOvV2nSssL1GTfG-->需重启节点，属重大变更</strong><!--pnid:EylwcgjjgQZ3wDzBSuIHNw-->）；
+- 使用 containerd 时检查相关 CVE/修复版本。</p>
+<blockquote data-page-node-id="7maR9fi7C0hrhROYxZ7uZB">
+<p data-page-node-id="jeHonSTWovx7F2U9xGyYAF"><!--pnid:DSgrhcNPypcAotcBn4mbbU-->这题是"L4 有事故经验"的强证据：<strong data-page-node-id="ToG3f7eylvlwnN2Y4uBgUE"><!--pnid:bnp6TUCl5giG3TqjntWoQi-->能说出"内存账对不上要看 kmem/slab"</strong><!--pnid:1aS6U98UWmikFZqSSGQ0fe--> 的候选人不多。</p>
+</blockquote>
+<h2 data-page-node-id="BVEjrYcL6fJekBO5Fa1sYw" id="b7-devshm"><!--pnid:e6l2K9n8kgm7aAa3q87Jpv-->B7. 共享内存 /dev/shm 事故复盘（模板）</h2>
+<pre data-page-node-id="iEW5FhetYEPY8v6sAgmTzB"><code data-page-node-id="8yQwIjfzzXVtaKSeFIPEZD" data-pnid-children="j9noM1wPeIfQCoGAXJvjBH">现象：PyTorch DataLoader 多 worker 训练任务随机崩溃：Bus error / unexpected EOF
+定位：kubectl exec 进入容器 df -h /dev/shm ⇒ 只有 64M（默认）
+修复：emptyDir(medium: Memory, sizeLimit: 8Gi) 挂载到 /dev/shm，并同步抬高 memory request/limit
+验证：重跑同样 batch 不再崩溃；同时监控 container_memory_usage_bytes 未超限
+</code></pre>
+<h2 data-page-node-id="o8CsrJ0sIhTE0VV3joQy1k" id="b8"><!--pnid:BfcokP0UBps2bPjWPMphT3-->B8. 怎么看一个容器"真正用了多少资源"？（必考实操）</h2>
+<pre data-page-node-id="31oqJuZ6Af4KGuEwdX3igz"><code data-page-node-id="3nXh9uaBlxeuPuZdXbj8g8" data-pnid-children="7nwD5tPaeOXINOdxvMknkj" class="language-bash"># ① 找到宿主上的容器 PID
+crictl inspect &lt;ctr-id&gt; | jq .info.pid
+PID=&lt;pid&gt;
+
+# ② CPU：权威数据在 cgroup（不是 /proc/stat）
+cat /sys/fs/cgroup$(cat /proc/$PID/cgroup | awk -F: '$2 ~ /cpu/ {print $3}')/cpu.stat 2&gt;/dev/null
+# 或者用 systemd 视角：
+systemctl status $(ps -o slice= -p $PID)
+
+# ③ 内存：
+cat /sys/fs/cgroup/.../memory.stat
+cat /sys/fs/cgroup/.../memory.events        # 有 oom 事件吗？
+
+# ④ 谁占了 fd / socket / thread
+ls /proc/$PID/fd | wc -l
+cat /proc/$PID/status | grep -E &quot;Threads|VmRSS&quot;
+nsenter -t $PID -n ss -s
+</code></pre>
+<h2 data-page-node-id="CTqybQx58acsYA7hbxqzZ6" id="b9-crictl-docker"><!--pnid:tGOifmkUxo8inIbbFEV9Gg-->B9. crictl 与 docker 命令对照（排障必备）</h2>
+<table data-page-node-id="Qr1glt1EtHriyJpiKiHKU5">
+<thead data-page-node-id="oVV7OYw4JpUo9MzTo9I07K">
+<tr data-page-node-id="fJxMqS3q84mvZHO56wqeYn">
+<th data-page-node-id="LjLh3o3whjFAkxLW3lNxOA"><!--pnid:5CuTJ4JwhXqNulEGcoR8pq-->目的</th>
+<th data-page-node-id="dbGas3xB6bcu6oKe5cFwIh"><!--pnid:Wif8NICf0ngp4fLgy6sJA1-->crictl</th>
+<th data-page-node-id="FCH1ygdMg1IA7JpyPTXlf5"><!--pnid:DrG9S3Wi8yxoeOQpHywG0t-->docker（旧）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="EQd4PLuJC8L9bYhsmDM5CH">
+<tr data-page-node-id="89G5qNZBg8lbCjTnndFBuT">
+<td data-page-node-id="JDZreWzAhRMv85dphgGbMf"><!--pnid:5OI6JQmbvUFGJ9Pu0jV77p-->列 Pod</td>
+<td data-page-node-id="siHlEIfs9ojEoHA91slvIw"><code data-page-node-id="RMfVTMVZnUnj5stmOlTk0P" data-pnid-children="VgbECjOtdYCZTvwkGILIhv">crictl pods</code></td>
+<td data-page-node-id="Q1QJttuIjHd3ZIE0TS4iM4"><!--pnid:4B8oLoAruBhFdiXCtuUL5g-->—</td>
+</tr>
+<tr data-page-node-id="2f950VyZePcoj3Dy6rD1fZ">
+<td data-page-node-id="O5PI0R2F7LZ4yCLR5rH9x0"><!--pnid:DXa8C4QrFJCjdOhnwGJMbc-->列容器</td>
+<td data-page-node-id="hKuuLB2NLps1FB2LHQK3Lt"><code data-page-node-id="Omg5XEWAysGJyu2k31sEs9" data-pnid-children="MPfLTj73BkUvBfQqUVjLbt">crictl ps -a</code></td>
+<td data-page-node-id="RuBcz4XErNBXuKhcvdZRmy"><code data-page-node-id="6FvveznntXRriVvf6DfnvQ" data-pnid-children="rjj8G4FcYPAMLQtmUZnJvO">docker ps -a</code></td>
+</tr>
+<tr data-page-node-id="8SSTEeWtdPk9OOqcXCoTZz">
+<td data-page-node-id="L9U6sX24rUQXFGXQGNXxdH"><!--pnid:OnufU8aItRktBMHqnXGbp1-->查看镜像</td>
+<td data-page-node-id="kmP22RFjQfNtrio0mEdaAd"><code data-page-node-id="8IpIPW0Vd11Gx3WKMwIWSb" data-pnid-children="8jf0DDF7r7j302E7mJTYV6">crictl images</code></td>
+<td data-page-node-id="Vpg6jGodKSHkqH0OwOPouS"><code data-page-node-id="onkTVt0eMZzpUsfGddUOur" data-pnid-children="tQUKOl0k6jbVzrHxU9yit9">docker images</code></td>
+</tr>
+<tr data-page-node-id="UKEPtTLx4wiTWKEXIsbpId">
+<td data-page-node-id="2FiTsAnJx5oKKkunwMwEga"><!--pnid:mkdLbsP8hxMyRgVdZHhHCg-->容器日志</td>
+<td data-page-node-id="7CQZCzzYM9jsmdpbSTMu2U"><code data-page-node-id="VjyCgJKGnGhUC059Xl6G4L" data-pnid-children="yX3baPpz8ebn5UFhSSAVW8">crictl logs &lt;id&gt;</code></td>
+<td data-page-node-id="4QtgG5WjIx6nLehFAV4gGj"><code data-page-node-id="1AMv0IYMJkSpv5CzJXGQ8D" data-pnid-children="B38ZsZ8xltRNdD5J0XaG1S">docker logs</code></td>
+</tr>
+<tr data-page-node-id="XCnVBh4ttlaxDQVfund5D0">
+<td data-page-node-id="rLFEmZiAKSAkpdfF20rLsJ"><!--pnid:0LrEkjNA30U7mHMykWnzSM-->进入容器</td>
+<td data-page-node-id="buPr1ZIHv1akIUj9HIzqEq"><code data-page-node-id="EXlanW65qDL55SqHbjcmj9" data-pnid-children="9CaG8AHEarNnW9jQOlfZPy">crictl exec -it &lt;id&gt; sh</code></td>
+<td data-page-node-id="scDUZMlhDr2qioEzfjiiWe"><code data-page-node-id="jQVWOJY6Uc1qTLSYD2XqSy" data-pnid-children="CLhTAaN6OOgq4fNlVQMSuS">docker exec</code></td>
+</tr>
+<tr data-page-node-id="DzVNYTXNhEJ74H17vz1wSE">
+<td data-page-node-id="uU4vstfTVO0EmTBxbspZ8N"><!--pnid:8Q1OMdViC2aPsqyz0fo0wf-->详情</td>
+<td data-page-node-id="TNbX0PWfiX2d32goluAGwo"><code data-page-node-id="D8xMWsh8K42dFwibYyBH25" data-pnid-children="LHSIeHlSypqd6L7nUqySSB">crictl inspect &lt;id&gt;</code></td>
+<td data-page-node-id="SC8Gnpt83QLbwmUQSsSdgT"><code data-page-node-id="3Tup5fBqYVahfNg4X5sSdZ" data-pnid-children="IwG2Fr0bIKzm6yCYbs7KHA">docker inspect</code></td>
+</tr>
+<tr data-page-node-id="UXMlZ4IVBoqdPPRu03qXO7">
+<td data-page-node-id="lZsyqUPtAJrWi3sM0C3NKp"><!--pnid:iXbtf6C4Q8csiAHIT7XzYC-->清理无用镜像</td>
+<td data-page-node-id="Dv34smfnfTovp2Klch8Ely"><code data-page-node-id="PqGlJleBeOj4vHujHu9ygG" data-pnid-children="woeFW1e7u318IGhnSLpWFM">crictl rmi --prune</code></td>
+<td data-page-node-id="p9K9YNbDZ1TGoNlBiHcrEO"><code data-page-node-id="IhEP3RBPQcMewijrxU4uAp" data-pnid-children="xDFHPl1vOSzwrKdqkPxZro">docker image prune</code></td>
+</tr>
+<tr data-page-node-id="Zvf12cKTdJfi0r7z4YafIP">
+<td data-page-node-id="TVnYLNFy6apLwyZqCj4Pf1"><!--pnid:gpoCWf7vWuAMFT2zuxMsBo-->Pod 沙箱</td>
+<td data-page-node-id="SSw524dqAkaIEGBW2CeSsy"><code data-page-node-id="HQingpXpwbjuiU42zsp3HD" data-pnid-children="INalxeFwqUe5UHxfs01iWr">crictl inspectp &lt;id&gt;</code></td>
+<td data-page-node-id="TN2qOpNUphHnZoi3GcpUO5"><!--pnid:JaVYxjFxTxNHY4CRCCP4Ui-->—</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="4ndyumoXsS5HGE6Beaofqz"><strong data-page-node-id="ZivfWSN1nd2t4TaLggXV09"><!--pnid:425ermFzGWrprzc9RuGbu7-->必答</strong><!--pnid:jHxqoFsBMeUuVY8y9pX6BA-->：生产环境<strong data-page-node-id="1DahOzRGxoZ6wwUB2Dcv2w"><!--pnid:yvt64h06AjOuO24QGBjfO6-->不要装 docker 只为排障</strong><!--pnid:okT4qJIb11C3oykpe2nrIV-->，用 <code data-page-node-id="05YlYR6JkXgQYQyQK2dSJV" data-pnid-children="rXpAi6Ia6l4a03q4npjl1w">crictl</code><!--pnid:Ijsi1gdmAIok6wsKvstnQ8--> + <code data-page-node-id="hxSwRFqhhcwaLPlZ2oVnn6" data-pnid-children="yS3hjTF2jhAbvQUz7MezLd">nsenter</code><!--pnid:9AMobbgXMRe195J5M0YTXA--> + <code data-page-node-id="pyyjS5UxdwMci38oG1jX12" data-pnid-children="iDjR4kcEGU3diz9cwDvAcv">cgroup 文件</code><!--pnid:oU317RdcctID6gzdJYq7ZE--> 这套组合就够了（而且更贴近真实数据面）。</p>
+<h2 data-page-node-id="vszX5exXZyPnKU7Rq7dOBr" id="b10-pod"><!--pnid:0gTto9dvpZcCn0AMK8eRhV-->B10. 为什么删除 Pod 后宿主机仍有残留进程？</h2>
+<p data-page-node-id="MUEt1gfWoEWwMuqlJgePBS"><!--pnid:qleCfFDl8N7DwmD8aQSl5d-->常见原因：
+- 进程处于 <strong data-page-node-id="ePtmFwg3wGg8eMevSOzhM7"><!--pnid:41ZB4OdM4y0G90SgDKFVWi-->D 状态</strong><!--pnid:70GJczzgxQSLtsPw5pvbKl-->（不可中断睡眠，多在等待坏掉的 NFS/网络存储）⇒ 无法被 SIGKILL 立即回收；
+- 容器内进程未退出（应用不处理信号）；
+- kubelet 与 runtime 状态不一致；
+- <strong data-page-node-id="Pa6r0Bj8IdQ6DnUu50dzWR"><!--pnid:pnT1wPP3TgS8bYUq0elVQQ-->僵尸</strong><!--pnid:4URMsuJQn3zfLeixmCUN3t-->：父进程没 reap。</p>
+<pre data-page-node-id="SpZ1L6HxcRvgCbQnVfjF7D"><code data-page-node-id="89CsBExpal6CbAnS6Jo0Bq" data-pnid-children="hdAuC0cX2kz4ewVnDmIAn6" class="language-bash">ps aux | awk '$8 ~ /D|Z/'          # D=不可中断睡眠，Z=僵尸
+cat /proc/&lt;pid&gt;/stack              # 看内核栈（需要权限）
+cat /proc/&lt;pid&gt;/wchan
+</code></pre>
+<p data-page-node-id="pvVjzlUmWxMvAWevgjl04H"><strong data-page-node-id="1QVhOaEq6tejINyJqOL0zb"><!--pnid:Huc7qExeccS0nshhmZgSK3-->必答</strong><!--pnid:iLj34HMtDFWXkfP3VkZjmk-->：<strong data-page-node-id="0L5CsBtJE2oUZL1GT20Ho9"><!--pnid:zLpDxbtkTPkKPOq2klot2a-->D 状态进程是"节点可能需要重启"的强信号</strong><!--pnid:VKvHpkjO9Q0IDnGAfW2YiF-->（尤其是后端存储 hang 住的场景），此时应先 cordon 隔离节点，确认业务已漂走后再处理。</p>
+<h2 data-page-node-id="KbZOG00pHuMCOYL6yWnXBz" id="b11"><!--pnid:T9lrHoL5ji9ggFOvDWVNV2-->B11. 容器启动到底慢在哪？（和冷启动话题联动）</h2>
+<pre data-page-node-id="zlyn3S1vdmVsxXxslHg5yb"><code data-page-node-id="rljHZJVtW8M6Wnx7jxzIB1" data-pnid-children="3rhXZjq7ZAzBA0TXPYcWph">拉取镜像 → 解包到 overlay lower 层（IO 密集）
+       → runc create：clone namespaces + 建 cgroup + mount
+       → runc start：execve 业务进程
+       → 应用初始化（JVM/框架）
+</code></pre>
+<p data-page-node-id="JbkNhT4ZktsJLRGvX6iwOd"><!--pnid:JEXvR5LKx0kLajMuLafyzw-->定位手段：
+- <code data-page-node-id="arjhWg9xhDdBCYG9EU4Kau" data-pnid-children="u04LafUpmnYk4AoOtJxoui">systemd-cgtop</code><!--pnid:TgS9LCnzWzyQtD74Mot6IE-->、<code data-page-node-id="RAwFEr4TmokO429M5MHe34" data-pnid-children="1r5oIdlyOYCPpbzhSD9khr">iolatency</code><!--pnid:b25VwxWsKhRqoAdwR4Tse9--> 看 IO；
+- <code data-page-node-id="oyJuhBSxoN0E5II2viDtYW" data-pnid-children="34IHVYCmJeaLQfvKKWOwu5">funclatency</code><!--pnid:tErGpqYjndpm86FDqWmtV0-->/<code data-page-node-id="CEDTdWLgf6PiuCVUcI0mEJ" data-pnid-children="c2LNUT9jWIHRp9fOB9fe16">execsnoop</code><!--pnid:7LOMLcFRf2lTthK30Vl8Py--> 看 exec 行为；
+- <code data-page-node-id="kI1NaJfiCNcOlFERuOxydw" data-pnid-children="0YerPXQecU7vioulYvvBTJ">perf top -p &lt;pid&gt;</code><!--pnid:WG62MadrfhTfcoxmfMC62Z--> 看应用自身热点；
+- 度量 → 对比：<code data-page-node-id="FxcKT0WShK3qKP6ax2XUPt" data-pnid-children="GW40MtiIGdSPxPOEFzRcx6">kubelet_runtime_operations_duration_seconds</code><!--pnid:Zzcu1eiVgJThGfThShv0iZ-->（见 Kubelet 篇）。</p>
+<h2 data-page-node-id="eOk439tTW9jLlWwvtrTnwz" id="b12-sysfscgroup"><!--pnid:uNrgjXHzDWPRDFr4g9JFQV-->B12. <code data-page-node-id="ZFUrgNHackQYRQjKrdcskW" data-pnid-children="E9XasbsKQCdACdhvP9Zt6O">/sys/fs/cgroup</code><!--pnid:nZ53FR2MeKHa8qjq3ZD8h2--> 只读挂载导致的坑</h2>
+<p data-page-node-id="tu7fKkQSOsV8vkCNFa2Ua5"><!--pnid:6HA9H3j9Ly7tD8iLHbCu1N-->容器内如果把 cgroup 文件系统<strong data-page-node-id="85u0C92emzXkBWMdLHtgHR"><!--pnid:TN8hQuFiqe82TfREReHZMQ-->以可写方式挂载</strong><!--pnid:LJ6AX1cbrsE00DKWFoUKHq-->，配合 <code data-page-node-id="me3a54xLpwx5zaR2BflA8M" data-pnid-children="EqIqCeW4nImPZy6sO4R3zS">CAP_SYS_ADMIN</code><!--pnid:OAFc43MJSfBpA6t0wmJlIC--> 就能改写自己的限额（提权手段）。所以：
+- 默认只<strong data-page-node-id="aeNkonlJEgnuINLTrb5SJW"><!--pnid:HY7RjKdK5NSSM2OmFur94q-->只读</strong><!--pnid:K7D8APIML6HzpXqfSwsuAe-->挂载 cgroupfs；
+- 应用若需要读 cgroup 值，读只读挂载即可（足够）。</p>
+<h2 data-page-node-id="qmHRS5LAyNcPVDqo7pERPz" id="b13-cgroup-delegation"><!--pnid:XbN7yjj3peitdRBqckZipV-->B13. cgroup delegation 与"容器里再跑容器"</h2>
+<p data-page-node-id="oTcWqwRoApcqGw3VgcnUQ9"><!--pnid:WTrxARWObTlbIjtwIhv8bq-->前提是 <strong data-page-node-id="FNrt020F6vdaXRHblmu79W"><!--pnid:e6edDgmGTRKD6CKVTzubSH-->cgroup v2 delegation</strong><!--pnid:JtRthDvIbt2COSIqKcpD40-->：把一棵子树的控制器委托给子层级 ⇒ 容器内的 systemd 才能管理自己的 cgroup。
+常见场景：CI runner / DinD（Docker in Docker）/ KubeEdge 类场景。<strong data-page-node-id="uZueOnEM3ymuCIDhpv6hQE"><!--pnid:ee8f2UvMkebN2Fys3jZ925-->注意它显著增加逃逸面</strong><!--pnid:KdrcQJaBI4B69awenW8tT6-->，一般不推荐在生产无条件开放。</p>
+<h2 data-page-node-id="LmOmu1jNpNg26BbcQzk7kU" id="b14"><!--pnid:QBzzjS9ZIhjO0p7I61Migm-->B14. 哪些系统级服务应该被限制以免拖垮节点？</h2>
+<ul data-page-node-id="lOy3SS4VmQvAwE5NsjaD27">
+<li data-page-node-id="wxus6pd4LclPanfozveTCi"><strong data-page-node-id="64KHCu6DJb71ssieGw2nHm"><!--pnid:RfjV4CzNUQFILvrrf3bJWn-->容器运行时</strong><!--pnid:6BpRhdzXHSdrF6DLNdFTCF-->本身要进 <code data-page-node-id="p17kwE3KPVDqWOqmdLdzT6" data-pnid-children="zAIAqT5OElKm5n1NwEldGN">kubeReserved</code><!--pnid:RZ5ayjaVQr6Qpz0st4ZohK-->（通过 cgroup 真正限制）；</li>
+<li data-page-node-id="TnrALBKOnjyvEux3upegsV"><strong data-page-node-id="lPUTstEtETrk8ZeYwLJsdM"><!--pnid:P8duGEpwhiCLDfTuWzjc4x-->日志采集/Fluent Bit</strong><!--pnid:Gi9EJhO3XniqKDQsAv2ee4--> 容易内存/CPU 失控 ⇒ 必须设 limits 与 backpressure；</li>
+<li data-page-node-id="9QSR80QJvoWUguWQmisHqA"><strong data-page-node-id="3lbDQYSEWtduqhX3Nkb2EY"><!--pnid:897Go3407Nea9WghfmPDKp-->监控 agent / node exporter</strong><!--pnid:L0QGAZjR9mH0qfZ4j7pyr9--> 同样要有 limits，避免被业务拖累反向拖累；</li>
+<li data-page-node-id="qNRZfyCH46AI8VXhtYoUyC"><strong data-page-node-id="Bgpneh8X5mOsqVcc8M0LzV"><!--pnid:qIm2h4IP0N6iLjITCsifWZ-->DaemonSet 全部要设 requests/limits</strong><!--pnid:dSsXbSlSS5cX05smGw914T-->（它们分布在每个节点，溢出会以 N 倍放大影响）。</li>
+</ul>
+<h1 data-page-node-id="eLVIAUt8vVwnoc0Ol6R2Re" id="part-c-14"><!--pnid:rldsXawamtlaDLADuLllxK-->Part C · 大规模节点内核 / 系统调优篇（14 题）</h1>
+<blockquote data-page-node-id="4wEQGK9bPNTJ9pSL5mJe44">
+<p data-page-node-id="UuqLvqajn9CUojyjIaUwHR"><!--pnid:TqZDb8fNl3edKHRHGJ4lxC-->定义：<strong data-page-node-id="BNEd4P5TxHImKdPcrFwhGS"><!--pnid:3v5RcesELBAkzeL0OoG6Ll-->大规模 = ≥ 1000 节点 / 单节点 ≥ 50 Pod / 高并发短连接</strong><!--pnid:i7USFmJgCdNW12a6uzVV07-->。所有 sysctl 建议值都必须在你的机型与业务上压测校准。</p>
+</blockquote>
+<h2 data-page-node-id="g76uR5N9xe3nvpE8Gozewn" id="c1-sysctl"><!--pnid:vBJNI6BeWpfxyohhogafba-->C1. 一份可直接落地的节点 sysctl 基线（示意，务必逐项验证）</h2>
+<pre data-page-node-id="i3qCF8fGyu1GNnfhaP9mnc"><code data-page-node-id="5fhyT9G1BuIv3aHS2AwbHX" data-pnid-children="18Ozz1VIUwjnSMQxQn10po" class="language-bash">cat &gt; /etc/sysctl.d/99-k8s-node.conf &lt;&lt;'EOF'
+# ---------- 网络转发与桥接 ----------
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+
+# ---------- conntrack（★ 短连接高并发必看）----------
+net.netfilter.nf_conntrack_max = 1048576          # 建议初值，按实测并发调整
+net.netfilter.nf_conntrack_buckets = 262144       # hash 桶数 ≈ max/4（部分环境需模块加载时设置）
+net.netfilter.nf_conntrack_tcp_timeout_established = 86400
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 30
+net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
+
+# ---------- 连接与端口 ----------
+net.core.somaxconn = 32768                        # listen backlog，默认常过小
+net.core.netdev_max_backlog = 10000               # 网卡收包队列，高 PPS 建议调大
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.tcp_syncookies = 1
+
+# ---------- 文件与 inotify ----------
+fs.file-max = 1048576
+fs.inotify.max_user_instances = 1024              # 大量 Pod 挂载 Secret/ConfigMap 时常耗尽
+fs.inotify.max_user_watches = 1048576
+
+# ---------- 虚拟内存 ----------
+vm.swappiness = 10                                # K8s 通常不建议大量依赖 swap（见 C7）
+vm.max_map_count = 262144                         # JVM / ES 类必看
+vm.overcommit_memory = 0
+
+# ---------- 其它 ----------
+kernel.pid_max = 4194304
+EOF
+sysctl -p /etc/sysctl.d/99-k8s-node.conf
+</code></pre>
+<blockquote data-page-node-id="N9PJ9Cw7Q2HY5SE0x9Xqz6">
+<p data-page-node-id="5nTZ5qZyUXe6esAByHOtFI"><strong data-page-node-id="vIZsdDNIVFuaER9czvIGmu"><!--pnid:BBvrCwcatgnCc3jPV5zJnB-->交付原则</strong><!--pnid:YBqs7MT680PvtbAWqhWeWD-->：sysctl 是<strong data-page-node-id="nGPPUafZgmKpe4H3hm77KU"><!--pnid:Ly9c9IOL3e40epXA8iGHu5-->节点级全局变更</strong><!--pnid:F4oN8DeOINzYPoOLw0zUjR-->，必须做到：① 配置版本化（Ansible/镜像）；② 按节点池灰度 1 台 → 10% → 50%；③ 保留回滚文件；④ 每次变更后跑一遍基准压测。</p>
+</blockquote>
+<h2 data-page-node-id="B2iQJsWPevfcudCjlHk7Jg" id="c2-conntrack"><!--pnid:3FZUy1FDMVJ5t9AJQCKSNp-->C2. conntrack 容量怎么算？（和网络篇互补，这里给"账怎么算"）</h2>
+<pre data-page-node-id="M6cDtxhks0JS5ilgysdMLl"><code data-page-node-id="6Skg1T85KrgzKtAv0gQgnc" data-pnid-children="Rd2kMEMcpKzjuiEQJRsMXz">nf_conntrack_max ≈ 预计并发连接数 × 1.5~2（安全系数）
+buckets = nf_conntrack_max / 4    （每个桶一个链表，桶多则链表短）
+每条连接约占 ~300 字节内核内存（量级估算，以实测为准）
+</code></pre>
+<pre data-page-node-id="KR1zivPXhpx3TQxiv4SiC4"><code data-page-node-id="SGogMlNC9uHqzYdrwXUQkt" data-pnid-children="4oRsx1z50kOKPBakulpvJg" class="language-promql">node_nf_conntrack_entries / node_nf_conntrack_entries_limit &gt; 0.75
+rate(node_nf_conntrack_insert_failed[5m]) &gt; 0
+</code></pre>
+<p data-page-node-id="LCJM6pmkKrey89OQG7ZMOR"><strong data-page-node-id="q8VXtLNaJXHSiHCuaeaT5X"><!--pnid:MlZPeL6j9xZtteaDrP3wUM-->必答</strong><!--pnid:3LOMCCFm0SxE4btF4F6NJL-->：<strong data-page-node-id="IeDyIUco5gr8M1Sti4pgnA"><!--pnid:9kK9XtbtWi6qfdBQcpm64l-->Cilium 的 socket-LB 路径不依赖 conntrack</strong><!--pnid:hn0LQqehoLhYj4XO4YwHyA-->，这是短连接极高并发场景从 Linux 层缓解此问题的关键手段（见网络篇）。</p>
+<h2 data-page-node-id="m04ga6SS2TgWEC9yhRGkak" id="c3-somaxconn-backlog"><!--pnid:eD4U78rGATikkEm1OdL9Zz-->C3. somaxconn 与 backlog：为什么默认不够？</h2>
+<ul data-page-node-id="K5RdOe1HH1HrVTFKsKlxU9">
+<li data-page-node-id="2V1sIAYcrh3SmAKa3sDQmy"><code data-page-node-id="dk4iMEn4f17xxSuerI6AHs" data-pnid-children="1BXWbpxfH51l3xafmPdbTw">net.core.somaxconn</code><!--pnid:0Jq24r1c44VpHqjwKwIijw--> 限制的是 <strong data-page-node-id="YUIn0URAwBYC0vkGIYznM2"><!--pnid:etlPg9GCX2v3HPZniu3y4E-->listen 队列长度</strong><!--pnid:Ta0YVmvx6GNO67o9DXnQs5-->；应用如果有 backlog 参数（如 Nginx <code data-page-node-id="ySBo37LQBOs2OkK9tP20PW" data-pnid-children="UjqY7s4ZlHjAyZB3OdJEap">listen ... backlog=</code><!--pnid:RqVDLrkE9fyMoCAeptyeEE-->）取的是较小值；</li>
+<li data-page-node-id="2p9bU1tKQikz9jJ8n86Ifs"><!--pnid:IUHZseMvRSrYLbPihAI1vt-->队列满 ⇒ 新连接被丢弃（客户端看到超时/重传），且<strong data-page-node-id="0ACnZPZCimUYjnNquatA2B"><!--pnid:Juq6ZA4V5Pxfun9ybpM9nP-->服务端可能完全没有错误日志</strong><!--pnid:gDOBuRI9loIIpJRo8kd2Xg-->；</li>
+<li data-page-node-id="JD14mAPmLpkG1Ebsufvi57"><!--pnid:d78JjyL1xNPIWvcyG3MwQw-->高并发短连接服务要连带看 <code data-page-node-id="37k9W3RJg7SjnWKTqLLRGC" data-pnid-children="OvSFY6skCaK6bXXacvNzwJ">tcp_max_syn_backlog</code><!--pnid:3ufyIw9zJ35q60O5KmbjS4-->、<code data-page-node-id="MirI97mGu0VPZRxWzzYQGW" data-pnid-children="FGrK4F8WgP4PuI6l4vF42x">tcp_abort_on_overflow</code><!--pnid:rkp4vETRr1aCNHEvyCNb1t-->（一般不建议开）。</li>
+</ul>
+<h2 data-page-node-id="9qhyHmx7zF7uBdzyGh3Kzs" id="c4-epoll-fdtoo-many-open-files"><!--pnid:hLTVINJZBfWWsiXvxGZyP6-->C4. epoll / fd：三层限制与"too many open files"</h2>
+<p data-page-node-id="NaVmzrNrLJ6vz2aravyH7g"><!--pnid:GVWB36yPGKBVRv6etOEfFq-->见 A20。补充高层手段：</p>
+<pre data-page-node-id="1hjw0ZCLRxAC2rxgHLDqOE"><code data-page-node-id="Zq65ACMhiFzBOmYRe1mA22" data-pnid-children="H2xQGTYzqd18SHtfEouEd7" class="language-bash"># systemd 服务级默认（会影响以 systemd 方式运行的容器运行时等）
+systemctl set-property containerd.service TasksMax=infinity
+cat /etc/systemd/system.conf.d/99-defaults.conf
+# [Manager]
+# DefaultLimitNOFILE=1048576
+# DefaultTasksMax=infinity
+</code></pre>
+<h2 data-page-node-id="lHIqC5gaXxgqvyH4hWXAJc" id="c5-inotify-k8s"><!--pnid:gTYnO6AdPGStILYYmzNj3I-->C5. inotify 耗尽：为什么 K8s 节点特别容易中招？</h2>
+<p data-page-node-id="GYkovdWRY4znKfjCkFQ0mJ"><strong data-page-node-id="NgwC6XNjV3qbTIqGOCflBE"><!--pnid:FylkwOTSMdH12lpmQpcl6C-->原因</strong><!--pnid:SWUjcX5kjhVGUZMrkhVYfC-->：kubelet 对每个以 volume 方式挂载的 ConfigMap/Secret 都要 watch 文件变化，每个都要占 inotify instances/watches；Pod 密度高 + 大量 Secret ⇒ 直接耗尽。</p>
+<p data-page-node-id="BWuOfIQNYvUNYrwZjKGONf"><strong data-page-node-id="otwzKWx2QReT0tsDOid3rw"><!--pnid:fqyd2EnrjnW0kXkMDzJYeD-->表现</strong><!--pnid:prDSlheDn2Azkj2BaaSKPY-->：kubelet 报 <code data-page-node-id="tvLBvQfQaOBHGMw8juwbnm" data-pnid-children="fhgQP58GxdjQ4qDwOyXApm">too many open files</code><!--pnid:kEVVhyjNAqxCvsOA1AuMzv--> / <code data-page-node-id="dDN5d4X5ppgJfDR6uz31Vs" data-pnid-children="41TxEYkk3m8TRmtD9B8mrM">inotify_init: failed</code><!--pnid:xk1xOeftcXUnm8xBIqKC1O-->，节点上的 Pod 挂载开始失败。</p>
+<p data-page-node-id="BoiU0U2NeFPaZRXcI0SvFG"><strong data-page-node-id="lgW63AX1J8siqB4tLEY6x6"><!--pnid:HMRNhIfVaiJ1NSnZlYbQ3m-->治理</strong><!--pnid:FX14H2U7P28inxC2oKYYst-->：
+- 调大 <code data-page-node-id="NJ5fd97YnviwjeFXAujRhR" data-pnid-children="FFsypTkpZ4N5ZoPZv1STIs">fs.inotify.max_user_instances</code><!--pnid:NQCHFMh50ezHirEdcC32me--> 与 <code data-page-node-id="JAfqh7TU0GlVS33jH0lyyp" data-pnid-children="8K1Xqs6OUs9iYOeRQ4otVq">max_user_watches</code><!--pnid:xhZf1JIQPSUUGwP9khN9LW-->；
+- <strong data-page-node-id="WMF2qNmA2xld2sMX01egxs"><!--pnid:XwizuNzMFUKPNVetqxaDj3-->Secret 设 <code data-page-node-id="uEyOAZEwTfOMG06kugPwpJ" data-pnid-children="kaSVshLRZbMDBdDBFpbSzq">immutable: true</code></strong><!--pnid:f9G1JVyFOBlCVqM3ek5XJT-->（正解，能去掉大量 watch）；
+- 降低"每个 Pod 挂很多 Secret"的架构模式。</p>
+<pre data-page-node-id="ggE8ggrjWdl2KrMurVrNUD"><code data-page-node-id="qBE5K10mWmGkB5UfeAWMHm" data-pnid-children="v13NJ3bizmFCkjjWjExAuz" class="language-promql"># node_exporter 需开启相应 collector，指标名以实际为准
+node_filefd_allocated / node_filefd_maximum &gt; 0.8
+</code></pre>
+<h2 data-page-node-id="Pqxw2E4FjryvuW8uMEDzZN" id="c6-thp"><!--pnid:H8js6GvbqzQwLZAcEytQ2F-->C6. THP（透明大页）：为什么数据库类负载常常要求关掉？</h2>
+<p data-page-node-id="sz0m0H7gzunrdmTy43bJ8W"><!--pnid:Eu0u6adckpZUCBciWGH3Oy-->THP 让内核自动把连续小页合并为 2MiB 大页，<strong data-page-node-id="bb1L79IbtCKleNco2H54PI"><!--pnid:3qDaq9dHqbXjqeUImpLYuV-->在内存分配/回收频繁的场景会引入明显延迟尖峰</strong><!--pnid:6p2NEwq9NyheJgikb6IJrr-->（khugepaged 整理、缺页中断变重）。Java heap、Redis、MySQL、MongoDB、各类数据库/中间件官方建议多为<strong data-page-node-id="DYTusBXa0iOWzTdopPPl5u"><!--pnid:XONuFMkCBdcWQkR2WxAT6A-->关闭 THP</strong><!--pnid:yU44awlN51NgREa8u7K5d2-->（或只保留 <code data-page-node-id="GgZGSdtXLD2uIwC0nYJVsq" data-pnid-children="1TkDLit9LeyIjADejzUeuG">madvise</code><!--pnid:WizWccOG0SDzsEVdoUyESA-->）。</p>
+<pre data-page-node-id="B05xfmBr08XTwgkydIEYP8"><code data-page-node-id="Ug9VdNwUDewcBNacgNgZwH" data-pnid-children="fs60lOi0dSafutF9zIh5BS" class="language-bash">cat /sys/kernel/mm/transparent_hugepage/enabled
+# 常见建议值（需实测）：[always] madvise never  → 关闭改为 never 或写入启动项 transparent_hugepage=never
+echo never &gt; /sys/kernel/mm/transparent_hugepage/enabled
+</code></pre>
+<h2 data-page-node-id="cVPuqG9fT7KzUkGHn4Sq91" id="c7-swapkubernetes"><!--pnid:DbP9npGIUwEyl8gCuhPX5y-->C7. swap：Kubernetes 到底该不该用？</h2>
+<table data-page-node-id="gYVgAMuQ9Sj5HTibLabaad">
+<thead data-page-node-id="g0YXZG7lJ7LwQfgo3B4jhG">
+<tr data-page-node-id="bKlSXhRp9P8rE5OoUPtvly">
+<th data-page-node-id="pUdYZMhGHQJwuuwcXJpUWu"><!--pnid:ZJ8NzS0iKdf1h9rdqYuDie-->立场</th>
+<th data-page-node-id="sfR9158FcdEBJnvrOs2Lmy"><!--pnid:lV01NYVgU8lIL8u6HayPZO-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="sHmKmQPIfa0YAAsJGmm2t8">
+<tr data-page-node-id="Xq1HbtsLEuRIQfWN8aC1a5">
+<td data-page-node-id="Q44p8hMomcJlmuG1B5Nyih"><!--pnid:4RbSuJzcZauGfl0HM9GWDD-->传统</td>
+<td data-page-node-id="LEHcFKqVamFZcCgXgoeeTF"><!--pnid:pKhzmEwUzF0HmUKNnt6jIC-->kubelet 默认要求关闭 swap（<code data-page-node-id="fugnESRHi9CKinvyyCqHGx" data-pnid-children="frwRitYHk4mYWiO13TUomI">--fail-swap-on</code><!--pnid:a4TYEMnpqZWUqQYKobUlur-->），因为 swap 会让"内存用量"失去确定性，干扰 OOM 决策</td>
+</tr>
+<tr data-page-node-id="uSzUkGiRwaI4GFNgrekLDU">
+<td data-page-node-id="6PnNvv6CSkscMQwJjOp5LH"><!--pnid:xWw7YQlTqGOJxERlQEeK7k-->演进</td>
+<td data-page-node-id="Ges6LUv6BxSKdJk0nctL3t"><!--pnid:5AvLJOfddfUU6aX8H9VMUm-->新版本对 swap 提供了受控支持（如仅限 cgroup v2 的受限 swap 行为，版本相关请核对 Release Notes）</td>
+</tr>
+<tr data-page-node-id="vpDQdVlAtZDFyyRbxFGoZf">
+<td data-page-node-id="8AUHRPG7VkE1GztxoOGAjJ"><!--pnid:84vHl7tRdpTGkWsu2jMS1y-->实践建议</td>
+<td data-page-node-id="890AnUALWWnwKU5SreAzmH"><strong data-page-node-id="vnaNeDVrg5NpnpSSzHVQtr"><!--pnid:taNVfIxSok7Gbi1e13l5q5-->在线延迟敏感服务不要依赖 swap</strong><!--pnid:78eStRhhByKpcwW3QaSyLL-->（一次 swap-in 可能带来数量级的延迟）；离线批处理可在受控场景下用 swap 提高装箱率</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="fKaP0w92PhLGzjiL2RYQQO"><!--pnid:oxVUOjlkQ3D92BnLRpp2WJ-->配套：
+- <code data-page-node-id="phTGPSidmipdX6R0XuBcSg" data-pnid-children="hUxfsOBJBC36FZOQRiCK9T">vm.swappiness</code><!--pnid:IOTLAXhleN6F9jWkzd1kpS--> 调低（<em data-page-node-id="maMkdqq6ZYxTyqaKVvGMO8"><!--pnid:6RDoIBLXV4QqeIANlJwMxk-->建议 1~10</em><!--pnid:5y1FJ0uwJStpDKdwgtv2rf-->）；
+- 若启用，<strong data-page-node-id="yHALRXqCSjL6daYg84ab0y"><!--pnid:unyylf16NDTKQCOTpyaFHS-->必须监控 swap 使用率与 swap-in/out 速率</strong><!--pnid:dGkw3o07qCwDfjF2tlHd8R-->，并明确有 kubelet、cgroup v2 的支持条件。</p>
+<pre data-page-node-id="qdPKIncy0ewJ93rPyy54vm"><code data-page-node-id="OL7m2RTtQ85DjD2MRkOyhT" data-pnid-children="SCQ5ligHBssv1Xn31CaStc" class="language-promql">node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes &lt; 0.5
+rate(node_vmstat_pswpin[5m]) &gt; 0
+</code></pre>
+<h2 data-page-node-id="UmULEhJC6ysrbLadVd3gLL" id="c8-imagefs-nodefs"><!--pnid:S1R235HwmCSIOCSTWnaGMA-->C8. 文件系统与磁盘：为什么推荐 imagefs 与 nodefs 分离？</h2>
+<p data-page-node-id="q5YGI9W6cVExGFwGlGgmBA"><strong data-page-node-id="PcUirPb3ZLLpc1G5AsfczU"><!--pnid:ZgsHi1U7bu9kESd3Qo7sH5-->问题</strong><!--pnid:zNmlIhzs9LVNyl7H4HXfq8-->：镜像层 + 容器可写层 + 容器日志共享一块磁盘时，任何一类暴涨都会导致 kubelet/运行时自身无法工作（<strong data-page-node-id="ZcFp9QDi8jUJCJkQZLUNdH"><!--pnid:radTR7nGevyNM5lErRoDvO-->镜像/I/O 抖动 ⇒ PLEG 慢 ⇒ Node NotReady</strong><!--pnid:tS095FNZpI7WNy8JK7Yt1I-->）。</p>
+<p data-page-node-id="XxqcYNQv4qAFb3dC2reQod"><strong data-page-node-id="H5xlen7DsiArAc9CyX13xW"><!--pnid:HZbXyJZE2rdqKBauD6ezaY-->治理</strong><!--pnid:7dEXtMeXMgSVIQvcljr4j3-->：
+| 项 | 建议 |
+|---|---|
+| 分区 | <code data-page-node-id="lsRwWY2qYfJubWtgtedASB" data-pnid-children="T4udOzc84MoyvDADp7zFCI">/var/lib/containerd</code><!--pnid:BgPP23xZVxIKMOAnwRbxnN-->（imagefs）独占磁盘；<code data-page-node-id="rbV3fFrrrRmg6M0Kg6RsFb" data-pnid-children="jLyMLuDrHOIH7DqWz0Nzcf">/var/lib/kubelet</code><!--pnid:c9GZuhkO081yfazKlDKyhY--> 与根分区另设或留足空间 |
+| 文件系统 | ext4 / xfs 皆可；大量小文件/超大目录场景 xfs 常更合适（<strong data-page-node-id="QXGfR8j4z2pFFapEROiHQt"><!--pnid:S2PpvyAukXQCtB0dRUbhgT-->请实测</strong><!--pnid:ZOsAyVYDrCLWLg7fmdUGLz-->） |
+| 挂载参数 | <code data-page-node-id="cYqGR1FDi8knCL9pLftxV9" data-pnid-children="H0iSRD7l3MA87LgeVu367Y">noatime,nodiratime</code><!--pnid:TIRgv7Z7L7RAhsFe42132O-->（减少元数据写） |
+| SSD | 开启周期性 discard（<code data-page-node-id="aryNE8GM6Sn3XX3RsDBTsC" data-pnid-children="ciYQkdYx5pecXRPdGnjcba">fstrim.timer</code><!--pnid:OPx15s8ebI8nwyk51Nx7H0-->）或在线 discard；监控 SSD 磨损 |
+| 监控 | 分别对 imagefs、nodefs、inode 做容量告警 |</p>
+<pre data-page-node-id="E9z2Zy52BuOZ3MLF8WCfkh"><code data-page-node-id="E1JyDudFoO2mSdKc3PJUox" data-pnid-children="85PqnutLalIwArmNQW273D" class="language-bash">systemctl enable --now fstrim.timer
+df -i /var/lib/containerd
+</code></pre>
+<h2 data-page-node-id="4gooJefJAPrSbmVIwTKoqR" id="c9-pid"><!--pnid:Z3DDsJeVq6cNZbtF8yFO4r-->C9. PID / 线程：宿主与容器的双上限</h2>
+<pre data-page-node-id="tzz7KRTwGDflCaCLEVtXRk"><code data-page-node-id="bsZIWwfjQAX7cf7Gu8e2n4" data-pnid-children="MLwqXNgdITXAgc9Bauqj6O">容器级：pids.max（Pod 级由 --pod-max-pids 等设置；也与 pause loop 相关）
+宿主级：kernel.pid_max、kernel.threads-max
+子系统：systemd TasksMax（默认可能为 15% 之类，容易踩到）
+</code></pre>
+<p data-page-node-id="6bJvPMovg21zEJhQOEw8Et"><strong data-page-node-id="hmTqN6IUAJe5oBxumNeiW4"><!--pnid:qUVgchQf0LWmOUNYavoGOx-->典型故障</strong><!--pnid:ZMbWOio5AAcrN3MbBSoj8Q-->：<code data-page-node-id="7SEs1ZuMg6SFBz7Y5hREH3" data-pnid-children="zhj7lrvfUZYAKHLbYYo8R5">resource temporarily unavailable</code><!--pnid:5PHGny4jikAdj7FM9up8pN--> / <code data-page-node-id="ETIEGX62psh8w0PP0SKhgy" data-pnid-children="boKJ9kygT3foVRDRJZDTCV">cannot allocate memory</code><!--pnid:s34wgF8IRmNAJ8FLWt2Ryq-->（fork 失败常被误读成内存问题）。</p>
+<pre data-page-node-id="jzO53KvIqywFyGCNFgiChz"><code data-page-node-id="Q9I8L9qBWMYLjDhuKaZcZX" data-pnid-children="UfPhk4y1xdJplVoiBLklo3" class="language-promql"># 节点 PID 使用率
+node_procs_running / node_procs_threads &gt; 0.8    # 仅为示意：实际请用 pids.current 或 exporter 指标
+</code></pre>
+<h2 data-page-node-id="p9NZ0hGUM9AJwxRNOro3fp" id="c10-io-k8s-io-api"><!--pnid:tDhJ0cdQU8t86rL9n5V5M3-->C10. IO 隔离的现实手段（因为 K8s 没有稳定的 IO 限制 API）</h2>
+<p data-page-node-id="yIHxwCMX3vUkHpPxl65h3M"><!--pnid:KouUNcvPLUFs86P93RT1qF-->优先级：
+1. <strong data-page-node-id="BwZB46jxBI1AxwPfLCe7ct"><!--pnid:WL6lMT4bHqMT5Egaq4xfmS-->专用节点池</strong><!--pnid:0S5mONmbpBmhOyO9dqDmN6-->（taint + toleration）——最有效；
+2. <strong data-page-node-id="nDY4Yy4owySlflEMOlN03l"><!--pnid:oRAvsujqHhbdpW6L1BtbZk-->存储侧 QoS</strong><!--pnid:XgSgrGa4uhtE6oSYV1Fnhp-->（云盘 IOPS/吞吐配额、Ceph 的 mClock/qos）——最贴近；
+3. <strong data-page-node-id="LSXpOGsMFcrySAXyXHHp1h"><!--pnid:xs8cQjj42vYwcLVJUP0kBm-->cgroup v2 io.weight / io.max</strong><!--pnid:XdsGRtqMKlZBVWfRYMt3Ox-->（需在运行时层或平台侧配置，<strong data-page-node-id="LmIR3RiP3pBD8LeUUTQndz"><!--pnid:u1I2jByhzNQZCJZoEyMTex-->K8s 不直接提供</strong><!--pnid:644bZ82Kw3WV1bM3NKUqqb-->；务必兼容性与压测）；
+4. 监控 ≥ 限制：至少先把"设备 IO 延迟/队列深度/IOPS"看清楚再谈限制。</p>
+<pre data-page-node-id="mtR918m5nA6Pv5wh6UXIZv"><code data-page-node-id="CHMwk6lBOnAvzSmfZHHleN" data-pnid-children="vKXST3docASeaVWN2fzalw" class="language-promql"># 磁盘 IO 利用率（node_exporter）
+rate(node_disk_io_time_seconds_total[5m])
+# IO 等待是对 CPU 延迟的直接伤害
+rate(node_cpu_seconds_total{mode=&quot;iowait&quot;}[5m])
+</code></pre>
+<h2 data-page-node-id="uoWXe40LU61clbnwdJ9Tar" id="c11-pps"><!--pnid:GQzY9ScHCTMD1DSYmdTHpU-->C11. 高 PPS 下的网络栈调优包</h2>
+<table data-page-node-id="8AwjZnIl2fNooeydtvdUtc">
+<thead data-page-node-id="kdUhwKE2u8OIpPc3L9MtVD">
+<tr data-page-node-id="u4NW0E21jWaNLF2JoYyGvW">
+<th data-page-node-id="KKZC6JV8P6IVcPDI2Nsqor"><!--pnid:xOd0U9lyWxAdZu7TXkUkIH-->项</th>
+<th data-page-node-id="MENTeiZLkXToinxBqoPSvI"><!--pnid:Mxdow0p7POefjLw1JO0JC2-->建议（需实测）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="aPwe3cuEHmL4oyXWiyCJYN">
+<tr data-page-node-id="6bYNtlNArJwCFIFaN8McEB">
+<td data-page-node-id="9AjQrhWTaTy37FRy0N5feY"><!--pnid:eu37aDsZvwisa8A0ZzbY8E-->网卡多队列 RSS</td>
+<td data-page-node-id="o6sjhHi1zitoDQZ31PnBfa"><!--pnid:NdtrmBbGa2PO4Hnb7vjFux-->队列数 ≥ CPU 核数，中断分散到多核</td>
+</tr>
+<tr data-page-node-id="FrUBQkYO844lzO7RLJl8pZ">
+<td data-page-node-id="xMKnoMXETMcYZ39fgcX3TT"><code data-page-node-id="Fi0UuKGHITk7O4RLWB2Urb" data-pnid-children="IKX1mHk6kEPOPFyXt7Y2DV">irqbalance</code></td>
+<td data-page-node-id="frcd07UXfDKmi6xqJOu9xo"><!--pnid:MuVFshFzNm3Cc9aiSLTjYI-->开启（或手动绑 IRQ，避免所有中断压在 CPU0）</td>
+</tr>
+<tr data-page-node-id="KdkDkTPEcu3wF0H5OKi4el">
+<td data-page-node-id="Pf7fAv45AbArtXKVWaTIuL"><!--pnid:v5wmKrKPavUxp0rdZTfsVT-->RPS / RFS</td>
+<td data-page-node-id="sZ7m1aOVGoYHwCJEeRGyfh"><!--pnid:aNpqg8e6IMzJP8cZs3BPUA-->虚拟接口/隧道场景可考虑开启分散软中断</td>
+</tr>
+<tr data-page-node-id="vxABQxIUFhjmq1soKO8P2l">
+<td data-page-node-id="wU2ZbWUKLVDGQIzMMuQPaK"><!--pnid:llRRO6EBk2WyZ2CFKkXINz-->网卡 ring buffer</td>
+<td data-page-node-id="Z6XClBM6On1OB8ov4kauUK"><!--pnid:ro5p6XwaxVZTIoSEkl07RB-->高 PPS 适当调大（<code data-page-node-id="ZgDDTJVFI7LVSRBGa9Zf9d" data-pnid-children="bxZckXMtFtsqEbW8XR4aVx">ethtool -g/-G</code><!--pnid:V7gKGJ7L00yZLIzNF8KSCH-->）</td>
+</tr>
+<tr data-page-node-id="NgMe5K25RYWsE3ZjBVTz19">
+<td data-page-node-id="hfVTt4kdW9EnCKRlJCp2Mi"><code data-page-node-id="v7dLKbgtjPNC8YShnOnOI9" data-pnid-children="czi3SgkRCK7yiwqvelries">net.core.netdev_budget</code><!--pnid:TFa9Ydg0ITehgmgOAdVsH7--> / <code data-page-node-id="RMj2wH4277cJDdizzrmunL" data-pnid-children="wJlGa4YceqtoY297BquBr5">netdev_budget_usecs</code></td>
+<td data-page-node-id="N6sDCj6NqU19ITWwSKzVGd"><!--pnid:LxtBWF4C9UNtU2uRfKnyy2-->影响一次软中断处理包数，<strong data-page-node-id="D7GLZqKbgcULlKhIMEDEm3"><!--pnid:LD927JGc6BPgPD3ifbULT0-->调整需谨慎压测</strong></td>
+</tr>
+<tr data-page-node-id="bktvrGv6eBKAVsX5RcpOjk">
+<td data-page-node-id="fK08qrNjrouGt7nFczXyHv"><!--pnid:p3Y2Q3EKxcM9VGWMUm03C2-->MTU</td>
+<td data-page-node-id="uR3XXi7cqnG3cvwZ4ceMmX"><!--pnid:j1PYP9xmpZY8cz4Z8FRFea-->物理网络允许时用 jumbo frame 降 PPS；<strong data-page-node-id="0zWQqNAgqInh7MxEwNoSzr"><!--pnid:LZNOi8UHM1gYg3GDUH0wLr-->注意隧道的头开销</strong><!--pnid:gNUQvbC1lhwaIyWzdbklZR-->（见网络篇）</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="KDSEUnieetSEnvNyAyMq64"><code data-page-node-id="0oyAXMI7zoByYWL5J1RslZ" data-pnid-children="ZyE2bW2ITqzt9QKzEoSabd" class="language-promql"># 软中断分布不均（单核打满的典型信号）
+topk(5, rate(node_softirqs_total[5m]))
+# 网卡丢包
+rate(node_network_receive_drop_total[5m])
+rate(node_network_receive_errs_total[5m])
+</code></pre>
+<h2 data-page-node-id="BZCLrHLBh6tIzHdKeSFNGn" id="c12-numa-cpu"><!--pnid:AhwADGI3SczfC0IWyF80pI-->C12. NUMA 与 CPU 绑定的节点级配合</h2>
+<ul data-page-node-id="qTLi1gQxOyulNCbF5E7eGB">
+<li data-page-node-id="YXnijY1WAyzbGLjEwdb7ZR"><code data-page-node-id="txEFAteVjvJ6njPvjdk2qQ" data-pnid-children="RBMMTrwcQ0F4QBbah1clp9">isolcpus</code><!--pnid:7DTGZN1MHzGe6hkIrm5IMD--> / <code data-page-node-id="5WoPllKY8Hz7UaNjacEoKs" data-pnid-children="6JXM6PhXFh8kNCd5skITNk">nohz_full</code><!--pnid:eTKOkpC3qgrEz4jGdQSUUg--> / <code data-page-node-id="PaIqG1nxTGJqBLIc0KCeU6" data-pnid-children="mhQ1ktr8SAympkpFPLjohI">rcu_nocbs</code><!--pnid:swtl1OCzZcPJgs3JIQmqOv-->（延迟敏感 + DPDK 类场景），但会减少通用调度域，慎用；</li>
+<li data-page-node-id="7VZJucJX04tl6ZNO6ZLOmD"><!--pnid:3kgxij1spbSOLXtAP0vaZl-->与 kubelet 的 <code data-page-node-id="RLZ2p4YZWbZJzs1N7Kcfbe" data-pnid-children="qkOORUQU7zBLlF4YSMINCl">cpuManagerPolicy: static</code><!--pnid:6g1q3czodM5OovyfHBMWgg--> + <code data-page-node-id="yGOHGSBiJ3psSf4PVK2qzl" data-pnid-children="Zg2GpU2xEaWOPmxR43bP3d">topologyManagerPolicy</code><!--pnid:2nVVd0yO43lnXhSQnVgXE5--> 一起做，且必须配 <code data-page-node-id="JIkXFmcjlmjP3YYEXfj4CE" data-pnid-children="24Hnk43rc7XVhuG2jdMw6E">reservedSystemCPUs</code><!--pnid:09fNpRz6XEAeaBRxyH7g7n-->；</li>
+<li data-page-node-id="gPefhheewUmDwMlVS0cfw4"><!--pnid:BZqUp6QhBKu9Jyi9u1uRu7-->检查：<code data-page-node-id="aSOCx24c4Jywy7iYgLCefP" data-pnid-children="MA3QXZRVYCH9aAI0ZoeZX5">numactl -H</code><!--pnid:nQnuiMhZYyDEpwUSgvru94-->、<code data-page-node-id="9PXCvgWoMasrkSpzPTDpeE" data-pnid-children="m1z29b7nUBq0uYg6xGMR3S">cat /proc/interrupts</code><!--pnid:RJK9yaCUd7gymtbl55y6b8-->、<code data-page-node-id="McyxraYgZmPEFu4JJ2FiZ4" data-pnid-children="QmjV0vQMl7gyYEoQS94wSY">numastat</code><!--pnid:3NrmCrfBDJtfa32clIRy7H-->（看跨 NUMA 内存访问）。</li>
+</ul>
+<h2 data-page-node-id="ylbJgo3Syikag6H1dJ8UTb" id="c13-psipressure-stall-information"><!--pnid:KJ2wTFZAaaYvq5v4zoIinN-->C13. PSI（Pressure Stall Information）：节点压力的最现代画像</h2>
+<p data-page-node-id="B15dPD72MZyLNL3R8qTD9K"><!--pnid:yMMV0EbC6IvEuwAFMxCL54-->cgroup v2 时代，内核在 <code data-page-node-id="C8MrkrpSD7bmdpWU2nzApX" data-pnid-children="aqdJCfNPtTrCq3WAPJejkq">/proc/pressure/{cpu,io,memory}</code><!--pnid:hWr81IK1NWhGMWhF7JcMfJ--> 提供压力指标：</p>
+<pre data-page-node-id="0bZJaULzrvcb61bcv6pBZ5"><code data-page-node-id="ehdgJNPnleFzmwsAOM49Jl" data-pnid-children="Uwb7HLXJyZBD5j489aD4Ly">some avg10=... avg60=... avg300=... total=...
+full avg10=... （full 表示所有任务都被阻塞，最危险的信号）
+</code></pre>
+<p data-page-node-id="EZthssKe7D5uaOFqNjsqP8"><strong data-page-node-id="ciR1Y0kFCsDD3qNFvi2F42"><!--pnid:voerQph3XAq1OsviLxtSk8-->价值</strong><!--pnid:utsqm6Q2Tz9IB9t4WDfuwf-->：比"CPU 使用率"更能说明"应用到底有没有被饿到"——<strong data-page-node-id="nkbmNk5disMOUIgf707J6q"><!--pnid:0BMjhr69kXJPoAYafEclzt-->CPU 使用率 100% 但 PSI cpu-some 很低，说明只是在跑，不饿；反之 PSI 高说明排队严重</strong><!--pnid:FZbrNRPgtKh6RcozIxpKkh-->。</p>
+<pre data-page-node-id="SNSEEc3paMRpNXbDtKmIJN"><code data-page-node-id="7hhI7eKrIipTtpmUwT9dMe" data-pnid-children="hjjjL8GDJ7pjKYGVMFlrLJ" class="language-promql"># node_exporter 的 psi collector（需开启，指标名以 exporter 版本为准）
+node_pressure_cpu_waiting_seconds_total
+node_pressure_memory_waiting_seconds_total
+node_pressure_io_waiting_seconds_total
+# 建议先看 &quot;some avg10&quot; 的 gauge：node_pressure_cpu_some_avg10 之类
+</code></pre>
+<h2 data-page-node-id="2gwyHGkqI8NFLF0FrGQVmm" id="c14-linux"><!--pnid:q9Cyknmld8MhGZ7lBmUKM7-->C14. 节点级变更的标准灰度与回滚（Linux 层最容易忽视的）</h2>
+<table data-page-node-id="tbQ1VwH5dVmlCbpjKQw227">
+<thead data-page-node-id="x4pWFC67NbzHL6JiMb1eKU">
+<tr data-page-node-id="fkafIdoFIsBMOmUoXFl2U6">
+<th data-page-node-id="qViDKKUZpg1pxnNjFLhQEi"><!--pnid:HfnhCzj0ztDOQbedY46MDa-->阶段</th>
+<th data-page-node-id="acJSOCi30ODpB4bEnGjDSy"><!--pnid:kzx1fRewMptTu8EfRRRUFL-->范围</th>
+<th data-page-node-id="5iF0O99GHLCyUylrI55ee4"><!--pnid:Yq3LQ2J62VEHaH83hRdvXH-->观察（≥30min，含一次高峰）</th>
+<th data-page-node-id="N2m1SNE4amHlBEgaAWQ4R6"><!--pnid:qZqCAk3HLe36W1hnZitw4W-->回滚触发</th>
+</tr>
+</thead>
+<tbody data-page-node-id="e6i140mYyOsb0LgDHs8fNq">
+<tr data-page-node-id="KsFkRIhP7DYhP9i3QjHi7W">
+<td data-page-node-id="iUYOJZai1DDZfI0g6BKkPT"><!--pnid:mKIK9OniJhUwEUwKUZFb3a-->Step 1</td>
+<td data-page-node-id="1ksf4vEdMiBbqZbsQpRe6q"><strong data-page-node-id="ph7Sf5jeEETvNvep3ZbaRz"><!--pnid:bqzQjKOJmoTTLtu4YBbmPg-->1 台</strong><!--pnid:3pQhcMNiWZVCLbWTWoft0j-->（隔离/预发池）</td>
+<td data-page-node-id="toJLl5RwRxDpO4bwzrvvsj"><!--pnid:ZuyuknWzvNSKVCPZRb0mGJ-->PLEG relist、RT 抖动、软中断分布、 conntrack</td>
+<td data-page-node-id="R7qCJxjJSu42yqR9owDLcz"><!--pnid:qbHjtccuVpIUhf5jqvhhuj-->任一指标超基线 1.5×</td>
+</tr>
+<tr data-page-node-id="VhPTS7rTEjB0ZLTYdlK6lN">
+<td data-page-node-id="rmpUqXwbaX9GHVX9idZxaM"><!--pnid:uVnXWJr4uoI8AjgYlDVAZo-->Step 2</td>
+<td data-page-node-id="co0gxRlnl1IBjJAuRhcZPS"><!--pnid:EanTIkJu2y3zVCqCbeKj7c-->1% 节点</td>
+<td data-page-node-id="g11BmfkjBfW6u4ze72Epf5"><!--pnid:TF219AkDPfOwrwGqLRq3s7-->+ Pod 启动 P99、iowait</td>
+<td data-page-node-id="vHHDqTjOXud0cQLnyHBU8o"><!--pnid:LOkbWoRl2gewmy1g5YjB8Q-->同上 / 业务 P99 恶化</td>
+</tr>
+<tr data-page-node-id="FjYlOkIfe2uMY3XDsX9qUd">
+<td data-page-node-id="nAMsDyNxGqb8UG9Bi0vori"><!--pnid:qSBXdo9otH0BzwM5BqDu9W-->Step 3</td>
+<td data-page-node-id="7W33UPnMS78kbeKBnJAhWQ"><!--pnid:pgA8d2JlJkOUkmTLPeH9Qt-->10% → 50%</td>
+<td data-page-node-id="u0AdOo0QQYNnzr7oYLX0rN"><!--pnid:5CRuekH0jG8M18pqpl0y8s-->全 SLO Dashboard</td>
+<td data-page-node-id="1sBN73fYXsNlRfFXyNqhMc"><!--pnid:lRS7exCaqNoaTN7rQJiBnO-->同上</td>
+</tr>
+<tr data-page-node-id="dN5A0JMorHFiOHyaslIBL6">
+<td data-page-node-id="v0VDbDORafZi3QjCkiWZdK"><!--pnid:tDRsMbKL8ceKuS7cHy88gs-->Step 4</td>
+<td data-page-node-id="BjCcSLl4uK7hrLUHbmyhgp"><!--pnid:75M253rjMVzkkd5gBfL5NE-->100%</td>
+<td data-page-node-id="dYUuTDYyl86wHClU97iecB"><!--pnid:am0aIXhuGaIoYhQzPcSSRb-->稳定 ≥24h</td>
+<td data-page-node-id="yLNj5iYXcRGBXbAR3b69nS"><!--pnid:rNH5nqJ106dTzrtH6OXCaa-->—</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="bciqyS0VeSZRoqhe7aWQYV"><strong data-page-node-id="23wowFzgGMlKbFpi94J5bs"><!--pnid:H1FWu2LnoM6l2QrcCWklaF-->回滚要点</strong><!--pnid:5VQAtvVKXmnby2qFxtlbU0-->：
+- sysctl 回滚 = 恢复上一版配置并 <code data-page-node-id="n0xSOimIhdDzixjXLUKpO3" data-pnid-children="kOXuZv8eWJ78HY1vrDIvah">sysctl -p</code><!--pnid:5vVKiXEXt8f0iX2AaanH64-->（秒级）；
+- <strong data-page-node-id="mnApHhzaBnILevTC9Le8CN"><!--pnid:RvV6jKTL8HciwF4VQlvCN4-->内核/cgroup 驱动/文件系统类变更不能原地回滚</strong><!--pnid:5ig5Ph2seVUSCjLHJ1xd6X--> ⇒ 必须 drain + 重建节点（这就是它们必须排在大版本升级窗口的原因）；
+- 所有变更写入 "节点基线镜像"，保证新节点天然一致，避免配置漂移（<strong data-page-node-id="VvHSl55Q3UL92rFZUKpOGP"><!--pnid:7f821cC4K1k4ffDQOxPQx1-->漂移是 Linux 层事故的最大来源</strong><!--pnid:yQnyu03zzCkYlIeHMbxkbH-->）。</p>
+<h1 data-page-node-id="GUSG4srxQ0QIIohpMYNWSl" id="part-d"><!--pnid:fT5JRKM2OiYzeoOYishhRw-->Part D · 反模式清单（可直接用于生产巡检）</h1>
+<table data-page-node-id="1ncF8ioVOlvQz3LRU6BWDQ">
+<thead data-page-node-id="S3iOnhoLSJ6pGGI0cfE0UV">
+<tr data-page-node-id="WxCvtcbpAsMQ9Cl9M4pj3q">
+<th data-page-node-id="G90X4aK7Yh8u5KegOeS2eg"><!--pnid:XFeQvMp5Xf2UZoxsHFMwkL-->#</th>
+<th data-page-node-id="r93X8w04oyNARuOczrqAEC"><!--pnid:7W7yBYZAs6zrzxA2Tcu90x-->反模式</th>
+<th data-page-node-id="dF5vpwyZxe0YQcwgKvI5as"><!--pnid:LwkR7nBic2yIM8iE0WNIJm-->证据（怎么发现）</th>
+<th data-page-node-id="RjZ9QNNQpz05vyRQDiCJNn"><!--pnid:ERKZ0WIyUF20eEUKagMXk4-->等级</th>
+<th data-page-node-id="bbTOHqMZmb0RXKexO7oMdr"><!--pnid:4dwfRpUBFX1bvyc0Q8smGD-->修复动作</th>
+<th data-page-node-id="RssZJ26VYTFY9wBGVuEdky"><!--pnid:8NiL8bNyj1epWxTOmrWqLW-->验证方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="JMSKSPq2sOAHvySJrVKu7b">
+<tr data-page-node-id="1OchoGez0RY8jbgjzaeoO3">
+<td data-page-node-id="vaDnVyFJsY7K5PfHuqXqK5"><!--pnid:CyF1KJA1SsOurQryOWBJSU-->D1</td>
+<td data-page-node-id="NWkybOjZ6Cqmp2D2ryjAUg"><!--pnid:zhnfqkfeOTqSSmBLcLo2tZ-->延迟敏感在线服务设 CPU limit=requests</td>
+<td data-page-node-id="TGrgG5wjWT3qW0haDdLDCt"><!--pnid:O2JnyVenzCDqvgfwokN6He-->throttling 占比 &gt;10%</td>
+<td data-page-node-id="MAbB4ROiUWSC2YeylRtipl"><!--pnid:pNobncbnSzp2cy7YbXcLci-->🔴 高</td>
+<td data-page-node-id="N01IE1KdQuDcWuf3T5qtHf"><!--pnid:4hqGymO4zTMOMCWxqJlfzQ-->去掉 limit 或放宽到 request 的 2~4 倍</td>
+<td data-page-node-id="p9h3xkQMhcSYkWC5EtyLUt"><code data-page-node-id="mywqBdtbzTrWFYOY6uN8xZ" data-pnid-children="ZBAsKHa7ELlYkq0vmcawcv">nr_throttled</code><!--pnid:lFc5qStCQFwKsV79zLu62n--> 速率归零 + P99 改善</td>
+</tr>
+<tr data-page-node-id="0lle8VCR0ReKGUK8tRsbkt">
+<td data-page-node-id="YfRar7xYzM0FvbZJxxXXqq"><!--pnid:XICtSP4a7Ks9Hh9oiuhQM0-->D2</td>
+<td data-page-node-id="WeG2O1MOgSo7C1RVimXgxV"><!--pnid:O4wlBURLrs2tQdvMSoMjvV-->容器用 shell 形式入口（无 init）</td>
+<td data-page-node-id="vxgma6rrVkRRKazQ1E8W8O"><!--pnid:Yo5MbdPWXneMKdM6cc9HDD-->信号不生效、僵尸进程堆积</td>
+<td data-page-node-id="DOKwGdKyXFQOgbwvZrxMls"><!--pnid:djJAsWId0XwnsekGZRMzqv-->🔴 高</td>
+<td data-page-node-id="1gMZiapjXVo76zJ0fsA0Sr"><!--pnid:OYxvdofu6XpYGkaVPw2pJB-->exec 形式或 dumb-init</td>
+<td data-page-node-id="flyLT3q2zVz55Ve0r56W74"><code data-page-node-id="RD1ObBqZCUhIN2heewJiL2" data-pnid-children="8DA8Ax10I2DqWreW7Dm1TD">kill -TERM 1</code><!--pnid:GMb0NVOdAo8Jh3uyVLlLr7--> 生效、无 <code data-page-node-id="TzSR7PSoKLFOcMcKPpAu4h" data-pnid-children="XtxrY1C8IC1akmOb0wRr2L">&lt;defunct&gt;</code></td>
+</tr>
+<tr data-page-node-id="jDjbYdjriisb5ndXanbZ5g">
+<td data-page-node-id="kp31Ow1IQOCSvbxUlj9jHw"><!--pnid:1SCrJGdpxD9CAuVdKQyqQQ-->D3</td>
+<td data-page-node-id="WKqHro0IzRr9xyXEINlZMW"><!--pnid:VOFSl72GUEuOxjUUZOUgHx-->生产用 <code data-page-node-id="t3y5UhH0pzlixGl1Pxg0l3" data-pnid-children="pfBPLzx6ntpLyGPwRWSkDv">privileged: true</code></td>
+<td data-page-node-id="BSwpRBQgrs0dx7nYYzMcBp"><!--pnid:duaVnXGWw3ALJaBFI5ctLb-->Pod spec 审计</td>
+<td data-page-node-id="fa4J7pSwb4PknVHNPOVmuZ"><!--pnid:kdn8pHecbYXsKXXXgxh9eh-->🔴 高</td>
+<td data-page-node-id="Tev12HXJiv6j2NPXMdidUV"><!--pnid:hEGQ3Z0AOh9Brq30EWs0R2-->收敛 capability + PSS restricted</td>
+<td data-page-node-id="p6ag8pfXztecyZEAKOt4bu"><!--pnid:IZ6I3DqkC2IWUxQWsDrdEW-->策略引擎拦截生效</td>
+</tr>
+<tr data-page-node-id="G5yRsMYKJxHJIbXwqiBR6J">
+<td data-page-node-id="NdDW9D3LF64EXnEEJwNIK4"><!--pnid:K2HNvIAeAduFOnlJPEEpDr-->D4</td>
+<td data-page-node-id="2v3hlGekG2ckLCRCWlJvhH"><!--pnid:X8XaT1UAklBah9cfnrATu7-->kubelet 与运行时 cgroup driver 不一致</td>
+<td data-page-node-id="VVouNeVspLQvXvBncxuPBE"><!--pnid:N50I1cp2YcP8RV95d9qGrs-->两条 cgroup 路径、limit 不生效</td>
+<td data-page-node-id="aDI7h9txk7xJh9bXlCYHO5"><!--pnid:je6HAJzu8MjA0UqqUKThAW-->🔴 高</td>
+<td data-page-node-id="bWmYWesEdK0R3rcnLkG2vo"><!--pnid:XbDApQutkx17z6vm5w62wU-->统一为 systemd</td>
+<td data-page-node-id="snwPQ0vYvVziWilVoeK3X6"><code data-page-node-id="dwApAlLDOmVIpLSKzMObIz" data-pnid-children="H0MST6y9t9KWxDvnO2IK6c">systemd-cgls</code><!--pnid:vzthSmlnyskZqUOLnvZatp--> 层级一致</td>
+</tr>
+<tr data-page-node-id="uWsrIdow9xscsSYIXfCxCv">
+<td data-page-node-id="fKfg8JWuMFdBZeq38EFU3h"><!--pnid:S1nZhbam678h5IBYVx4DD5-->D5</td>
+<td data-page-node-id="dW3hMYmaheRybCpOybJCGu"><!--pnid:G5c5yeJy6o0evTZb67gnyS-->只看平均 CPU 不看 throttling</td>
+<td data-page-node-id="RuId6jdOVEIVT9pL099R5f"><!--pnid:ZKZM6SVeCq484ALjHdDL94-->RT 抖动却无头绪</td>
+<td data-page-node-id="WsHFSG9QjOQaAEWd2JfVWm"><!--pnid:ouGcTCKOvfaygCu71CTsft-->🟠 中</td>
+<td data-page-node-id="ObjQUfwHY85cPYlNnB9sYr"><!--pnid:WVp8lKrz8o0KdguNfrCjft-->加 throttled 指标与告警</td>
+<td data-page-node-id="P9gypVOklNGzhXHqwBP8Tx"><!--pnid:ELFw1JSQpmnQzPHyYQ5mg7-->压测时能复现并归因</td>
+</tr>
+<tr data-page-node-id="lKiXSiNmkpz8aa2DiD7mBE">
+<td data-page-node-id="QG3iyPK90Z3dQqT8nYUpyo"><!--pnid:DhbXmp5gZkwagZppKZ6YG0-->D6</td>
+<td data-page-node-id="EZzvPvcgdNOZoQYOrExOuT"><!--pnid:TVSPIqAHnGDpNvJwm0V1hh-->配置节点后不做基线版本化</td>
+<td data-page-node-id="UP5rph0Y2GGXhutFZ0yFJo"><!--pnid:9fTr3D7f72vrdvjDALDvvf-->节点间参数漂移</td>
+<td data-page-node-id="9Zgxw50yGJkwBO7wQsQhVA"><!--pnid:2w4DUsfHsV0zukenkQsvQv-->🔴 高</td>
+<td data-page-node-id="DHdNOf4emf9fNVDzhChbEu"><!--pnid:ISutpgAktewg02I5QvaYVM-->sysctl/运行时配置纳入节点镜像</td>
+<td data-page-node-id="eJlzOa7lsYkeC3MpJyrRWH"><!--pnid:yfBw8MuMu7WgomdYIkXalb-->巡检脚本比对一致</td>
+</tr>
+<tr data-page-node-id="nLdYTlbK7kx41C1uxwOhij">
+<td data-page-node-id="5B24fHXWxEzwfi6EKFjSlS"><!--pnid:eH8FMUaeC5GxV3XFeCjIQB-->D7</td>
+<td data-page-node-id="8mPDFCepGHqExt17fx3SEZ"><!--pnid:ePHY6UFEVYUH9r4RJHrCTU-->inotify/ulimit/fd 无监控</td>
+<td data-page-node-id="4ZLV4TsaqPtCDirArWukEP"><!--pnid:MFNxx8l4v1CovbNhKsuFJS-->突然大量挂载失败</td>
+<td data-page-node-id="f2kUu3ModaQp48pn2PCDJK"><!--pnid:4rJaAvk6die8uvsqOEfCq5-->🟠 中</td>
+<td data-page-node-id="VRdETCQkfhOKpJDM9shD8N"><!--pnid:0GKa8rk99D4ja90sGADIVY-->调参 + Secret immutable + 告警</td>
+<td data-page-node-id="S1dGA0fapkRoXxyUBn3Ati"><!--pnid:nwMKhqc5jgilfFrQnk1Iwj-->压力密度下无 limitations 报错</td>
+</tr>
+<tr data-page-node-id="gDQvqol8WNk74yR8Vv5NMz">
+<td data-page-node-id="R3IzM0RFRHccYYrnnAuAT1"><!--pnid:6uQISFx27dIowhIROlzHd8-->D8</td>
+<td data-page-node-id="XvMjOvldB2f3gDDzi4kMYt"><!--pnid:RiWfH8xPGEl13UocAsD69J-->imagefs 与 nodefs 共用根盘</td>
+<td data-page-node-id="8vQ5gbEj1iyLzFPvv6VNOH"><!--pnid:o2RbhWAoc7iIdrzJBaOWjz-->镜像暴涨导致节点不可用</td>
+<td data-page-node-id="XaWCtPxGa9wiC6cxdPdDTs"><!--pnid:pMV99kCdMaUrYq3DB7mYE0-->🔴 高</td>
+<td data-page-node-id="zlycFIW6I2ZsIBU8EF9Wjl"><!--pnid:T9x1lYrFhbzxJT3OFbHgQj-->分离磁盘 + GC 阈值</td>
+<td data-page-node-id="W1OocqfxQnDdIyGs0rMaXP"><!--pnid:WPk7eai9t9BBYIofxS8dI6-->写满演练不影响 kubelet</td>
+</tr>
+<tr data-page-node-id="3XkZgIL3zTKdQewqJ1NBHF">
+<td data-page-node-id="E8T5uZtMHoAKyUoVCoAgDK"><!--pnid:68QrS1la0jKi6IgGf9gsfE-->D9</td>
+<td data-page-node-id="TtwTSKsdlhJDyFHx9ubDij"><!--pnid:yXnVSFzNl2DMS225NrORMP-->忽视 inode（<code data-page-node-id="vMhb08X3AqeiCjO2OEnWSZ" data-pnid-children="XYJiNFY9oNtbkDNWnpCekE">df -h</code><!--pnid:ZIefNge2Ov164Ot1JlLUtr--> 只看容量）</td>
+<td data-page-node-id="NJVZL6K36sdHwfUMw4jKuZ"><!--pnid:TdtPxjTxwSGJY3UY7q5iV8-->空间够却报 No space</td>
+<td data-page-node-id="FaOx638FcThYSTlwNFElkm"><!--pnid:R2p3CKduiBs4JmpFAGLS6g-->🟠 中</td>
+<td data-page-node-id="e8IWgxUWeLCFrkOYTXlsqy"><code data-page-node-id="pXmKOqfJSDTCyBUYBipwzH" data-pnid-children="gTjbLCFYIOgcNomhXnmuOQ">df -i</code><!--pnid:0CoDtFirZXC0ukoXiyBCc0--> 纳入监控</td>
+<td data-page-node-id="tfdYNV5GpspYqbwnSmaRp2"><!--pnid:FrRdug4cglUYpnZ9bXTXi7-->inode 告警提前触发</td>
+</tr>
+<tr data-page-node-id="rq5HCCGdsxtkIsEL89eUN1">
+<td data-page-node-id="W84HyOTHPedHAmEpP3jqhy"><!--pnid:59celX8erfdubILvGaC6Iw-->D10</td>
+<td data-page-node-id="XhBFJteCchM8IQWoYwoSr6"><!--pnid:fklMcXevz5zhSfl8h11Tu4-->THP 未关（数据库节点）</td>
+<td data-page-node-id="w1Ko26ppZHPSiZADJ5kfiu"><!--pnid:wUhEEKrFNnB8Dqwgk7HYv2-->RT 偶发尖峰</td>
+<td data-page-node-id="YYhzwCnTR6wJTyOgGctP3C"><!--pnid:4FrLkFD638qYsoJHHEQyjw-->🟠 中</td>
+<td data-page-node-id="MFecVkJkeHK90Sucp1IzRR"><!--pnid:rmY57yL6UWTV2rbD1CnLjh-->关闭 THP（按厂商建议）</td>
+<td data-page-node-id="TZtrkIPoxeEMyDvb5TZNep"><!--pnid:SJNaPMrqIeGRQlXJUmhTam-->压测 P99 平稳</td>
+</tr>
+<tr data-page-node-id="ksoNjffixVm4MhQFXvspAF">
+<td data-page-node-id="Av1gRdJ7H4oND2p9kJ5yay"><!--pnid:jsDskO9gUbOsePF35IRLr2-->D11</td>
+<td data-page-node-id="Y5Njajaqw4gTkmejE2QWRd"><!--pnid:bmxgEOt9deBkHRmhPkKEKl-->swap 随意开启且无监控</td>
+<td data-page-node-id="XKLFAdlw67s1HLRbBHtmRm"><!--pnid:uMxmQV93TVQx10towMSc4o-->偶发巨长尾延迟</td>
+<td data-page-node-id="lfWSPOL3HBGssUTpFsZtIQ"><!--pnid:XrYUooC3UeJfHB70utTdou-->🟠 中</td>
+<td data-page-node-id="igZzDRJ0KSt1EY7yEpQLsB"><!--pnid:4kg0WjGy5pdtVleMLE18r5-->明确策略 + 监控 swap-in/out</td>
+<td data-page-node-id="Cs4T3Mobdqng2BJnQIZ6nq"><!--pnid:NdqZACbH39WhXvBM9bCQnd-->在线服务无 swap 抖动</td>
+</tr>
+<tr data-page-node-id="W6Ia59buFeZ8iJUZkt6IXc">
+<td data-page-node-id="AM9iovDrDGz9Jb5ulv02SE"><!--pnid:ktGfPx5Nox9SWlCf4GeXTv-->D12</td>
+<td data-page-node-id="7s0Ot7P6pGLvtvjQAAELdi"><!--pnid:3n9oQYKDfZAoskhSK8hu5z-->DaemonSet 不设 resources</td>
+<td data-page-node-id="P1CsgcUaz2blUmXNyoZolb"><!--pnid:Lg0r9ZD8nlqqvdzwTmGqj0-->节点被 agent 拖垮</td>
+<td data-page-node-id="Py3DCTkx0Zr616PQ6AkC5D"><!--pnid:kMJoE8Wj601vs5FZ8sLnmd-->🟠 中</td>
+<td data-page-node-id="Bo675SBI0MpLAppDuLK4th"><!--pnid:F3nazimCYFoQM9vAn6mwoA-->全部设 requests/limits</td>
+<td data-page-node-id="rdaXpgmJE4vJOonrP8DrdL"><!--pnid:HgkBlrdi6ZN7LnkpThkggi-->压测下节点资源有冗余</td>
+</tr>
+<tr data-page-node-id="vL9X1lZCpS3l8nUMIlZWsI">
+<td data-page-node-id="oYhYP46VlO5STBJpHd6Wsn"><!--pnid:EI8Os87Sfpggjp679Hhqwn-->D13</td>
+<td data-page-node-id="AXvAT6aB0wJU5nJKeSNyLs"><!--pnid:JCHqre5R6uS2NtseKxCT81-->未在 CI 里校验 cgroup limit 与应用参数匹配</td>
+<td data-page-node-id="YRZvYP2gzFOChn9jIwi1ql"><!--pnid:PqQg5fHScAwugTDllSdlDb-->JVM 按宿主内存算堆</td>
+<td data-page-node-id="Qz5giaT8r9UZW6cdMcfQzG"><!--pnid:GskKNemDtk0o0BJkyoAGz8-->🟠 中</td>
+<td data-page-node-id="y3BuY8GGHvXdchtcwoDrY5"><!--pnid:2RLku3aRkzSooUgl9QUelO-->cgroup-aware + 显式参数</td>
+<td data-page-node-id="YLKrVgZA6OMytF2en2NtEV"><!--pnid:3BfLcwawG9mybSxGZiCUG4-->容器压测不 OOM</td>
+</tr>
+<tr data-page-node-id="pjD2c7NW7JnjQimdG9trvK">
+<td data-page-node-id="IvMiGWSLPDcNMFk1jm9Win"><!--pnid:607hd1h2cMoeL9uGn6YNby-->D14</td>
+<td data-page-node-id="c5pNua8X6f87IPceRZT0RV"><!--pnid:I8HOI8xjCTOPXudQoDiU0K-->直接 <code data-page-node-id="HbeftdW6tkiDpxu58NdwfL" data-pnid-children="408ykCoxUvPRvWBJGtc6rg">chmod 777</code><!--pnid:NNJhSjTzTDo5ZwB1QjoBTJ--> 解决挂载权限</td>
+<td data-page-node-id="6701co6XOFRgZVwTd8tOwQ"><!--pnid:XG7eyIwna3A9lrXq55uyaE-->掩盖 SELinux/fsGroup 真因</td>
+<td data-page-node-id="X0NUPCrhACxdWWr6pJqfJP"><!--pnid:T3SiWMdof0HXJGIbjft4PZ-->🟠 中</td>
+<td data-page-node-id="0AzSxz0o779dM0pvDdkBTk"><!--pnid:AqrJ4yUX1V71Js2DBKP4Nu-->正确 relabel / fsGroup + OnRootMismatch</td>
+<td data-page-node-id="hb8iEmddaJ14ftO3ib4vZs"><!--pnid:Gs2pwbYenTHBvoxyNLsqgx-->无 777 且功能正常</td>
+</tr>
+<tr data-page-node-id="rYsbZY3L2VN2CWBq1FiLI5">
+<td data-page-node-id="bkTHoMF9J7jCh43E0uNGmA"><!--pnid:4iOnC8g0M1hRXGyV2RADxt-->D15</td>
+<td data-page-node-id="70JwX4ER6sBM9UiX7tDR96"><!--pnid:m6jj5WHmiXl5Yocq1ZiuNK-->内核一次性全量升级</td>
+<td data-page-node-id="y6eivG7PAGtpaOdzOsAppx"><!--pnid:tLQHm99A2VpwmNqwYjWdwf-->大面积驱动/运行时不兼容</td>
+<td data-page-node-id="kOAfhm5wy8ozTEyuiSV4JT"><!--pnid:ZvbdRPa5Q22S7CBb7V3Rco-->🔴 高</td>
+<td data-page-node-id="aPQcVtY4FX7Q3twHnEzU6N"><!--pnid:6rGZs3TDzgknHcktc1zIwK-->节点池灰度 + drain/回滚窗口</td>
+<td data-page-node-id="rju1f1hwfzuTB0qWTyeuEP"><!--pnid:X2T45ql9YkCvK9diiyU8YD-->灰度台各项指标达标</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="na1d7zKlpr4Rpo7FHs04Q1">
+<h1 data-page-node-id="RnvOsTnsdBuvTaLmQjRz7X" id="part-e"><!--pnid:kp6xWSszItAtvAreZCXgrc-->Part E · 可观测性：指标与告警</h1>
+<h2 data-page-node-id="QTBsESBAuVqfiRXoMzmNzO" id="e1-curl-httpnode9100metrics-cgroup"><!--pnid:SAyQojysMla4CnpayfLPTB-->E1. 必看的指标清单（<strong data-page-node-id="TYVJPB6DtAx5Ug76SdmvvT"><!--pnid:ElCTKqYIyWTAyi7QbXTHok-->先 <code data-page-node-id="r7PmFAMUHgETjuF6IRvLEZ" data-pnid-children="3VWGk1PgCa1BnaTN4i1a2P">curl http://&lt;node&gt;:9100/metrics</code><!--pnid:JSnf2Kj9qBTr2WZAQR1W5L--> 与 cgroup 文件核对</strong><!--pnid:90zhzxW9w28rRsvM6uoIT0-->）</h2>
+<table data-page-node-id="7xMHq9furJmnV3kW9zUqib">
+<thead data-page-node-id="arIJcT1kcVjP696IjYNhVB">
+<tr data-page-node-id="KX8XRgqabkSj80V2azicFw">
+<th data-page-node-id="6IWjIFtQ0Sbz3ijgtLaKzB"><!--pnid:i5sxiC9zhh0cwSbTFyj8OC-->层面</th>
+<th data-page-node-id="NawMCLW9ol3WTQZgRSiaux"><!--pnid:S386DjzPfQbMpxaQfIjEIG-->指标 / 数据源</th>
+<th data-page-node-id="uhJByPG9snHW43GMmhlgjg"><!--pnid:rsu4ED006rxXMbvGjhVF8l-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="whkd1daC8ywjNG0muEYolp">
+<tr data-page-node-id="WmKYRjiGbZ408FCwi7k4eu">
+<td data-page-node-id="JVd0Ldx6PsSneEoVnueMQq"><!--pnid:Gezmy58JnYpxZe84eiWfG3-->CPU 限额</td>
+<td data-page-node-id="bz9hSSjXSl6y6s11oCDrS6"><code data-page-node-id="YWGJOGgjDoS9x4sPTGcGCY" data-pnid-children="agCW7Oq0b66inmExtaHryD">container_cpu_cfs_throttled_periods_total</code><!--pnid:sYEXDMPA7GowfUmeXlrmBN--> / <code data-page-node-id="bVXuxNbG0SfQN5imCoGVSZ" data-pnid-children="Nby7vZJXLzltuEHOBXm7se">_periods_total</code><!--pnid:9dBCrmLEE70mMvvXX25U9L--> / <code data-page-node-id="BoB8mVgbgbCBLKXaIVb2cd" data-pnid-children="RrD6CFrXTVUqnI74dZG0CH">_throttled_seconds_total</code></td>
+<td data-page-node-id="KsfN4ZpK8LGC9wHPOg6cX1"><!--pnid:0vK9g3t4bWF8cZYBu4vSAx-->throttling 检测（<strong data-page-node-id="bjAYV4wsrTMMdcO0eyS3aU"><!--pnid:PTauWwcmtweL8BLiq6auGK-->核心</strong><!--pnid:njSt7CETisXwrNEAjbqoBL-->）</td>
+</tr>
+<tr data-page-node-id="t2lM8GPh0BYhJCdhTqpA7Z">
+<td data-page-node-id="HeQlpZrs2kyJ4S3M7on3gd"><!--pnid:CX16DYkTM0Nad4xVU6QRbe-->CPU 使用</td>
+<td data-page-node-id="hrtKBLXxzf4RvyfgZOzfjM"><code data-page-node-id="Kg5MWcejjx6BXMgwRdRwEx" data-pnid-children="n0klFlLx39yJ7X3XEfdyea">container_cpu_usage_seconds_total</code></td>
+<td data-page-node-id="PsRqorfq5R9Oe64s60qPiz"><!--pnid:tDfGbjKPj30CtaLkH42iOJ-->真实用量</td>
+</tr>
+<tr data-page-node-id="9bnny2K82b7jObkm60rVjw">
+<td data-page-node-id="UND5zzKCys9v6vfqyrjJnH"><!--pnid:dzFJLY61DhF7Wtar0alShL-->内存</td>
+<td data-page-node-id="x8MuYwhxr3Ju8etZ3rdmZe"><code data-page-node-id="Bl106nTf1WcHqhdwa8Z13k" data-pnid-children="1k4Q83EUQ11KkWNfB9fWRv">container_memory_working_set_bytes</code><!--pnid:e2TKPfGV102o5i7Nv77NeD--> / <code data-page-node-id="NI60XZdVgV0t4rCSu1A4wk" data-pnid-children="DLhwqtvfZkMPbXqhRP2H0S">_rss</code><!--pnid:Tfg0yOYsnGJnjdVqaBRtTt--> / <code data-page-node-id="uFm2bHfOLFSZQbV9SiCfqF" data-pnid-children="EyeDOhrq7x21zwlG0Jjrib">_cache</code></td>
+<td data-page-node-id="PevJmRNsSfpYAgK6BGnSzA"><!--pnid:qNv4G5L6p7jvWi9ipHxX1a-->内存账；working_set 是 OOM 判定更接近的量</td>
+</tr>
+<tr data-page-node-id="HfgXY5y2oUmrB8uxkkFt5E">
+<td data-page-node-id="dRYim3JSdPK5mDm1GPtA5R"><!--pnid:XpeLeSIeKc5sNQVo4i2eRl-->OOM</td>
+<td data-page-node-id="LAd1HYs7lTcYp6rGhmABR6"><code data-page-node-id="A6wXAVN6cCXJs54NNPX3dz" data-pnid-children="c0w5YCrYb35bcgEawihcjb">kube_pod_container_status_terminated_reason{reason="OOMKilled"}</code></td>
+<td data-page-node-id="SlF4NUjPHBZFORy6nlvnI3"><!--pnid:3ujHOhK0Pp9WjOF0cAai8i-->容器 OOM</td>
+</tr>
+<tr data-page-node-id="ePPg162FPATQP7JyJdNhis">
+<td data-page-node-id="8n7MgfNzTaibYfcem5yN8w"><!--pnid:mrscsE3xR0yB3NNFxJyYJS-->cgroup 原生</td>
+<td data-page-node-id="1EsXpLlo8eZtVfsPJrahuP"><code data-page-node-id="8cLv1qBMz4HWn4ExsRw4mB" data-pnid-children="8gAD5u17gbc8GtrDKdiPWz">cpu.stat(nr_throttled/throttled_usec)</code><!--pnid:ju4btv4OWbi7cHQeGx8e8J-->、<code data-page-node-id="zVA0BBqihQYTRFkPN4ewUZ" data-pnid-children="NBcSmDjYpbg5Z7Ceqt6agr">memory.stat</code><!--pnid:Ayywm17Go8iUHVfMbvNxaF-->、<code data-page-node-id="FRjxme34P7mwpSZ5RtX8Bx" data-pnid-children="evfZDHUozWJ6tQVKBaGBgC">memory.events(oom)</code><!--pnid:NLots3ybzfqEMY6ZxrGM2Q-->、<code data-page-node-id="qq00nlQtYGy9yNLfJMEbwP" data-pnid-children="YVMl1q6PVhSRYWxafeWaJl">pids.current</code><!--pnid:XHHRE40KRGMqArvsDywQSm-->、<code data-page-node-id="n1KwXsldhX5UBWaGfM1N1c" data-pnid-children="H8l3fZKwP9p5pOnkT8MFpL">io.stat</code></td>
+<td data-page-node-id="kwHCbrty3DFnX3YwHTnZuP"><strong data-page-node-id="skVENYNVzhbP1fFdOrb1GG"><!--pnid:MUQBdUx5pKmRzheYlr7e3q-->权威真相</strong><!--pnid:6IDO8mLNXcLT4P9cW2LmQZ-->（hostCom基层党组织）</td>
+</tr>
+<tr data-page-node-id="asmKuBxmNAzZbWTSxzIOHx">
+<td data-page-node-id="nECdQl0umzDuieBGGs3KQo"><!--pnid:bDnOMQJbP5cgL70aa1WUwH-->进程</td>
+<td data-page-node-id="r8wu5PaukzA3B9PPVtJKdr"><code data-page-node-id="YRKRr55BWXd5u1XHsePTdv" data-pnid-children="RLdUrkusucLZURDPL3wpN3">node_procs_running</code><!--pnid:Szom9RS5nCeWPd0BcUyI9A--> / <code data-page-node-id="H0Mqi0jmwVQMKAjtAfhAPH" data-pnid-children="2etcV3G1KHAfrk3asLFZRo">_blocked</code><!--pnid:z0VWK7z48GzabPkkLuoBt7-->（D 状态） / <code data-page-node-id="znzXl9QhWHBVXZgQwMktPT" data-pnid-children="OJ6RYlZIA8hv5Z3y4JYgkV">_zombies</code></td>
+<td data-page-node-id="Y5tzevQYylD01Ja2YTKYvK"><!--pnid:I81ANixLlz95GbxQvo1q6P-->进程健康</td>
+</tr>
+<tr data-page-node-id="tjpFk070WUGx420NgobvJu">
+<td data-page-node-id="piYmnvlL9kbIYmsB8UFn1H"><!--pnid:941Z4BrtgnAebQkxqXIpeX-->fd / inode</td>
+<td data-page-node-id="oHlphM9jEuqyyLxyeKIAdZ"><code data-page-node-id="WKTUn919JQ99CeRGBaAc9W" data-pnid-children="bSXoAJ6d9UYaYTxBplGOn1">node_filefd_allocated</code><!--pnid:CY16vaDynifCLG7sxvtJtK--> / <code data-page-node-id="ZuIv0rTd2c9P8zScOT3hKP" data-pnid-children="VypqebyD9l9ZMHn88vvYne">node_filesystem_files_free</code></td>
+<td data-page-node-id="8K6Sbc487iorOSt1bzUMSM"><!--pnid:76LyfjPUoAwHHyWmWl6Ps9-->fd 与 inode</td>
+</tr>
+<tr data-page-node-id="gsT4LY1yswBr7ljdpiRrLu">
+<td data-page-node-id="S3a6LxoB9tdVIeuuGmXcMN"><!--pnid:kvDTaKUQ2brpXogWnqkkww-->内存</td>
+<td data-page-node-id="IpOtMtTeGJmtSmO08Nnk9G"><code data-page-node-id="FfibTIuwktPwz1auE6dc78" data-pnid-children="C5bcT0BVy2lYALiDEiu9S6">node_memory_*</code><!--pnid:pAMuYAt0os818vAoqNS6Vs--> + <code data-page-node-id="MKl4YCPrYz16nmUhRSjZkb" data-pnid-children="HbxekXvhddFFwo9gVvTOFE">node_vmstat_pswpin/pswpout</code></td>
+<td data-page-node-id="hDOScPTDFSF6MAnLzqT9nR"><!--pnid:ElTsVHBBk8qg5ZVU1TRMEQ-->节点内存与 swap</td>
+</tr>
+<tr data-page-node-id="aNmqvJOMlb80JhQtUpWGhX">
+<td data-page-node-id="lXnKnr9xej1YOjHj72gPTR"><!--pnid:uN8iMwoki0aKn80fu2EFvC-->网络</td>
+<td data-page-node-id="IMhmAzUqurBxsW3lxfUXo3"><code data-page-node-id="IpTWgNNHY0zd5llsFTclFN" data-pnid-children="ccWETG2mGMTndbUmuyMqIM">node_network_*</code><!--pnid:rUSweThNrnXWjPVkNx2kbq-->、softirq、丢包</td>
+<td data-page-node-id="YZcNqotemjKBI1KptPGyQI"><!--pnid:wmalBUOT3bRWbXWk2kPtI1-->高 PPS 与软中断</td>
+</tr>
+<tr data-page-node-id="iL3ZBDvnQmShe2i9weVOoI">
+<td data-page-node-id="n9WDbt6K0sk4Y1CrVQdsSx"><!--pnid:8d4b75R21l8PzTv3LvNlDg-->conntrack</td>
+<td data-page-node-id="3g1JQIMuA4mTgbS9kbkgyh"><code data-page-node-id="VBjrlEElxAGa6xHcW2RJOO" data-pnid-children="PkqanOn5RwBQf6U7MpC19v">node_nf_conntrack_*</code></td>
+<td data-page-node-id="taoU807Fdtloqdx6r0szqu"><!--pnid:pPuVGPwuXbZx5Smsk31nPc-->NAT 表容量</td>
+</tr>
+<tr data-page-node-id="J6o7oBYcpNkcDsvghiTZHY">
+<td data-page-node-id="FSFAWr9YFVsrJLLoH2Yknz"><!--pnid:S1cd9kZ1Ep3eqBX8lS19RC-->PSI</td>
+<td data-page-node-id="R4qjuy9jGS31nPVFGYHXdQ"><!--pnid:Rz68n3CLDDj90e6fwl6mz8-->node_exporter psi collector（开启后）</td>
+<td data-page-node-id="DTFbMI5SLKTQFhluy4BoQe"><!--pnid:JuNL4ICRsxipWpWEfMQl6n-->真实的"被饿到"程度</td>
+</tr>
+<tr data-page-node-id="NoP0DKnwSFPCTCBmn5Bdd6">
+<td data-page-node-id="gFrfbyAQkBQxTVB182Jjdm"><!--pnid:fSYdWgsajQ5CnMMJhHoMP5-->时钟</td>
+<td data-page-node-id="6uaiCFuu5HNhg5jabwYxAw"><code data-page-node-id="8IuA2sQ8H4P7j3xyoUZ84b" data-pnid-children="f5SVJ0sD9oUvgruUNavbPi">node_timex_offset_seconds</code></td>
+<td data-page-node-id="7aICKMqBvZDbYvosl8o2r8"><!--pnid:Bg6eudJrkYxBluL7reb8si-->时钟漂移</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="fNX08p8LQotppTbOjcYzmY" id="e2-prometheus"><!--pnid:j8vZdODLs3KuedXLgDbio4-->E2. Prometheus 告警规则（可直接粘贴，阈值需实测校准）</h2>
+<pre data-page-node-id="CWOM65xED8MdxjMs3TbZyl"><code data-page-node-id="b6kEKRXgQjo2GxW2m2BRcC" data-pnid-children="SDPvgD3oAprfEUe4EkPsoU" class="language-yaml">groups:
+  - name: linux-container
+    rules:
+      - alert: ContainerThrottlingHigh
+        expr: |
+          sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total[5m]))
+            / clamp_min(sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total[5m])), 0.001) &gt; 0.1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;容器 {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} CPU 被限流比例过高&quot;
+
+      - alert: ContainerOOMKilled
+        expr: increase(kube_pod_container_status_terminated_reason{reason=&quot;OOMKilled&quot;}[15m]) &gt; 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;发生容器 OOMKill：{{ $labels.namespace }}/{{ $labels.pod }}&quot;
+
+      - alert: NodeConntrackNearFull
+        expr: node_nf_conntrack_entries / node_nf_conntrack_entries_limit &gt; 0.75
+        for: 10m
+        labels: {severity: warning}
+
+      - alert: NodeFileDescriptorNearLimit
+        expr: node_filefd_allocated / node_filefd_maximum &gt; 0.8
+        for: 10m
+        labels: {severity: warning}
+
+      - alert: NodeInodeAlmostExhausted
+        expr: node_filesystem_files_free / node_filesystem_files &lt; 0.1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;{{ $labels.mountpoint }} inode 剩余不足 10%&quot;
+
+      - alert: NodeManyBlockedProcesses
+        expr: node_procs_blocked &gt; 10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;节点 {{ $labels.instance }} 存在较多 D 状态进程，可能存在存储 hang&quot;
+
+      - alert: NodeZombiesHigh
+        expr: node_procs_zombies &gt; 50
+        for: 15m
+        labels: {severity: info}
+        annotations:
+          summary: &quot;僵尸进程偏多，检查容器 PID 1 是否 reap&quot;
+
+      - alert: NodeClockDrift
+        expr: abs(node_timex_offset_seconds) &gt; 0.05
+        for: 10m
+        labels: {severity: warning}
+
+      - alert: NodeSwapUsed
+        expr: |
+          (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) / node_memory_SwapTotal_bytes &gt; 0.1
+        for: 15m
+        labels: {severity: info}
+        annotations:
+          summary: &quot;节点开始使用 swap，在线服务可能出现长尾延迟&quot;
+</code></pre>
+<h2 data-page-node-id="tUdhZi1EYNg485FyCet2eV" id="e3-slo"><!--pnid:XxymSLVyCHu94TsgbXVxzq-->E3. 建议的 SLO（<strong data-page-node-id="DnvFqqqTKWp20ZdU5ukCk5"><!--pnid:jrbSVWCzsUkEMJUzyiIs9z-->初始建议值，必须实测校准</strong><!--pnid:crJtImWPlQvYvDPDSYkbzR-->）</h2>
+<table data-page-node-id="APYPvRbOV59cgV9Fk1KZ13">
+<thead data-page-node-id="zbgHmGmXIXzpk1RhaGueJ1">
+<tr data-page-node-id="ufHGOUxIOWFsWGopztDxjp">
+<th data-page-node-id="wFy0f9rL28fMbg8qZbgQNo"><!--pnid:rNo9212d6vj33j2hrmaGrU-->SLI</th>
+<th data-page-node-id="f1GhO2rQ2HMrshd7YWk2jG"><!--pnid:7IhLrcSOrQDjbBK4E381GG-->建议目标</th>
+<th data-page-node-id="eYURlQOB3yH6WS0WCsdImX"><!--pnid:eFfQWxaxu3wirZRyTH2Dpa-->度量</th>
+</tr>
+</thead>
+<tbody data-page-node-id="r2cudSlhdg0CT042Llnffh">
+<tr data-page-node-id="vW9PkTDWca0iKVnHo0FZOm">
+<td data-page-node-id="pmD3qsriJjY6pL7ZSnnAEy"><!--pnid:UWoZ3wNdx2NLIBKmUhQ1wP-->容器 CPU 限流占比</td>
+<td data-page-node-id="acMJvUX9F4YeuSDspEvg2d"><!--pnid:zJcaJr8M8xyrykJx6OE524-->≤ 5%（在线）</td>
+<td data-page-node-id="zdzqNV0kJAcbBoeRrwgehM"><!--pnid:VeVqq1LtkaaqQ2BLHrYyEV-->throttled_periods / periods</td>
+</tr>
+<tr data-page-node-id="sIIxODWqdtZMHPDYJnA2B7">
+<td data-page-node-id="SkM4PiOtpwzLTcTtQT3m7d"><!--pnid:NBiYs9F940ZbjqE1rFLvY0-->容器 OOMKill 次数</td>
+<td data-page-node-id="5XrkKGUFaRxKsKsWHXobxc"><!--pnid:h43kA5sHm66GPxJTegwY97-->在线 ≈ 0</td>
+<td data-page-node-id="cZfmintVQ1oPytcbmCSvWD"><!--pnid:mhqMfqhbFWARdlDyfyLe2T-->terminated_reason=OOMKilled</td>
+</tr>
+<tr data-page-node-id="yJnJtUjdPKwyF4k2Bw6BZ7">
+<td data-page-node-id="ZV7W6xIoBKEEmCsuaRxYvY"><!--pnid:19wLijuZzejHtHTLJt3NXj-->conntrack 使用率</td>
+<td data-page-node-id="UsvOiwWQrXIAlw8EaP7OER"><!--pnid:U9mErDghzJ7EwlNyj094S6-->≤ 75%</td>
+<td data-page-node-id="9wppz6EacnxwXCJdkx6GXc"><!--pnid:8mZwp4GR55LbTxVK3o9gc6-->node exporter</td>
+</tr>
+<tr data-page-node-id="rjaFoBXef4BRGDC5OjIEYH">
+<td data-page-node-id="1lSxS5q7vHNCLaVM4V7xl4"><!--pnid:MAz48Y9koIhK1YROoIIwme-->inode 剩余</td>
+<td data-page-node-id="75R6QRSbTxoAAQCKnRnNOI"><!--pnid:Un6bX4X1wFUmkh8TkqXh4g-->≥ 10%</td>
+<td data-page-node-id="PMtdRMAEXIYTwu5sj0SGpy"><!--pnid:OlV1oPLhfnfDpnE0b6fGvg-->node exporter</td>
+</tr>
+<tr data-page-node-id="DzBs9KtpPgZjLXrY2eDJi3">
+<td data-page-node-id="jvFd2gvRx6l6jNUuaS8g6s"><!--pnid:rF6sP0fjG77a5L84K61RGd-->时钟偏移</td>
+<td data-page-node-id="4bcvczKd5qzBUGpaOwP3Ns"><!--pnid:0dRgi2F2C4SnNk3wmyO8DL-->≤ 50ms</td>
+<td data-page-node-id="acjtpX1ouVH2k7mep5ML2p"><!--pnid:BGnG3xmplPoAqFVaB2ehTE-->node_timex_offset_seconds</td>
+</tr>
+<tr data-page-node-id="XSxImHR6WtPkptMwAwLvOh">
+<td data-page-node-id="wpz8iAzl8OIGQIsZcaIaCp"><!--pnid:t6OpkIPWVkJ9KF0m2WHKvt-->节点 D 状态进程峰值</td>
+<td data-page-node-id="XGEV1AZKHEOB6jaFQ3g6sy"><!--pnid:egXKsj9QLzhNqgZHLUagZ5-->≤ 10</td>
+<td data-page-node-id="46xZ4hhvmK75MVLC5aIqSH"><!--pnid:9eGTUB9XsL77cpDXr6izgg-->node_procs_blocked</td>
+</tr>
+<tr data-page-node-id="zcSQ6erJIHDWmGPzFEQsxF">
+<td data-page-node-id="QOMwSr19FsDhVupgPvWcp7"><!--pnid:EuZZJl2mNEIHN4kRK1vTRi-->fd 使用率</td>
+<td data-page-node-id="Wo3b6HGttkRwePU13xnNwo"><!--pnid:hFNm6yMQOLI68FXPGMinyR-->≤ 80%</td>
+<td data-page-node-id="1t3w001ZRFRWAUS6dGDaP5"><!--pnid:zIirkBK2KOQ0mCHXPNCJ9h-->node_filefd_*</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="ntIZt5r0iGy58U7nMLKc6K">
+<h1 data-page-node-id="kTiEtmfNkD9KNQpxl0dUBr" id="part-f-gameday"><!--pnid:PAAQCJu8SopQZI9Tn3EggJ-->Part F · 演练（GameDay）计划表</h1>
+<table data-page-node-id="mOTexzUGErUaHguXGAbEvQ">
+<thead data-page-node-id="YNTSTvOYgBVc5BS5Nw5bBm">
+<tr data-page-node-id="RQ9VJZHxXZ0tDVZvXgXXE3">
+<th data-page-node-id="sKGa0WxlqvlcdmU0kcqfeu"><!--pnid:Oo9rUDMnWSvR3ZJhcxI9ad-->场景</th>
+<th data-page-node-id="9m06qG4Cb3uF4xwhttS0tj"><!--pnid:6rGxLkOOPzMI4YXmZ8TNVU-->注入方式</th>
+<th data-page-node-id="0dX90aYPPC4RzzECLdG7ra"><!--pnid:b3fB0msxQuKkHv3jblLqyh-->期望表现</th>
+<th data-page-node-id="gbHRIi2f1sh8bHVbIoVIyX"><!--pnid:YQKZ4TULAKnjuJLgGNlppk-->验证的 SLO</th>
+</tr>
+</thead>
+<tbody data-page-node-id="xhsYDlKR9K8RpTtwwatCrE">
+<tr data-page-node-id="CH8oJaBAJg4FZfdB5ek7YY">
+<td data-page-node-id="SKm61vUQ4LHq540k6Z9Ghz"><!--pnid:EhafLUWQSJRV2sgYvc0BFH-->CPU throttling 事故复现</td>
+<td data-page-node-id="ionHFRaUVcGTBSQrnOqqt3"><!--pnid:EWTP32cpJSoTmxG3d0FIvF-->给某容器设很小的 cpu limit 后跑计算</td>
+<td data-page-node-id="N0f3H5shRY39Rz1Lzr5Ail"><!--pnid:70U9aFLvkY2JsZ8fl61nBH-->告警能识别出 throttling 而非"CPU 高"</td>
+<td data-page-node-id="QLZK80o38Dql2ynzasq6yr"><!--pnid:msyPzuwNCnxYGKGO7bdhwg-->限流占比 SLO</td>
+</tr>
+<tr data-page-node-id="izCLVBbAOUcqyJfPywdqfQ">
+<td data-page-node-id="ASRrjQCipcO769wxLWDMUS"><!--pnid:8Pgd3NdkvDImZ1EiWzgMN4-->容器 OOM 复现</td>
+<td data-page-node-id="6c8aoOn4TdtDxqrVNG8vkh"><!--pnid:RjpbLmkbDIfIyJMAAO2uAU-->容器疯狂写文件制造 page cache</td>
+<td data-page-node-id="C67wzmtM3ZUFOBOOxGdy7p"><!--pnid:5lVJJHyq1CaLltWGiJ42m1-->能从 <code data-page-node-id="vOkRsnbtjjFB3C404zW8HR" data-pnid-children="b5U3WKi6BROC8Eb60boSys">memory.events</code><!--pnid:qAwuCsoqsjoq2DxhrFL76R--> 的 oom 计数与内核日志确认归因，而非误判为 RSS 超限</td>
+<td data-page-node-id="zB1RFfR53RtOtJNgswCMqx"><!--pnid:woIyv2jaNsmaM6AEe4Hl6K-->OOM 归因准确性</td>
+</tr>
+<tr data-page-node-id="x8Zr2gwMpewyTOOQNHIENI">
+<td data-page-node-id="famYtLQwbprZ6dW484YSiW"><!--pnid:iq4VeSUkxMYKVBO51Ceq0N-->/dev/shm 耗尽</td>
+<td data-page-node-id="7P5AGp4wASe7CHx910jGeB"><!--pnid:aSgoIs7DItkV6pzkTIPXoA-->跑多 worker 训练任务</td>
+<td data-page-node-id="nBBkJ6znpxAT1DSnbgk0cz"><!--pnid:3OMKdWtlzNfkankU6DREKb-->有明确报错与处理手册</td>
+<td data-page-node-id="VCsgcCVSaphnHjcBbB60g1"><!--pnid:Qtvwn75fJxGiIopszpdfpG-->故障处理 MTTR</td>
+</tr>
+<tr data-page-node-id="xGtbYe7RP8mmdebBOz9owi">
+<td data-page-node-id="L0R5EJeXWIWwUm4sVXMZGY"><!--pnid:9WEvHyDcgdgOOL3yuVSyWL-->fd/inotify 耗尽</td>
+<td data-page-node-id="3bcxQ3sZibnaSOQOzfWOwp"><!--pnid:DhIVzrVtBIViYlPClRFWwg-->制造大量挂载/打开文件</td>
+<td data-page-node-id="LCfxGUmL16VisXHwJs71Ca"><!--pnid:A6yCjgZDiJL5dkAEoh8M9H-->告警提前触发；immutable Secret 能缓解</td>
+<td data-page-node-id="wylrcicH0XG40lMjldAQy5"><!--pnid:daEQRNcvCJ1loLvHog9FRR-->密度上限认知</td>
+</tr>
+<tr data-page-node-id="4HmmJPC8YO47Q7no09EJNh">
+<td data-page-node-id="7oYKMyvZeKx4UBBP82jkv8"><!--pnid:ygfOVHGqhIlpQlJEzcbM6F-->D 状态进程</td>
+<td data-page-node-id="4SwrBOMloz0pUEzlMw5VUu"><!--pnid:hP8flrPhZM9vpsIo8hMpNq-->让后端存储 hang</td>
+<td data-page-node-id="DrVx7cI8zHngKvEerrz4Ak"><!--pnid:0WEhCJJBBrKruywQlyEgoB-->能识别 cordon 决策链</td>
+<td data-page-node-id="pzL2NTtJmAElt0AhBquBwc"><!--pnid:jDIjn5ZadXsYkCtD8xVagA-->节点隔离流程</td>
+</tr>
+<tr data-page-node-id="SEwhFzkCCV9A4yeKyy6EU9">
+<td data-page-node-id="CWsiVFztmpuIvws38Uph5R"><!--pnid:mPaxi7FkEa7oooeN2aJ7a6-->内核参数漂移</td>
+<td data-page-node-id="q3rRhcCylUp3fVOi4FMYHD"><!--pnid:FivMYuXLLfojSvb0yOYZNt-->手动改一台机器的 sysctl</td>
+<td data-page-node-id="OftfIElEUsJWUC3c7AO19h"><!--pnid:H59eQhdK7Qcpm4eLhkB8B4-->巡检能发现不一致</td>
+<td data-page-node-id="QEGKBXrPCrGAvpB7grBSK1"><!--pnid:ztTPQNJu2Hayd7CcGXAKnA-->配置一致性</td>
+</tr>
+<tr data-page-node-id="Hr7EvskFiPqIxELBqEzvVF">
+<td data-page-node-id="Q8ePan7HRe1e1j0jvbb5wD"><!--pnid:KF3Fgy1Gxw0cpDE9ZTYofo-->conntrack 打满</td>
+<td data-page-node-id="acsaDZIZwnQKmsC6XLX4Dk"><!--pnid:OSJUAbEL34AuPJWooGoYQb-->短连接压测</td>
+<td data-page-node-id="n0VzhEmqRymx1gRnUfy2A8"><!--pnid:cKjaw1CLFIP7OEw7Wc1qFh-->告警早于丢包</td>
+<td data-page-node-id="swLEFcL3ujM6hsTF842zks"><!--pnid:cwobzNkin2Lwt9WpwvA1JF-->连接成功率</td>
+</tr>
+<tr data-page-node-id="AtdIrxvtpk1gCClyazA9OY">
+<td data-page-node-id="CmdycCNy2i3PINMfOzunRH"><!--pnid:gsGcVcZ3Ww9P1yA7noNoNM-->时区/时钟漂移</td>
+<td data-page-node-id="3QTFEIoHt1rOIiuhDaE00V"><!--pnid:UoITN3MIS2s3ILGTl2yr0I-->停止 chrony 并手动偏移</td>
+<td data-page-node-id="ML5JVFLKQ6MI6ZXQfigIv0"><!--pnid:8mqZlf53auDDiaxc5xlNb8-->时钟告警触发，证书/lease 行为可解释</td>
+<td data-page-node-id="U7oAOSGWLYuRD22M0nAdtZ"><!--pnid:3ohJs7lsDX1Umwc5DYjokb-->时钟 SLO</td>
+</tr>
+<tr data-page-node-id="S60KmGfLXHzfpbBxh60Be6">
+<td data-page-node-id="AUo6dS0Cbp1Xr3MJy6RMgx"><!--pnid:Ku7shDPFaIcURbO6PtMvB8-->镜像盘写满</td>
+<td data-page-node-id="FvNGph6FmvbLWlyTq6Qnp0"><!--pnid:P62bvGQxIW67JMbg0dsLnO-->疯狂拉取镜像</td>
+<td data-page-node-id="DQ8jWxi5IO6fwyEQ0jzT5a"><!--pnid:TSDCflnPZEKwNJii12Hwcw-->imagefs 告警 + kubelet 仍存活（磁盘分离有效）</td>
+<td data-page-node-id="wZ0fctkpuifk32WGRnutz7"><!--pnid:wCr0TJtuej0WoICBAp0iO6-->磁盘隔离有效性</td>
+</tr>
+<tr data-page-node-id="Ae9TNbUn60OCPYAMxqBP8Y">
+<td data-page-node-id="tSSrpEGQXJXgbTqtHfFs5b"><!--pnid:27mYmqFpA5O6JNZnV8ptz8-->cgroup v2 迁移演练</td>
+<td data-page-node-id="Ce3DF0jEzNSZhycABD3IqR"><!--pnid:f6ZzEgBCBjrcPyEb7FX0wZ-->独立节点池先迁</td>
+<td data-page-node-id="1e3XgDplqtdQKB0RbXTwFw"><!--pnid:BsHhWwTKGSwbYbtqABfjzg-->指标、PSI、编译差异、运行时兼容全部验证</td>
+<td data-page-node-id="jheDfV3Ir1zh3JrMrOVjBk"><!--pnid:zeqUOboCNE7kXpmY8oCtIV-->迁移可行性</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="PDUfe8cqh0Ig0jPpFsUkVA">
+<h1 data-page-node-id="wW4gwvsCLqbPuYGy3HwaYa" id="part-g-10"><!--pnid:kxBjOCM9aRCDQEnmumCyUZ-->Part G · 10 张面试速记卡（临阵磨枪）</h1>
+<ol data-page-node-id="YCvFTMwjF3ui4G0wzrhsLY">
+<li data-page-node-id="tUJOExxLsg0WRMnQoaUjQ3"><strong data-page-node-id="gQ2lOWjB1wzJuHrwh7nG0E"><!--pnid:PbzJR99qFBadNa5meg7SJs-->容器 = namespace（看得见）+ cgroup（用多少）+ capabilities/seccomp（能做什么）+ rootfs（文件系统）</strong><!--pnid:mKLRtBIz9iHF3Wu4UFSIPw-->。开场说这句，后面全部挂得上去。</li>
+<li data-page-node-id="uQqQlk2wdpGNwmC73aplF5"><strong data-page-node-id="9VYJoKIDF6cYoJWFpsl2OP"><!--pnid:nskay2cE37it29H8M2Gil7-->八个 namespace</strong><!--pnid:T5nXw7foeRWq713C1eWQLc-->：mount / pid / net / uts / ipc / user / cgroup / time；<code data-page-node-id="X9OfIm1Ia6o38axsEDZeo7" data-pnid-children="S5kor5To2q5U5N2fOz59gj">/proc/&lt;pid&gt;/ns/*</code><!--pnid:ZCMudIoOtAbS5gTkVC4Sb3--> 存在 ⇒ namespace 不灭。</li>
+<li data-page-node-id="H1tof8XZe48aj3ucsut1HD"><strong data-page-node-id="9MJZoYjd6im9fE5P0U0E1V"><!--pnid:L0LFCTW5gnIX8l9HgII494-->PID 1 两件事</strong><!--pnid:2yhwhlJbqBI0WZOh9aicrO-->：转发信号（<strong data-page-node-id="GxxiHXKjJYw6F9n9gMtJfr"><!--pnid:phF1Nu5Y4qUUJDHfeSppVp-->未注册的终止信号会被内核忽略</strong><!--pnid:MrpBUDWJ06giCXX1QQTyHd-->）与 reap 僵尸。解法：exec 入口或 dumb-init。</li>
+<li data-page-node-id="7OnsfxP0JVIa0kY44e3tA2"><strong data-page-node-id="I0X8sF0CTsNyv0MIzTM76J"><!--pnid:AuHyduX4wsYkzRp9dEAq1A-->cgroup memory 含 page cache</strong><!--pnid:XDH6QzdWrnvKy8FWkseOao--> ⇒ "进程没超内存却被 OOM"的真相；<code data-page-node-id="hgJVHqWYVsYmLqf7Beht5p" data-pnid-children="asnqCIARmdbLQ3QifxczK5">memory.events</code><!--pnid:Z0zadovQnP0wF5tTuWHzQD--> 的 oom 计数是最硬证据。</li>
+<li data-page-node-id="9YTBP9L60OnwY1dPHgmZq3"><strong data-page-node-id="DAvjLbfuRAX5UqMSzUvXW0"><!--pnid:rpjrpNGI9FyXrvsVYICy1j-->CFS throttling</strong><!--pnid:jnRPNg7Y7dQZQ379UJ820X-->：平均 CPU 不高也会被限流，看 <code data-page-node-id="vnkQgLSBT1UZHiLK8dgLtq" data-pnid-children="KA7OmYI2DtArQwau6gzYgN">cpu.stat</code><!--pnid:jKeelAkxGi7bOeVGpMAvSC--> 的 <code data-page-node-id="YHPhn7iggSsUUld5nqrfQQ" data-pnid-children="Ahr37E4KLfLmHCgky2Ybqk">nr_throttled</code><!--pnid:TvzdsADD8vp5hQlVpLrJ1G-->；在线服务建议少设/放宽 CPU limit。</li>
+<li data-page-node-id="KdLIE0pCa4SeR3h2vMbWAc"><strong data-page-node-id="DqbdgBG5gATu1gGzwg4HSk"><!--pnid:fPwSvY0aHJ6B9rVfLxKnNc-->cgroupDriver 必须和 runtime 一致</strong><!--pnid:IJB1Nl124PmT3ry4agZ82H-->（通常 systemd），否则两套层级、限制失效。</li>
+<li data-page-node-id="xWM0GrPFwNrObnFqcJX92w"><strong data-page-node-id="7iXzHagdOZfY3VYojO7uxA"><code data-page-node-id="OwLrvwHrw0G4oEh7E3xmUv" data-pnid-children="T5IX6hdbSzmDGfKHDWqA8W">privileged</code><!--pnid:DYrgpwZgsb6C0pjX9tjj3A--> ≈ 宿主 root</strong><!--pnid:xHrizWd2dATWJa62qc37nW-->；正确的姿势是 drop ALL + 按需加 + <code data-page-node-id="xsoZIiEaiU3sEzO8PHlJU5" data-pnid-children="WfXr9AYELeahpFH638V5B0">runAsNonRoot</code><!--pnid:tlJ8Pg5nOxA4n4YU2ywPLS--> + <code data-page-node-id="8tGltV1u64gVcKu7SR1Gye" data-pnid-children="gyIV8ywCx4cvbs0VYUt3tD">readOnlyRootFilesystem</code><!--pnid:NAJ5CVIN7211XbHjZwkLbM--> + seccomp RuntimeDefault。</li>
+<li data-page-node-id="izLpThycdypAnEuNrAPkvb"><strong data-page-node-id="pGKT9RSb2c3b5mwGbPVWhk"><!--pnid:xi4AGx6zmoHRJoqou6f4Hp-->overlayfs 的代价是 inode</strong><!--pnid:stBEawrFWY2ZGnjE9UdecN-->：<code data-page-node-id="M4KSgGAU90EToH6j4jddvM" data-pnid-children="Q2OdNd6A7KpqphSJ1Z9h5W">No space left on device</code><!--pnid:mWb9elP5p0U8kU7pXO9kYj--> 先看 <code data-page-node-id="KyODupT2qD3EUe9mFyT1zU" data-pnid-children="AHwhZZ9OMef91Tcsq1o9Zx">df -i</code><!--pnid:2jQjgbqEVzorZfcUePrMbF-->，再看有没有进程持有已删除文件（<code data-page-node-id="MfQ1wv402Cw7oEzIZtfr57" data-pnid-children="SShpBMJC13eUnfp0vKGMov">lsof | grep deleted</code><!--pnid:HyVDMJo8oPGpYjAsOXImkP-->）。</li>
+<li data-page-node-id="fo79XVKLUjCfUwZQBvpmuu"><strong data-page-node-id="6lslUjQwITNstbBl3VYVyr"><!--pnid:KnPX6Y9aPX7cKjucQvNYk2-->容器里 <code data-page-node-id="lO087sRDA3M8U9h5TufdIv" data-pnid-children="yYLhpgqHA1tfAzQeIf4eyg">top/free</code><!--pnid:7eqt64kHUhRmqxgOKcpMoO--> 看的是宿主</strong><!--pnid:s5kRzRgqEiAa1lHNRDkRkt-->（procfs 不隔离）；权威数据来源是 <code data-page-node-id="OMD18qg9sHWllc9QeleFGq" data-pnid-children="W38pBQb1DkYZwWNwJPq9BN">/sys/fs/cgroup</code><!--pnid:SS3qrz8goLJsoZKXupvD67--> 与 cAdvisor。</li>
+<li data-page-node-id="pSBIgicTSuVSBP4uxvuMyo"><strong data-page-node-id="Z2wgBavmp3bi4oM4AUxmVt"><!--pnid:FKrFjgm5xcKNNgQTdzuzbA-->节点参数必须版本化</strong><!--pnid:lXn8TlnKf1nSwHu4ofi2kB-->：sysctl/运行时配置进节点镜像，按池灰度 1 台 → 1% → 100%，内核/cgroup 驱动类变更不可原地回滚（要 drain 重建）。</li>
+</ol>
+<hr data-page-node-id="G0KxyCD41ZOUE6cXSh2oG9">
+<h2 data-page-node-id="MecpqJTdBhk9S5fJbw7W57" id="_1"><!--pnid:EQTsWBCUIUxmiLuuDdh2dt-->附：文档自查清单</h2>
+<ul data-page-node-id="BoivDZjJul1A9o2huiMhAl">
+<li data-page-node-id="3k6onG3lkUWQmd7IAIWqqF"><!--pnid:QZFrIXy6TiiiHKyOkN2AUX-->[x] 每条建议配了可直接套用的 Dockerfile/YAML/sysctl/PromQL/排障命令</li>
+<li data-page-node-id="6wcJNgzVwu3GFKLUEj93hR"><!--pnid:bzAdVNi5mOeWYw7pTXfD3W-->[x] 所有 sysctl 与文件名（v1/v2 差异）标注了"以所在环境实际为准"</li>
+<li data-page-node-id="SpGVUNdsLzRKdxjyZbAlS1"><!--pnid:axaQWKWBULKAYdNw8mmaGd-->[x] 未提供任何未经实测的性能数字，均给出<strong data-page-node-id="NYRRE15EGUn08HWl4yN0Ce"><!--pnid:d8CLkP6pSN4xsgU0mdB9Fa-->测量方法</strong></li>
+<li data-page-node-id="amEvlZHDjNnEEiYbXULN20"><!--pnid:XIG3oUTsbkkwmU2KTdGBgx-->[x] 反模式清单含：证据 / 等级 / 修复 / 验证</li>
+<li data-page-node-id="g8vRLJJpfgvJsC90SMNMcs"><!--pnid:LZ9kzruPARiBBldV2iXqjk-->[x] SLO 标为建议初值</li>
+<li data-page-node-id="EUSt3FZy8Eaf53j3fHN7gW"><!--pnid:k9P2qIKoMVWj2xt37JYHF0-->[x] 节点级变更给出灰度比例、回滚方式与"不可原地回滚"的风险提示</li>
+</ul></div></body></html>

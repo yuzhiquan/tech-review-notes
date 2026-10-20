@@ -1,0 +1,2008 @@
+<!DOCTYPE html><html data-page-node-id="RHS5Bp41CVSuUgrcBfUs3E" lang="zh-CN"><head data-page-node-id="TBmSCruyc8fpqfbolPpJiC">
+<script data-page-node-id="RhDQ5XSGWuybNQHenN6i8f" src="/page/page_comm/inject.js"></script><meta data-page-node-id="2W15u2U2Kzl6jTy7omZCcx" charset="utf-8"><meta data-page-node-id="iCmCiCA2E6R8TMrV82h2JL" content="width=device-width, initial-scale=1" name="viewport"><title data-page-node-id="bax9PJX34bsbw5MO44ZtaZ" data-pnid-children="eJ6vq8kYTPYTjixbsMPous">Kubernetes 存储 / CSI 面试题全解析</title><style data-page-node-id="6wBoNuyLGwOE1cQZKw4BHS" data-pnid-children="QuOkmAUxkSCeXOHi8sK9gK">
+:root{--bg:#0f1115;--fg:#d7dae0;--muted:#8b93a1;--accent:#4aa3ff;--card:#161a21;--line:#242b36;--code:#1c222c;}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f7f8fa;--fg:#1f2329;--muted:#5b6470;--card:#ffffff;--line:#e3e7ec;--code:#f2f4f7;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px;}
+h1{font-size:30px;line-height:1.4;border-bottom:2px solid var(--accent);padding-bottom:14px;margin:0 0 8px;}
+h2{font-size:23px;margin:52px 0 16px;padding-left:12px;border-left:4px solid var(--accent);}
+h3{font-size:18px;margin:32px 0 12px;color:var(--accent);}
+p,li{margin:8px 0;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;}
+blockquote p{margin:4px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+th{background:var(--code);font-weight:600;white-space:nowrap;}
+tr:nth-child(even) td{background:rgba(127,127,127,.05);}
+code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--code);padding:16px 18px;border-radius:10px;overflow-x:auto;border:1px solid var(--line);}
+pre code{background:none;padding:0;font-size:13.5px;line-height:1.6;}
+hr{border:0;border-top:1px solid var(--line);margin:44px 0;}
+a{color:var(--accent);}
+strong{color:#ffffff;font-weight:600;}
+@media (prefers-color-scheme: light){strong{color:#0b2c52;}}
+</style></head><body data-page-node-id="Km6bw9ViZCL7HA6cMf1rz7"><div data-page-node-id="ifwazAVeXaxCvOZJeQ9IdA" class="wrap"><h1 data-page-node-id="FQe61IFF0huDqSDSZmAUV5" id="kubernetes-csi"><!--pnid:6taO4fayqMl69GHodj44AY-->Kubernetes 存储 / CSI 面试题全解析：原理篇 × 方案模式篇 × 大规模优化篇</h1>
+<blockquote data-page-node-id="yPNohq6rSR7SVtLPNQH5YL">
+<p data-page-node-id="wmfCLi2rFlNAwPJyHqivJB"><!--pnid:54f0rmnGkM84aVEUuYHnmD-->适用角色：SRE / 云原生运维 / 平台工程师面试（社招 3 年起 + 偏高阶）
+姊妹篇：《Scheduler 篇》《Kubelet 篇》《网络 / CNI 篇》《控制面篇》
+版本约定：以 <strong data-page-node-id="7KpN3vEYTPbSWFR73wNAGG"><!--pnid:qwne7HmQKevTlU3X9clYxT-->1.28 ~ 1.31 主线</strong><!--pnid:Yo6MkIJQCj0y4bCjW8wAHh-->为准；凡涉及默认值、feature gate、GA/Beta 状态、flag 与 sidecar 版本的地方，一律标注"以所用版本官方文档 / Release Notes 为准"。</p>
+</blockquote>
+<hr data-page-node-id="3UPjheXmWNwZZ2kJcsJjrT">
+<h2 data-page-node-id="5Dqb9Ch10L4I8O6f5YO7c6" id="0"><!--pnid:6sSKcxkCCZ424AqUAiHHFJ-->0. 使用说明</h2>
+<h3 data-page-node-id="akLE0xNKC7ZkrvlJ3nmlZP" id="01"><!--pnid:0WXELSoOMxqFb8HxE6zo8K-->0.1 存储方向的考察层次</h3>
+<table data-page-node-id="m1gZelZre0xS5CvN7OmzNk">
+<thead data-page-node-id="onmKfXsaiACno1Ljq6Gfrl">
+<tr data-page-node-id="QrWYmvYr47BZdwu4ikycyA">
+<th data-page-node-id="Xv2n95fIZ2Nb0xzuRltsE7"><!--pnid:PN8u8ADJ3VBokJbfladBgK-->层级</th>
+<th data-page-node-id="8aqbZRlQZLMwvfI7wfvNxl"><!--pnid:oRR4gjh3BmnKyRm6NgoJCv-->考点</th>
+<th data-page-node-id="jUwHIUctgBq2wYRiOzUBKU"><!--pnid:o6WA4LrSi4oLSKPGLtXOXK-->表现</th>
+</tr>
+</thead>
+<tbody data-page-node-id="YeAAY80rrBche4unuYKfAY">
+<tr data-page-node-id="n2RS6qFzHBWKwXCY7V7A91">
+<td data-page-node-id="FqqHsnEcr5YAFrEv4Tf8Gf"><!--pnid:TxdQREAENhu4meoFbk26qW-->L1 会用</td>
+<td data-page-node-id="6g2mS4XTvvfGUeQxhVRuES"><!--pnid:pVr2rUh7ZJF0SkU91tFQTb-->会写 PV/PVC/StorageClass YAML</td>
+<td data-page-node-id="h0OQiiTcEhbKIAhD6LGGmD"><!--pnid:MBdUhOoi5PvX4mt8ciYwau-->只会 apply</td>
+</tr>
+<tr data-page-node-id="EFSZLmsvSBPk9KwV1RI61C">
+<td data-page-node-id="VNXVgwWq47BHfu3LQOlFbH"><!--pnid:58FFn1X0rA0VPS8DHVmb1y-->L2 懂原理</td>
+<td data-page-node-id="muhhAlRTlYgEdp8EfC0rW9"><!--pnid:gMB80C59cEkEfoaVU4OsX8-->说得清 PV 绑定状态机、动态供给链路、CSI 三个 gRPC 服务、attach/stage/publish 三段</td>
+<td data-page-node-id="YwbabRuY187v1KFh0Q9kmZ"><!--pnid:achzbhfWmaAMIwMLvol3DN-->能画全链路图</td>
+</tr>
+<tr data-page-node-id="s0IkRfYhRfGCCJ8PtA1sNv">
+<td data-page-node-id="dQ4nQEel8CNLGClUt3wMIQ"><!--pnid:YpDpC0j7FSoKqFFsrb73aP-->L3 懂选型</td>
+<td data-page-node-id="u0AmJdKTMRtyuIOWIlORDe"><!--pnid:2PtTlRkBBTs6S5NHtIhwnr-->能比较块/文件/对象、各 CSI 驱动能力矩阵、AZ 拓扑、访问模式</td>
+<td data-page-node-id="8LGmdgaH7LnSZTySU3Ebhr"><!--pnid:QqenLsB3wFJCrEwkhCFDWx-->能说 trade-off</td>
+</tr>
+<tr data-page-node-id="aHqCxKSyguDdKE6Z9cO0R0">
+<td data-page-node-id="nyYM93KY3bnlCYpd9m4RnE"><!--pnid:AEsQzjCXqVAFcB4wuYO6q1-->L4 有事故经验</td>
+<td data-page-node-id="B4HTjBnX9YlkVEhf5qJ5uE"><!--pnid:0V5YXiMLT7YvRQEqG4FUzW-->能讲"Pod 挂着卷 20 分钟起不来""有状态服务跨可用区调度失败""卷删不掉"的根因与治理</td>
+<td data-page-node-id="wibaqtRwNaPOXx0x2pf2kQ"><!--pnid:nivDHncjIKZBOFkaHJPuXe-->有排查命令、有灰度、有回滚</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="WRrXJF6KwT9R42y5hOac4A">
+<p data-page-node-id="Zykl23WcegfaYMLJQlbjnd"><strong data-page-node-id="U5k57dwh6dn2ZKRemWB158"><!--pnid:jjiIzVXgZKuqUJYIMzKRf6-->答题模板</strong><!--pnid:9mDxbZ8g7OYBWuTLr5WIuH-->：先说这条链路上的<strong data-page-node-id="TVGivOeagtHKdq1ZqIkSBN"><!--pnid:zwmwd4CV1ULurnhFSfCCel-->四个参与者</strong><!--pnid:XhylCePpFeqmfkB5jr3ird-->（PV Controller / CSI Controller / kubelet / CSI Node），再说各自做的事，最后给证据（配置、对象字段、metric、日志/事件）。</p>
+</blockquote>
+<h3 data-page-node-id="FzoUUjLduc1bpqAHjw1Pu0" id="02"><!--pnid:RtSbJWjrWGtqImSzlfUFT6-->0.2 一句话区分四个层次</h3>
+<table data-page-node-id="yBj6fppAecxI7pToOjl0ql">
+<thead data-page-node-id="LdEaObwVW6W18dzw788wrt">
+<tr data-page-node-id="fMt7XF4Y8B4Y5LNetegFD0">
+<th data-page-node-id="xP8TjQHjwzqC7bQ2Yd98nF"><!--pnid:jbITRFG9ZZWfCiVcxPXpHK-->层次</th>
+<th data-page-node-id="bv3ci0uTYE7PJZUpPTxKBN"><!--pnid:cPnX2eSHes8gyZHEMEjwYw-->对象</th>
+<th data-page-node-id="84bYbP9LKOUAnAKdU5Ivub"><!--pnid:YxMChwEKrpyz2ehvkOfEd4-->谁定义</th>
+<th data-page-node-id="udLWobY1AiPdXCXc4u1XTB"><!--pnid:3yrFMwwb4oEmjQHB4gnmRk-->生命周期</th>
+</tr>
+</thead>
+<tbody data-page-node-id="6NhBKbSQFIcI9YECxJTHNy">
+<tr data-page-node-id="isUokJSkvSjn2DoHw4YYvx">
+<td data-page-node-id="US8duUzZ2fB3Oj9ApI5BiC"><!--pnid:EpQzw6C8w6qhWdWgN61dr6-->Pod 内的 Volume 声明</td>
+<td data-page-node-id="O6QSSDnqkscACBxuN5vVRt"><code data-page-node-id="siu5jbPT4VuSohZMWO68xY" data-pnid-children="osBGIYzExH6AjeLewtXF4N">spec.volumes</code></td>
+<td data-page-node-id="mqBaxv1jlEtKCpDFX2cMnO"><!--pnid:CKy8768R0sAqlZrv7iEEbY-->应用</td>
+<td data-page-node-id="976Ooa88ByHasalBRCVYbc"><!--pnid:DrvwuRqIdL4kpRtfsbTlAO-->与 Pod 一致</td>
+</tr>
+<tr data-page-node-id="vmcUPx7YyRgEHGTudrVUox">
+<td data-page-node-id="eCZUFyxluN2loeqnIolCYg"><!--pnid:pDX3R1xbOrsMrUw6XmFD0U-->用户申请</td>
+<td data-page-node-id="WLOV2zj2v2r6aPZzlDboU1"><strong data-page-node-id="1hqe632v5wtApM8ZWOb9wz"><!--pnid:GCSt8pcVuVU3h3Ze7xdwEn-->PVC</strong></td>
+<td data-page-node-id="XQPyq4UqnHogyDMzRmC0Uq"><!--pnid:Oog3WlAwp6am3XUqFCoCHm-->应用/平台</td>
+<td data-page-node-id="AvcEtJ8nSGp5JPePk92d2L"><!--pnid:YbqMHX7BiWHxKu46ptzZEJ-->独立于 Pod（关键！）</td>
+</tr>
+<tr data-page-node-id="4VN0JPejcNOx9WbXfYXeqn">
+<td data-page-node-id="G2buHmm2xAdxnrgXA18UkG"><!--pnid:sLPG5XtUmIhUXsq8cGZzNg-->集群资源</td>
+<td data-page-node-id="R31LwzMsPLgYEZCOaHh43j"><strong data-page-node-id="7P5iYjfdR8MSw3nXnXIqUJ"><!--pnid:E3vOy06d5RsSREGXqqVOkz-->PV</strong></td>
+<td data-page-node-id="H18yOGSDhXpkZnT1w8J3Ey"><!--pnid:Sk89kwmU9YnNRkMXPNqIBC-->管理员/动态供给</td>
+<td data-page-node-id="FQKAufSaNrJIUvNyGeznEK"><!--pnid:LgQPUE9VzXivOsy8GuC2eH-->独立于 Namespace</td>
+</tr>
+<tr data-page-node-id="dCdRTdX03NbrjQy8VB2LNQ">
+<td data-page-node-id="GD5L2tOqFKYHtG9MXnaosI"><!--pnid:1MDQHnwxxr2UXb6myVBRyy-->供给模板</td>
+<td data-page-node-id="PhDEUMA2E0oY8kk6yWfCCI"><strong data-page-node-id="GOEhbvlcsrYWF0SgenR5fR"><!--pnid:PvqICfCDB9n6fH5ouvlph6-->StorageClass</strong></td>
+<td data-page-node-id="9nxworUB4SOs5bxD96Lgcj"><!--pnid:VfWtwpyiKOUXdlLHFQiZTO-->平台</td>
+<td data-page-node-id="TOqZ3oedum4giWcyBGu3r3"><!--pnid:4t8k8BOW3TaFbcMdL8Sggi-->长期</td>
+</tr>
+<tr data-page-node-id="nTrNbpg0m1jpp2Ir371qgq">
+<td data-page-node-id="iaxkWNw6AokHFUqyKA7Gl1"><!--pnid:DVMMQT4dyZIiEDlfCiHv46-->真实实现</td>
+<td data-page-node-id="DkQ97LRwz05zOn3K3oLYWo"><strong data-page-node-id="vtwNUWJEMaitVALqrSttIx"><!--pnid:TIPbq3bTIiUwkoVIGwRd9V-->CSI driver</strong></td>
+<td data-page-node-id="K6BcMYugdVToOgyQO14pZN"><!--pnid:5jBsJMum4ELbC3U4VHlxf1-->存储厂商/社区</td>
+<td data-page-node-id="z59jBHXsnVKWlacbUYf7SP"><!--pnid:ef0sq6pwrrTh0jHIorkAAq-->独立于以上全部</td>
+</tr>
+</tbody>
+</table>
+<h3 data-page-node-id="JiI0TbV0gehZxhQwhurSfj" id="03"><!--pnid:aGalH9qDXXMklu5OXWzEpO-->0.3 数值约定</h3>
+<ul data-page-node-id="sqJHfLAKprU6WZFkOuCsYR">
+<li data-page-node-id="KqjsJLG3TpFIDTh0rmXDA8"><strong data-page-node-id="3YXXq8f8URn0V3xMC2yw31"><!--pnid:mWV8xWU0d1MvJphYyldzNF-->源码/官方默认值</strong><!--pnid:KEMp6rIBWt9NUVJHN6CxlT-->：标注字段，提示现场核对；</li>
+<li data-page-node-id="EvsiDCPwCtZalAOmQy58Pj"><strong data-page-node-id="Me88RjAFf4txJxfVD94e37"><!--pnid:xY33ybGwD4H8lGsnoB6khy-->建议值</strong><!--pnid:jxUlZg0S8kRiV6fiF0Bo3m-->：标为 <em data-page-node-id="WWb7TbdsBV9hYBZTWzttsa"><!--pnid:sN4RBTraB4xitR7SW6KLLn-->建议</em><!--pnid:cgMHVBJEYu3Jc0woToaDgV-->，必须压测校准；</li>
+<li data-page-node-id="vYYCWTtjHXc4G3KUrzP0hj"><strong data-page-node-id="OiiPr5n3etm2z5xB3tNKZs"><!--pnid:mBGOMkJZXWta76oxpSkZiw-->实测值</strong><!--pnid:ctewGo7EBmthXjZ7q6Pos9-->：本文档不提供任何未经实测的性能数字（IOPS/吞吐/延迟），一律给出<strong data-page-node-id="iM0O8jtpFRKsGxxaVqKkA9"><!--pnid:ucRCX2ylC0EpTnqZFzMVMC-->测量方法</strong><!--pnid:OzUxw0T2o0la3LmeruplVS-->。</li>
+</ul>
+<hr data-page-node-id="yjs6ptMwRuO4NMw6njQs3J">
+<h1 data-page-node-id="Pqa5dXe7rteG5TDUglgb9F" id="part-a-24"><!--pnid:d6yYVjK2JqjKnewa4gGdPL-->Part A · 原理篇（24 题）</h1>
+<h2 data-page-node-id="4Bo6jCQZU9RROPHBvRUYfc" id="a1-k8s"><!--pnid:eTBDoiAohfPTMxj6VY6Heu-->A1. K8s 存储的四种抽象各自解决什么问题？</h2>
+<table data-page-node-id="2IHVvWSO1DPjPmMD33TNNa">
+<thead data-page-node-id="XDppBaoOwZFpfe04HTLRyc">
+<tr data-page-node-id="w4fbS0CJQx1rqhGeVmqjtP">
+<th data-page-node-id="z9tZaQXUIgFJZv9NQR2rKQ"><!--pnid:P06u0Xz0iicPnJRa5WtLnS-->抽象</th>
+<th data-page-node-id="PqLlLd6tH1DlbODXvyeDxI"><!--pnid:Hz9pvB3m7nllqw5wQVk1sB-->解决的问题</th>
+<th data-page-node-id="mfFQSi8kD7rsjuHCbeM58H"><!--pnid:pRDvmooQBY6ipmjEUiT1HR-->关键点</th>
+</tr>
+</thead>
+<tbody data-page-node-id="hrINf2a5lz3PKrXEKe0P9b">
+<tr data-page-node-id="hh8eBV1Qr3KBCQtNRFYjKa">
+<td data-page-node-id="FUq7DWdvi3MiAXJt8Qh7qC"><strong data-page-node-id="bWe7PwSJZ2Vw4SgMAr4fSU"><!--pnid:y9VQ2NAg5AtighOtVF8zyz-->Volume（Pod 内声明）</strong></td>
+<td data-page-node-id="LKgYQhUKKXrFR2XJTLwfM8"><!--pnid:TADcdWzzlSk3TzSgrXLE05-->让 Pod 能用上各种"卷"（emptyDir/configMap/secret/csi/pvc…）</td>
+<td data-page-node-id="OnBjKnhM0L341femClkTAt"><!--pnid:P961MkOlEvYpXxRibW4Ycs-->与 Pod 生命周期一致</td>
+</tr>
+<tr data-page-node-id="2NKSixtqELp3aClYoPmurJ">
+<td data-page-node-id="zijJ1byskWwtv8P9A54NdK"><strong data-page-node-id="J9x8jdP66PXiO58vTquqhd"><!--pnid:a72Z98KKHtJicf0Hr0sm1Q-->PV</strong></td>
+<td data-page-node-id="ci1z0bdhdQEN9w9JWg5ayr"><!--pnid:B7pePToD1RMKmRZUtjjUpT-->把"具体的存储资源"抽象成集群对象（容量/访问模式/回收策略/后端信息）</td>
+<td data-page-node-id="qHTmpqHdVDW2qJcvl2TMX9"><strong data-page-node-id="IPVsBiLQAb0bjO6OMyOdDp"><!--pnid:Z4BKoWkLzJ5Re8KKjct7yv-->集群级资源</strong><!--pnid:zStizY7BBF02kMZtyrhCrU-->，不属于某个 namespace</td>
+</tr>
+<tr data-page-node-id="nsviY9NoWeDirikR3IUOcE">
+<td data-page-node-id="fKUoTTXnWlwShbydgugmwU"><strong data-page-node-id="SQNKAyFMH1hAPbNmjKSRb8"><!--pnid:6DMqNdT1hzwAjocBFfSjlC-->PVC</strong></td>
+<td data-page-node-id="4oZE25a1rkdWnyGO9xdQsW"><!--pnid:pE7bBhomvGALmPHHXYr6cL-->让应用"只要提需求"（多少 GiB、什么访问模式、哪个 SC），不用关心后端</td>
+<td data-page-node-id="B4SQKMEZVZh6DR0t2EhGgi"><!--pnid:rdtTShLN3Fw7saInWFdnFY-->与 PV <strong data-page-node-id="2rs3QuZvnKbd5rxq2WVDrq"><!--pnid:MhvAoRCdEpjyEVZyV85OS7-->一对一绑定</strong></td>
+</tr>
+<tr data-page-node-id="wawaLSpuhD9jry20cctuQE">
+<td data-page-node-id="G0YIrNAXD7IwELcxvHHIXs"><strong data-page-node-id="PWvZHLZizMyt3CmVSGA7RB"><!--pnid:y9umJvYMBAfQ2iA1QnOia8-->StorageClass</strong></td>
+<td data-page-node-id="dx7z0oZcuWkBY4qr8yQwxy"><!--pnid:CQ9MJmCm8v7igQ8ZvuV44j-->定义"如何供给"（provisioner、参数、回收策略、绑定模式）</td>
+<td data-page-node-id="HkqWsgUROKZcH7CHdZDMrt"><!--pnid:nuz1JOgnmy3KQSMCdUIfcL-->支持<strong data-page-node-id="NXQPzBdlOgkoXb8AJhb2JE"><!--pnid:VxKvnr2d8mPptiVHJgQJBJ-->动态供给</strong><!--pnid:rHOGmhZUqhBePedcGi5LO9-->，是平台能力的边界</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="eMtDWKC2MyFvTmDDVQfjpU"><strong data-page-node-id="YrgppZeMOICY7V6UuUBJyj"><!--pnid:7cEu4nOTQa28WQOrxrzqca-->必答</strong><!--pnid:TEhTYFMObx08MkOCsjVCW4-->：PV 与 PVC 的绑定是 <strong data-page-node-id="gIHb2CDk3blzpNd3kEOR8n"><!--pnid:oLUOjL86fGZrsytWZH1XPv-->1:1 且独占</strong><!--pnid:FfuVXzLNoHAIzmODnU1nFc--> 的；PVC 的生命周期<strong data-page-node-id="Ld3FbUYWv3GWzZ0VGeXWMw"><!--pnid:LepQNfUJh9RuO6u4CPoP82-->不跟随 Pod</strong><!--pnid:m7YyC3d5JGsyBSEKL6xtMs-->（这是有状态服务能重建的基础，也是"磁盘泄漏"的来源）。</p>
+<h2 data-page-node-id="QJbvXyXbmJBkaxrWqyO355" id="a2-pv"><!--pnid:j02znyXTBe2BT6S6xavNMn-->A2. PV 的状态机是怎么走的？各状态代表什么？</h2>
+<pre data-page-node-id="UEd4mHL17hf3M6gw9TKGxG"><code data-page-node-id="EizUAYJVPeOyZJK7cSaSd6" data-pnid-children="oeAdykQWEwf33gIZ48bcAl">                 静态创建 or 动态供给
+                        │
+                        ▼
+                  [Available] ────── 被 PVC 绑定 ─────► [Bound]
+                        ▲                                 │
+                        │                            删除 PVC
+                        │                                 ▼
+                        │                            [Released]
+                        │                                 │
+                   回收后变可用                    reclaimPolicy=Delete → 删除后端资产 → PV 消失
+                   (Retain 需人工清理)             reclaimPolicy=Retain  → 保留 PV 与数据（人工处理）
+                                                        │
+                                                   自动回收失败 → [Failed]
+</code></pre>
+<table data-page-node-id="zTApmGFUZHjXZfHrVdJh85">
+<thead data-page-node-id="94iD8SAwRsWP9YwXnCqCv9">
+<tr data-page-node-id="AICkMlRozivHUehZHrnoL0">
+<th data-page-node-id="VVbtaFSmevPUj74DYU7A8P"><!--pnid:OxQc0ZSBKwvYl5mgcfkelJ-->PV 状态</th>
+<th data-page-node-id="Z3RC3pSvUPkdiiEEfsMy0w"><!--pnid:ROx1N9zw5QUt1PRnG8WIW2-->含义</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ihNjafGYgStjzEsXlXkDxQ">
+<tr data-page-node-id="BjDES3kJltBV6ZtFrYrynE">
+<td data-page-node-id="PjebJs52GRLWEczC6j9OQJ"><code data-page-node-id="dc7eAARctFtkjlvAa7O8SY" data-pnid-children="YmlXpjcgKa2494ZcGppK1z">Available</code></td>
+<td data-page-node-id="OL6utyXibBj02qpzcQA1Vo"><!--pnid:Nevdi0GYaLSkh3nWKHnCxD-->空闲，未被任何 PVC 绑定</td>
+</tr>
+<tr data-page-node-id="QzyHKZ4UOTCFn1mmpSAZTp">
+<td data-page-node-id="ez1IpO9VNVgMG840qC9K4s"><code data-page-node-id="Z1n8eWuK8nYhKAzsdKaaTq" data-pnid-children="BQijLriWoD0AfcrONIkvMH">Bound</code></td>
+<td data-page-node-id="IPhdQJ04JMFOtnEYIe5OCb"><!--pnid:yYBF2W9CsntBTEfFBJmMW2-->已绑定到某个 PVC</td>
+</tr>
+<tr data-page-node-id="CYqyfQz8UH13vhviueGZJF">
+<td data-page-node-id="q804mzsuwayuS6in1WPfsA"><code data-page-node-id="K55j5UsMuieH4gnU8rjL1c" data-pnid-children="yk8TBnNBEenOXykYnnxhS1">Released</code></td>
+<td data-page-node-id="na56jW5n5sJbjYo8smNY87"><!--pnid:hcU0b1zyyQhs2kYwTY0wbN-->PVC 已删除，但后端存储资产还在回收中</td>
+</tr>
+<tr data-page-node-id="JwDQSykXK9HfvDbmKjG6Nb">
+<td data-page-node-id="6HmnZubkJwY7waR2XHk1yU"><code data-page-node-id="xQmVlpUIVyfWGqUJmt4iwU" data-pnid-children="RVzZdr7806NGPAASGfqymD">Failed</code></td>
+<td data-page-node-id="WuabUUSajiGje9kqGRiXMO"><!--pnid:nvd5bnHpMdrnMheVMEdhth-->自动回收失败（多为后端 API 报错/凭据失效）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="LqniOoZ56c2p3NLKr7rcJY"><strong data-page-node-id="PNcb306WfOZMVJRakt3G2c"><!--pnid:dzbCXJk9X5qkUBzbT4qxIj-->PVC 侧状态</strong><!--pnid:ZSqS0UdJl1JBTlFE8SJoyZ-->：<code data-page-node-id="Z2awT8hE4JvuqNQC7JHcfZ" data-pnid-children="O4FDL4dVOmJwUlCCcEeAIy">Pending</code><!--pnid:MQt0mJJzdjtU1iyrIU7ATV-->（未绑定，最常见）/ <code data-page-node-id="oixMNoMBSLO7TLEdNqJ6vr" data-pnid-children="liRMbMHm2oTcfrlvbl1wrZ">Bound</code><!--pnid:2HV7A2FkVRRks0LSb1XkcK--> / <code data-page-node-id="cmFbb5kPSmPRtpnXbgbLS1" data-pnid-children="YUMhfvt99zCJgIU16EPbr8">Lost</code><!--pnid:8LKUzKLKPu9dzu2YqWPOiw-->（PV 丢失或异常）。</p>
+<p data-page-node-id="ym5toaxNGphPbDPMn5BQdI"><strong data-page-node-id="JFXNepodP8gQwVcSWBQLS8"><!--pnid:0jiTYN1NmwAjrUsuj2Scpt-->必答的回收策略</strong><!--pnid:dXrknYkk0LWRJe1qnrKcYk-->：
+- <code data-page-node-id="NFDAoJmGn7T0htLcyPU4Hm" data-pnid-children="inKBw2H6qgSEPWXH98oUIl">Retain</code><!--pnid:YvMcfCmrqZVXt6EUmHOfUU-->：删除 PVC 后 PV 保留，<strong data-page-node-id="oqrciaZYHVBm1lbZbucqY2"><!--pnid:VOv46M46iWV9bqTHYUzQGL-->数据还在</strong><!--pnid:YsxLzTJR0A9VyIqNGoYq28-->（合规/防误删常选），但没人自动清理 ⇒ 容易堆积；
+- <code data-page-node-id="wnuDBjdNGu2YXzwNtZXitB" data-pnid-children="0hSSiCdZ8rffTjQrIGKphX">Delete</code><!--pnid:pXgNsc9vIjsYEomWcPZMZ7-->：删除 PVC ⇒ 删除 PV ⇒ 调 CSI <code data-page-node-id="vxU9CP4kvBptxw3iSTYVLA" data-pnid-children="OYyUkMlw3lLzLZRlMzDgLG">DeleteVolume</code> <strong data-page-node-id="Y8HFxsIGR8wqhZ0aTZxHeM"><!--pnid:bMyQpyAfmAOauI0RlnRLas-->真删数据</strong><!--pnid:C7MZgG4gPXAnQo3GL8bMdN-->（默认行为要看 StorageClass 的 <code data-page-node-id="ANeiqIkS6Mq22HsR4CdXEh" data-pnid-children="ptCjZcBhxgxoTul6Md4xYj">reclaimPolicy</code><!--pnid:StK6Xh0kpxgKfl8JUB80Vc-->）；
+- <code data-page-node-id="TGPUYcFfo9kNxEWZCVx7CI" data-pnid-children="Iu0ebxFN2DauzAcZMKB7gJ">Recycle</code><!--pnid:ecoY4wtmWAt8oNj48inCPk-->：<strong data-page-node-id="CS7QjtCkg8bREKoPkFupUq"><!--pnid:izdDXAfPXYtyYFaIKd3bke-->已废弃</strong><!--pnid:QspEsm0YUDCIn1Cefd0FCS-->，不要再说它是推荐做法。</p>
+<h2 data-page-node-id="gfWDfOqcq6bXUwps0Q8SpE" id="a3-storageclass"><!--pnid:KRqnot4yKMLQhVzDtjljwp-->A3. StorageClass 里每个字段都会问什么？</h2>
+<pre data-page-node-id="vpMVSPU3KOD2k1KN80OGV4"><code data-page-node-id="wqrWeU3Tm56SwhtHjyVfUm" data-pnid-children="0fBcPSDaA9DHGTW2igmnnR" class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.com          # ① CSI 驱动名（必须与 CSIDriver 对象一致）
+parameters:                            # ② 传给 CreateVolume 的参数（驱动自定义）
+  type: gp3
+  iops: &quot;5000&quot;
+  throughput: &quot;250&quot;
+  encrypted: &quot;true&quot;
+  csi.storage.k8s.io/fstype: ext4
+reclaimPolicy: Delete                  # ③ Delete | Retain
+volumeBindingMode: WaitForFirstConsumer # ④ Immediate | WaitForFirstConsumer（★ 高频考点）
+allowVolumeExpansion: true             # ⑤ 是否允许扩容
+mountOptions:                          # ⑥ 挂载参数
+  - noatime
+  - nodiratime
+allowedTopologies:                     # ⑦ 拓扑约束（配合 CSI 的 accessibleTopology）
+  - matchLabelExpressions:
+      - key: topology.ebs.csi.aws.com/zone
+        values: [&quot;cn-north-1a&quot;, &quot;cn-north-1b&quot;]
+</code></pre>
+<p data-page-node-id="pvaaKhIXUfDmOKnXjMKU1T"><strong data-page-node-id="CuJTsX6WETzQPv3grOvIPi"><!--pnid:7vx0DbbPDpFl1bXU0GZTyE-->必答</strong><!--pnid:blcTIhB67MYKwfrU4DmHjL-->：
+- <strong data-page-node-id="WvfkJuxWSFvuFQGOstSMYQ"><code data-page-node-id="zHmTL48C7jHhGpxJJn1bBy" data-pnid-children="Ugl1DtxfjK6IlxnpSjVFzl">WaitForFirstConsumer</code><!--pnid:eSl0rqUFIs6kQW7fJUO0q4--> 几乎是所有支持的 StorageClass 的推荐默认</strong><!--pnid:uyWLB5ObNrOTs9T7BMh7xD-->，否则会出现"PV 先落在一个 AZ，Pod 却被调度到另一个 AZ" ⇒ 永久 Pending；
+- StorageClass 是<strong data-page-node-id="flp6M5UKL75baKVjNqzV29"><!--pnid:ZlKPl8TcuuwCK2jYdIxt3r-->不可变为主</strong><!--pnid:6F44yETrYcQjF5uiwYMZcK-->的资源：修改它<strong data-page-node-id="35t1UXhGhShVQIJTGwUo7t"><!--pnid:ss97Rq9D9BHVFXxIkZ5nDt-->不会影响已创建的 PV</strong><!--pnid:EMdsTpsfytyhSjHhO7s9xb-->（很多人误以为能"改参数生效"）；
+- 想给不同租户不同配额 ⟹ 用不同 StorageClass + ResourceQuota 的 <code data-page-node-id="SHJOwB2KiKGiGKVRUQJEIE" data-pnid-children="MDcSmuDkdaXDNZ2dS3QbEX">xxx.storageclass.storage.k8s.io/persistentvolumeclaims</code><!--pnid:BjuMp3Ws7hhVlqwTlTDLWC-->。</p>
+<h2 data-page-node-id="CKfheSsymSdhHZVkNyEmM8" id="a4-accessmode"><!--pnid:FnQ9E4fLUsGGN3i9jCh0lZ-->A4. AccessMode 四种模式到底限制什么？</h2>
+<table data-page-node-id="brJ4TTSV13ZM1k8aYcbv6j">
+<thead data-page-node-id="4MG5yn8goVbhMyaX8Lqm99">
+<tr data-page-node-id="eA2qD1c25QQMCNlfWPofZb">
+<th data-page-node-id="486R2meCDQXPgyfGuKjaLr"><!--pnid:sKPAusiCg0HHHU7lq0Nmds-->模式</th>
+<th data-page-node-id="zBmOxZWFWm3y1QvqM9IfFN"><!--pnid:zX2VTUTLzuOWBY5hoM4U6I-->含义</th>
+<th data-page-node-id="5QoPcJ7P0558ViVaRUl8y6"><!--pnid:Shh09SxNT6LLdQ2GrEF1ek-->典型</th>
+</tr>
+</thead>
+<tbody data-page-node-id="pz9FSPzSo4LcWXbkERqiok">
+<tr data-page-node-id="rAfVDBRSWuy6Kbai3XJFqY">
+<td data-page-node-id="4aFV7vcJNiK1u0aZ2G7hn9"><code data-page-node-id="saOJBzxNazLErHxRGcNzem" data-pnid-children="0KcThlBrPNBFzfSUcUte1h">ReadWriteOnce</code><!--pnid:zfl9lbXj5XSCMAPZIa6ZMM--> (RWO)</td>
+<td data-page-node-id="Y1vj7TeOg3BZzq1GkK4ypP"><!--pnid:kM7tu3mXG7LcKVMfccdznd-->可被<strong data-page-node-id="L1feTxPrJWrCGNGjaRdHCl"><!--pnid:ULRXztlXMPv0VidvGDTDIX-->一个节点</strong><!--pnid:N0yB5zteMfZm6BBrJ1kDmJ-->读写挂载</td>
+<td data-page-node-id="rCEJvXH7oc3sxR4keLuv42"><!--pnid:KfVgWdF3oQmBcm3sTyaj2k-->云盘、块存储</td>
+</tr>
+<tr data-page-node-id="1rUo3A1dJaqofcy6rjaQxt">
+<td data-page-node-id="1dJWgFMtqzhjKZ8Iz7ZeP0"><code data-page-node-id="JB6gBnjr5n1YW4emOEYnCj" data-pnid-children="GM1n6mpw790snOmUpw374h">ReadOnlyMany</code><!--pnid:38N9WPlhM9gvKRBlI1Ecgf--> (ROX)</td>
+<td data-page-node-id="rZFMHTsyVqunqXuPMwOf9N"><!--pnid:OZJyT2ybAPXuaHMY88qnsy-->可被<strong data-page-node-id="fShKUn82urnd4BObIkWwz3"><!--pnid:wFgK1wjYZEFyYDyztqfDYr-->多节点只读</strong><!--pnid:AAUG0s85awTlLagheIrCvp-->挂载</td>
+<td data-page-node-id="0ekMUkpbreSwe0ohSSFL4z"><!--pnid:yUvuojarr6gmlhCt0jlGT6-->只读数据集</td>
+</tr>
+<tr data-page-node-id="Pex2J5j1R6y05ZtQZZOPdo">
+<td data-page-node-id="HSY5QIfV1vWrripVoK1bnh"><code data-page-node-id="ci4k3Ze9MIw3jYIIKeAVgb" data-pnid-children="zi4nF4vRVJ7zYtEVqFI7dj">ReadWriteMany</code><!--pnid:hlWUKcavNuGv3wXarYene9--> (RWX)</td>
+<td data-page-node-id="axd5CTjIm5AOc4UhR9s6w3"><!--pnid:YDlluqyQY8B86Xx2mY6XSU-->可被<strong data-page-node-id="36YRptgmFmI8cpXSxcRU1E"><!--pnid:UQgdiuOmRLVWLuB7O9Up8y-->多节点读写</strong><!--pnid:u2lghCth3PgVJsu3GLlB4I-->挂载</td>
+<td data-page-node-id="32VrPmHvSx1NdMzyK2k6WE"><!--pnid:uY1gMGcLWr5lXzk4Jpx5zf-->NFS / CephFS / EFS / NAS</td>
+</tr>
+<tr data-page-node-id="JdmmbG5JBLhpy1SLTyFyA4">
+<td data-page-node-id="G3oHZNv3QkivNGx8HDeNJ9"><code data-page-node-id="OuIO1WmY2CmrrtmhjNBjRq" data-pnid-children="XJ4i80RaetCbOaHm70xxGS">ReadWriteOncePod</code><!--pnid:c0Bd7KzcTHihVQPPDv2ApO--> (RWOP)</td>
+<td data-page-node-id="2ToKrqB1ZM6eBxW8Y2MqGE"><strong data-page-node-id="hqzkdB7PhGq8UA2FjbISH3"><!--pnid:bGw5qSyEcSJq5PYzwo9Jfd-->整个集群只能一个 Pod</strong><!--pnid:T7gdgJWA0AkgCvbniZwlpZ--> 挂载（比 RWO 更严格）</td>
+<td data-page-node-id="jTKuRLQKYKug3WehamjZ2v"><!--pnid:0MRr1h59PnTaeXk49I9VEq-->需要严格单写互斥的有状态服务（版本相关，请核对）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="4hjyopEgIjhUA76ivqaXB2"><strong data-page-node-id="rvusDVm0ORpte5FNKmb82i"><!--pnid:5NzjwV6rT9yMr5IJrY6l2Q-->必答的两个真相</strong><!--pnid:0uy462VGMGW6y06uP74bZg-->：
+1. AccessMode 是<strong data-page-node-id="WEA5mAMI7yKaM63FxvCaR1"><!--pnid:mTJC0MrzMcKfDPnC6ZOmRg-->声明</strong><!--pnid:bvhj9fI3tq9sNa40JV8lfy-->，K8s <strong data-page-node-id="AM2VKzkuY9XRbDAXb0bIa0"><!--pnid:5bPJ0MDBR4LENs3v5y3hcW-->不强制</strong><!--pnid:8bXrcnwza5jtkzTqrtuFeL-->执行（除了 RWOP 会在 kubelet 侧做 Pod 级限制）：驱动不支持 RWX 你写了 RWX，结果就是<strong data-page-node-id="yTZZF7n77LzjTDLnewGAjn"><!--pnid:AeMyn7WgvdvbOPjTclbuSy-->多节点挂载失败</strong><!--pnid:xGHxkOaOWuFTuqxIspwN8u-->或<strong data-page-node-id="5NTmhMwbsbAwhTT06jQR7m"><!--pnid:4ITE1rMnQi7MsDm8W8WuBk-->静默数据损坏</strong><!--pnid:v1Q7P9h36lXSnXEJ2EHRii-->；
+2. <strong data-page-node-id="3eDnnKTVRbDTmo0OTyd3Pw"><!--pnid:tibwHItgBKg8lvVIrtBR40-->RWO ≠ 只能一个 Pod</strong><!--pnid:iOsGI56OKNgcGSjaRysohk-->：同一节点上的多个 Pod 可以同时挂载同一个 RWO PVC（因为都在一个节点）；要防止"第二个 Pod 也挂上来"，必须用 <strong data-page-node-id="6uZNFWKoyGXLVaqn7ViSUN"><!--pnid:ysADIEDIUHBnILo8cfDTpW-->RWOP</strong><!--pnid:MtvIGqa2A1uqoNLqz6WTTI-->。</p>
+<h2 data-page-node-id="m84mhTsNfTBXQmaUd0fhwJ" id="a5-volumemodefilesystem-block"><!--pnid:3yvf5UbYdUCQRqbGXN7AaU-->A5. volumeMode：Filesystem 与 Block 怎么选？</h2>
+<pre data-page-node-id="8jKtK7U2vREyU7z2gvhoUA"><code data-page-node-id="OaYtGcHUvbnpjEz8yJ809G" data-pnid-children="p73575vAtp7Tc4jn7VvPYF" class="language-yaml">apiVersion: v1
+kind: PersistentVolumeClaim
+spec:
+  volumeMode: Block            # Filesystem（默认）| Block
+  resources:
+    requests:
+      storage: 100Gi
+---
+# Pod 侧使用方式完全不同
+spec:
+  containers:
+    - name: app
+      volumeDevices:           # 注意：不是 volumeMounts
+        - name: data
+          devicePath: /dev/xvda
+  volumes:
+    - name: raw
+      persistentVolumeClaim:
+        claimName: block-pvc
+</code></pre>
+<table data-page-node-id="0QSdatzKYQrrEsnYvz9n4t">
+<thead data-page-node-id="1c71Jmp1tKKjBDc47kGfdE">
+<tr data-page-node-id="3pAAwkcAZDjUtHIZgHWA4Q">
+<th data-page-node-id="tsDNLo86FnwmEkjBPurnv8"><!--pnid:aLFlJtTzWX0lgXXmkMbDkm-->模式</th>
+<th data-page-node-id="kOGajALRYGUOORgtFZDJoD"><!--pnid:MBIehl3Dz19eXJS5dhbfMp-->特点</th>
+<th data-page-node-id="bHMQXqVR123Hrwmaf6r1OP"><!--pnid:HetFyv19P4O31OCUzKLSGT-->场景</th>
+</tr>
+</thead>
+<tbody data-page-node-id="8PHzHrUpCdGHgCZFGJtSSI">
+<tr data-page-node-id="wyBECzd9hPpCw7o7G9pPFq">
+<td data-page-node-id="7YQsVuQIvouBxjkKj2w8EB"><code data-page-node-id="JJx4Y3nMu8RHcnGCwPWTa4" data-pnid-children="enr2CI4nmJuuxdGo76goTR">Filesystem</code><!--pnid:DiugJO7bw1C4otSuCCE0qw-->（默认）</td>
+<td data-page-node-id="jRHLg6Irvaz62jcmoO0V3R"><!--pnid:94D39smmXVtLbPZpWXCc37-->kubelet 做 mkfs + mount</td>
+<td data-page-node-id="mSPGMUe64ouI0GzfjAYx8t"><!--pnid:2w2L87UsV1UBU5o7x0sZNA-->绝大多数应用</td>
+</tr>
+<tr data-page-node-id="fJgqp546Tphe1vZuU5FUhK">
+<td data-page-node-id="7NRV3nLpeQ78M9ld9MSgIJ"><code data-page-node-id="RUdfmBCI3VlL2OVz2Py23F" data-pnid-children="bQofzYZjKu4WMVlW02kH8a">Block</code></td>
+<td data-page-node-id="moofVxPsLdKtROYWfM0Req"><!--pnid:iW37VRIXQsNB7ebObOk9QV-->把裸设备透传给容器</td>
+<td data-page-node-id="3ep3KjhxWtN6zPxiU4RKnz"><!--pnid:mfRkQP9e5mdoqxdpTiVLa4-->数据库自己管文件系统、需要 Direct IO、部分 RDMA/高性能场景</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="1GTIqF5USk5P5rFbCG5OYQ"><strong data-page-node-id="QKEdUzB3RfBJf25BGgmPor"><!--pnid:IKoD3GTMlO7aXJIhiVSnsF-->必答</strong><!--pnid:Tu3ASi5vEAtVALnpGSZnr0-->：Block 模式下 kubelet <strong data-page-node-id="g1ScPCfeSAaPFcSnSbXVId"><!--pnid:IYmB2V7LWwBmoLWwxXpyR9-->不创建文件系统也不 mount</strong><!--pnid:EZXrxQBNhGgKVQWJF56mH3-->，由应用自己处理；扩容/快照行为也与文件系统模式不同。</p>
+<h2 data-page-node-id="gqQv9atRYKh6To9vtAqCZk" id="a6"><!--pnid:IhBJRgEGKbbKXM5UeZDuyJ-->A6. 一次"动态供给"的完整链路是什么？（核心大题）</h2>
+<pre data-page-node-id="quREhlHqoVqSdF9S4lkfLO"><code data-page-node-id="0iXJfjKWPB12XgiSZ4t5Wl" data-pnid-children="3XQtTeT4DQa7YnNGo67vdY">① 用户创建 PVC（指定 StorageClass）
+② PV controller 发现有 StorageClass → 标记 PVC 为 Pending，等待 provisioner
+③ external-provisioner sidecar watch 到 PVC
+       → 调 CSI ControllerService.CreateVolume(capacity, parameters, accessibilityRequirements, secrets)
+④ 存储后端真的创建磁盘；pv provisioner 创建 PV 对象并绑定 PVC
+⑤ Pod 被调度到某个节点（若 WaitForFirstConsumer，则 CreateVolume 会带上该节点的拓扑信息）
+⑥ 若驱动需要 attach：external-attacher 调 ControllerPublishVolume → 云上把盘挂给这台虚拟机
+⑦ kubelet VolumeManager 发现卷已就绪
+       → NodeStageVolume（格式化 + mount 到 staging 路径，仅支持 STAGE_UNSTAGE 能力的驱动）
+       → NodePublishVolume（bind mount 到 /var/lib/kubelet/pods/&lt;uid&gt;/volumes/...）
+⑧ 容器启动，卷可用
+⑨ 删除 Pod → NodeUnpublishVolume → NodeUnstageVolume → ControllerUnpublishVolume
+⑩ 删除 PVC → 依 reclaimPolicy → DeleteVolume → PV 消失
+</code></pre>
+<p data-page-node-id="bfMIHkPpfxrO0GC0Z37ThA"><strong data-page-node-id="7g27JzcsxvDMhRpiYPePhL"><!--pnid:ItGYmwnjHveMLrZQL25oKZ-->必答</strong><!--pnid:P0kCayYkHNyVxcPkPO7gmZ-->：这条路上有 <strong data-page-node-id="Giv9FRj3ORooVnQQOVMzLr"><!--pnid:xlOIfBTiFyH4t7mTo6pDqz-->4 类故障点</strong><!--pnid:4vw9tjYTOXqWH61buYWCve-->：<code data-page-node-id="MzQEB3Ax4zb2WAPgnOLnIL" data-pnid-children="HEG6YzZBbgAevpY6kB0CET">provisioner 没起来 / 后端配额不足</code><!--pnid:r7PkJAavTnH46yq7sZmS3m-->（停在第 3-4 步）、<code data-page-node-id="zFv2BwlvidXJiXEdLCoCkh" data-pnid-children="IOu41JnmTitMBn6ecihgob">AZ 拓扑不匹配</code><!--pnid:VU237ORsKodsj0coeTHswS-->（停在第 5 步）、<code data-page-node-id="BCjnosfBawlGJK4dUdK99N" data-pnid-children="1x6upFxGF5WKDG4ruUYziQ">attach 失败</code><!--pnid:JhO5d7rd0qxeDgxtAj0kCO-->（第 6 步，<code data-page-node-id="70iW0auNToyg00Y4dTPMUX" data-pnid-children="LzOZSGew9vjByZZM0MxCfa">FailedAttachVolume</code><!--pnid:eoq7GxixVznRtCmSTdtVVU-->）、<code data-page-node-id="CZzReuwHOwK3n6U5x8LrGk" data-pnid-children="ZH0u95ThZ7U4tvcESyo7Eg">mount 失败</code><!--pnid:rDW914h7303LnyujIZHORS-->（第 7 步，<code data-page-node-id="bxrlInJFGSyvmTTlymHDop" data-pnid-children="p7M4k82EHo35cMOBxZetDq">FailedMount</code><!--pnid:A5i4ys8qy9I9CWpT7CQGZh-->）。<strong data-page-node-id="NCNCOi75QNjCQ78Ignbif4"><!--pnid:Rs7EiSAkNGBu1HQ5ZqBOMB-->Events 里的字段名就是最好的定位线索</strong><!--pnid:iYN13OzWyvk42tfgj2K8IQ-->。</p>
+<h2 data-page-node-id="U8KvcuFOt4Fy0nY3GovpdX" id="a7-csi-sidecar"><!--pnid:s63lktV8JcOasH9XMcOClS-->A7. CSI 有哪些核心 sidecar？各自干什么？（必考）</h2>
+<table data-page-node-id="4YhIglv1k4FTMuNw85YIvB">
+<thead data-page-node-id="DgH2EmFYKofwf6SflISHDY">
+<tr data-page-node-id="JPwEp73JG4ta8FaKVj9mLU">
+<th data-page-node-id="ORlF79gEUTBsNrjZ7RJ3p8"><!--pnid:GapkUpzi6Wx6eSSU7590aE-->sidecar</th>
+<th data-page-node-id="BCaW11cWRkjw5AiLPNDOkx"><!--pnid:J23wDuTEwsx93VasYmdyIB-->干什么</th>
+<th data-page-node-id="ZdM57S4YsO1Pxqc0Rk7Fd8"><!--pnid:pu2urSbLo6ybzRhhkWT9nH-->跑在哪</th>
+</tr>
+</thead>
+<tbody data-page-node-id="iAwTqIxjRKH943p1I5Yh1M">
+<tr data-page-node-id="6WGxGkC5LCNRoNdqPt4uf2">
+<td data-page-node-id="O078B7PwqOpTrDe4SXf0ay"><strong data-page-node-id="2h3cFXOrjdQtHjF10mHMX2"><!--pnid:yqJqC5UCT3zUqqwlQnqwQT-->external-provisioner</strong></td>
+<td data-page-node-id="ZLCRkjwnSnTufADu7CkckI"><!--pnid:dmdeVWGGBdtNFvlDSnzQ0s-->watch PVC → CreateVolume / DeleteVolume</td>
+<td data-page-node-id="9L2wjEcsf8OMzGvTueMvGv"><!--pnid:4Lj5kgl47iSGUFxM30UjSS-->Controller（Deployment）</td>
+</tr>
+<tr data-page-node-id="eD16HOrGKsSdDXaZBKjgc6">
+<td data-page-node-id="UNaMAZqchnYUy8RsjvmuGu"><strong data-page-node-id="bmaj76LRWd7cvWB4prEnUE"><!--pnid:Fg2foKy7NfEweL45GYFgpg-->external-attacher</strong></td>
+<td data-page-node-id="aOc5sTVPXO10NvuDZraQwc"><!--pnid:dnzspZ7P78ozFGFKdwQ8Jn-->watch VolumeAttachment → ControllerPublish/UnpublishVolume</td>
+<td data-page-node-id="YmkSjegH8FzKqLcZZye89e"><!--pnid:PWHo9gVYKAliPQWWCMjM8X-->Controller</td>
+</tr>
+<tr data-page-node-id="ENmhpkf9Mv4PnbQvfnurJM">
+<td data-page-node-id="viPgCBbAapwj7AJDLpiMC8"><strong data-page-node-id="BaebkEZNUiMig1G9gQmE3d"><!--pnid:H3kXQWhzXvcryC5AStuoJ6-->external-resizer</strong></td>
+<td data-page-node-id="hmNU7QzmTRb4ByV4jbLR5J"><!--pnid:GfdfmOnZr36zNMAUXNtu9L-->watch PVC 扩容请求 → ControllerExpandVolume</td>
+<td data-page-node-id="QdztCwocduLjt6OgxD8U2W"><!--pnid:UlXWId1kjqhz1aasimKWkK-->Controller</td>
+</tr>
+<tr data-page-node-id="Zcqp8xAlubp9QcY0Xj1n30">
+<td data-page-node-id="Ar3IxqguXQTiiBlwmOJV29"><strong data-page-node-id="JDu70vM0EjUwvnO8rI3Ykw"><!--pnid:Xis6m00n5cYRZBkxAvmT19-->external-snapshotter</strong></td>
+<td data-page-node-id="FtT2KpZBsWk7Zy0RNu3rus"><!--pnid:oI93cGAPUNyk84TGfvdUVi-->watch VolumeSnapshot → CreateSnapshot / DeleteSnapshot</td>
+<td data-page-node-id="aL5rDbLXq5gTmQjZ2LC6R0"><!--pnid:r0kfHcImFoziHWV4mXYAo8-->Controller</td>
+</tr>
+<tr data-page-node-id="5XmOghFCc0IZ1fKuHCPct7">
+<td data-page-node-id="6z8nGIjMuuoLL3KTSQaaew"><strong data-page-node-id="x83z3fLrw0veKWjtICnmr7"><!--pnid:0ZsrIIOxkWXnp04PLz7jho-->external-health-monitor</strong><!--pnid:NB5uBtKP1RvwZMGXt4ZQ6r-->（controller/agent）</td>
+<td data-page-node-id="BK6IvqZfXmHfJXgAqHJFyD"><!--pnid:K4QU8clCzX3DRpOKauGwIB-->卷健康检测 → 上报 Abnormal 事件</td>
+<td data-page-node-id="ySjNRCrQsOjV0I1FB4au9V"><!--pnid:IwkZRsHAJYDZida5k1yDqb-->Controller / Node</td>
+</tr>
+<tr data-page-node-id="TReYMyElB2bR4zA2n5xyrK">
+<td data-page-node-id="pBF3AKq4RyEmJfsudpOvJr"><strong data-page-node-id="j6PXcrsQQZ3iYe09WlkISs"><!--pnid:H0b3QB7sDQ7htHBOSIoqOX-->node-driver-registrar</strong></td>
+<td data-page-node-id="23YvuKOa78HBOruer8s1ot"><!--pnid:vHg8u3VHZCdte9fi7t9ZyR-->向 kubelet 注册 driver socket → 生成 CSINode 对象</td>
+<td data-page-node-id="MdV9utuggOwmfyPKPKzqzF"><!--pnid:dUh4JY9rQfgF1VBneIOsIv-->Node（DaemonSet）</td>
+</tr>
+<tr data-page-node-id="b0lpAvNC4tzOKloM3cVNKQ">
+<td data-page-node-id="bGoWRge6qGrgt7viBMKuyF"><strong data-page-node-id="B0206abE5eKh4oS29gXntZ"><!--pnid:6SdnYDPVVmvEsLfMsNNfWO-->livenessprobe</strong></td>
+<td data-page-node-id="u2AId0MRo6aOCQwzPO3u3D"><!--pnid:ZRcyg56Ho99fpls1Es8wad-->探活 CSI socket，暴露健康状态</td>
+<td data-page-node-id="V8nQBzOmuvCcwxxmgECnGK"><!--pnid:nuV7ENbnnY4rauTpAAwxD1-->Controller + Node</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="wODjWaUQNx5tmNp99bqd8k"><strong data-page-node-id="RfPPUeMquNbnO6YGlu23l5"><!--pnid:4GJeSXKIkBz2cNMBab6QFU-->为什么需要这么多 sidecar</strong><!--pnid:fIVh6gTQK38MKtEtcHxttW-->：CSI 只定义了 gRPC 接口，<strong data-page-node-id="TxPCUEzc1UiZyVdK3pwCCf"><!--pnid:kIlVPYIVq62YYsRIvMz0RT-->观看 K8s 对象并调用 CSI 这部分"胶水"交给标准 sidecar</strong><!--pnid:YbxVisPCsG4jcYh8T6o2da-->，各驱动只需实现存储语义。</p>
+<h2 data-page-node-id="SLLmD2c5D1YA4h55Jca6Pk" id="a8-controllerpublish-nodestage-nodepublish"><!--pnid:SA9yRWfSHYiUEqVx3kHDo2-->A8. ControllerPublish / NodeStage / NodePublish 三者必须分得清（必考）</h2>
+<table data-page-node-id="O61yUIJq1vLXwZwEcbFXAY">
+<thead data-page-node-id="7gVwz3NCzSDN6N4uFzkNoB">
+<tr data-page-node-id="ySpxKXGaPGn3ZYsV3TNZQT">
+<th data-page-node-id="no1btLRsqDVsDozTCBv7wo"><!--pnid:7blGppDU7oo6MZT8vKjfSZ-->阶段</th>
+<th data-page-node-id="dVP34lovsT7WXP0iWxsNsD"><!--pnid:LgrqOAG9vOdt3Rqybobhxz-->调用者</th>
+<th data-page-node-id="AFNJUlBCYF0BlMlZEJjPTm"><!--pnid:YU3CQliEcK5u4zhGekAvDJ-->含义</th>
+<th data-page-node-id="YlnuyaVS2u8gemOSBoA2tU"><!--pnid:X1AaXDYT5fW1U6lMIDGwtf-->失败时的事件</th>
+</tr>
+</thead>
+<tbody data-page-node-id="dx1NSfRXumqdlmYxVlm5NK">
+<tr data-page-node-id="ZCS7fPo3i4FKHyw9whN1nC">
+<td data-page-node-id="KyozfcfPBtV6ippaln0H2i"><code data-page-node-id="X7ZiCWcXaJNlU0Vb9zcL5b" data-pnid-children="XEFCZxFLYC3c5x7SzFWvbc">ControllerPublishVolume</code></td>
+<td data-page-node-id="Hxg7bFaJq6c1hQxvUHSggQ"><!--pnid:pg1l5qinLB6nJ28Qaq2NYp-->external-attacher（控制面）</td>
+<td data-page-node-id="7KFbAseU10XbUxFdz4KXJa"><strong data-page-node-id="oEuU5hmMPxNMNrRXHbstZ8"><!--pnid:zvkh6hMCeytM9a4eBU65pg-->把磁盘挂给这台虚拟机</strong><!--pnid:zsPSmfetUuwH2PSsQGfGlb-->（云 API 层）</td>
+<td data-page-node-id="QadnNAA1P6cCoYd5LhsKYn"><code data-page-node-id="kTnwlUyshULdLq62jeIlOB" data-pnid-children="KLx8IC7tUReot76yYLtOBy">FailedAttachVolume</code></td>
+</tr>
+<tr data-page-node-id="stumgYmgnCBgWfUbP9z8y4">
+<td data-page-node-id="FYdnjcWsmkEsmbRmmSRapm"><code data-page-node-id="jup6ELgSFpk2Li4hHhJl52" data-pnid-children="cGCg1qPAdGzK4kt2pb3NKT">NodeStageVolume</code></td>
+<td data-page-node-id="aHQ8bS7710Hg4Sqienuwxt"><!--pnid:qq0yEaloAdWZCpzhIiMoLC-->kubelet（节点）</td>
+<td data-page-node-id="8qU87DhMPUruWdtXL60VNI"><strong data-page-node-id="sLWVT7ujOTaSQnZ83hoHWk"><!--pnid:BAxEmXKJ0zQnQ6ppM0tCbk-->格式化 + 挂到节点 staging 路径</strong><!--pnid:MqSr4ddxdjvxyXvYIwssfP-->（一次操作，可被多 Pod 复用）</td>
+<td data-page-node-id="0MKiu8Xh4e0InbFi6uX33m"><code data-page-node-id="tgCCd4cKHgf7NUr9FjEO4X" data-pnid-children="BPcZ03e5tFatcasIyrFV6m">FailedMount</code></td>
+</tr>
+<tr data-page-node-id="9z5u27I5l6i3gj2KQFOZeO">
+<td data-page-node-id="FrtfWfnGBKTNQaqDKz2pKb"><code data-page-node-id="GexcN2QerjVwTI8sq3ryI0" data-pnid-children="AhVtlEH872LgzboUCTpSq6">NodePublishVolume</code></td>
+<td data-page-node-id="bsxQNRuzBCgkfCth2uGn2v"><!--pnid:L5YlrLs0vHItVD7oRnsxx4-->kubelet（节点）</td>
+<td data-page-node-id="bndE6YpURkg8W1jriVgM6P"><strong data-page-node-id="xVd8oIIcXAzpqXZKMoMy3u"><!--pnid:s2LQPHm1dAE925RMY0rxMM-->bind mount 到具体 Pod 目录</strong><!--pnid:uuyG8LDhWBtOKHOp8meS13-->（每 Pod 一次）</td>
+<td data-page-node-id="Ekd5UH2I6sAV0lXgSykr8f"><code data-page-node-id="NkwwhXW6EROorahA7Hz8UR" data-pnid-children="PgAy03JdJicIfn5YzdXZ9e">FailedMount</code></td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="snKsmd5T9vaiCyj9X8O9kI"><strong data-page-node-id="1wYxMi5M6pE4fn0g1ZH68Y"><!--pnid:SsiyHvqclTF6Pk3FN7UIq1-->好处</strong><!--pnid:Oj7NcaH1xJJ29lETbPLxgS-->：多个 Pod 共享同一个节点上的卷时，<strong data-page-node-id="6d6C6iUuY4qtaV1WUZ4olh"><!--pnid:owzPPGZLiA5qoyGJyqSU1j-->stage 只做一次</strong><!--pnid:0cqpYNckboWqfthMhGngSi-->，publish 多次 ⇒ 显著减少昂贵操作。</p>
+<p data-page-node-id="hK51PXhi23o3gHKArmoRh4"><strong data-page-node-id="0vcyQGClFgi6f8wm6QxhnT"><!--pnid:lKwzSd4yCQI33drL0HG9XU-->必答</strong><!--pnid:7y6BSON8juO4PKZskgGYX5-->：并不是所有驱动都需要 stage/unstage（<code data-page-node-id="ihsmpWhwU9vETPIxAB0Iqs" data-pnid-children="9Dl2hkxIIwdg47R5TBcpzC">STAGE_UNSTAGE_VOLUME</code><!--pnid:GURYXhMMHD45q6wHJ3mLj7--> capability）；块存储通常需要，文件存储/NFS 可能跳过。</p>
+<h2 data-page-node-id="j4M6vyzK7Z7zo6Bi8WlqtD" id="a9-grpc-identity-controller-node"><!--pnid:lMFquj5DPSV2YzbztH3g3O-->A9. 三个 gRPC 服务（Identity / Controller / Node）各自的能力？</h2>
+<table data-page-node-id="8LRhnsxp8OvNvJmybDk2Dp">
+<thead data-page-node-id="lxVXbWpQJZFp38rWdJbvKN">
+<tr data-page-node-id="wYK11hJem0Nfq9nNNmH9TD">
+<th data-page-node-id="GNiRmZhXWiWeRQCwZKOMys"><!--pnid:wV5RiTFm7WeUqUHP1aEiy7-->Service</th>
+<th data-page-node-id="kTxHWmOkEpJ9gmQq14D2Cz"><!--pnid:sMn3ANoHr94ljxUtkomxdK-->主要 RPC</th>
+<th data-page-node-id="CvtEwwlXWr1TMajDcTBxmD"><!--pnid:NBY2hF28NQfLNhCSzXKq6H-->部署位置</th>
+</tr>
+</thead>
+<tbody data-page-node-id="oJsiFKhlTfny7kIpZJNY1v">
+<tr data-page-node-id="4jiHf6tYzTzbcUnDvr8b7i">
+<td data-page-node-id="5rlhwmxiEtQ12tgQ4k32iv"><strong data-page-node-id="a0pb057S9LhLbEbmRGV4yW"><!--pnid:ceXdNHf5tkJNz6oHTTJT8w-->Identity</strong></td>
+<td data-page-node-id="34jEBJnfgTCn8mcpy1Vntp"><!--pnid:a4skuJjCU2igtbGpzA8xUb-->GetPluginInfo、GetPluginCapabilities、Probe</td>
+<td data-page-node-id="W0eYnxcBHt6r6GJVAw7l4e"><!--pnid:1nyWkLDSqyzgKgaf0KmA0X-->两侧都有</td>
+</tr>
+<tr data-page-node-id="kowp2SDPq7DyuMPqXAzPCc">
+<td data-page-node-id="GiZwpbtExVF7qyagZQU6W3"><strong data-page-node-id="pNUOlX8sQF8xQZOeax3JKZ"><!--pnid:yvv39zDprlhhmvuS8DJiNV-->Controller</strong></td>
+<td data-page-node-id="q412ceADOLW0hxBXt77Uh8"><!--pnid:SSx4y0M3HhQjuceEjAJGpd-->CreateVolume / DeleteVolume / ControllerPublishVolume / ControllerUnpublishVolume / ValidateVolumeCapabilities / ListVolumes / GetCapacity / ControllerExpandVolume / CreateSnapshot / ListSnapshots</td>
+<td data-page-node-id="3zmGjQyPNQD5fmgOS6cO6V"><!--pnid:64l80fuOzTM7A62c11vgBw-->通常只有 Controller 实例</td>
+</tr>
+<tr data-page-node-id="5p0vE8oj9FD7JykIMhA5Bu">
+<td data-page-node-id="8JOB9EZgaltEeC4DEJWip1"><strong data-page-node-id="pVypuKjNISo1BAnaozXc5v"><!--pnid:gXthgtJ6cGYGo2kcjmy3tz-->Node</strong></td>
+<td data-page-node-id="rWOF0inOFrHjQBCOgIAUWH"><!--pnid:BUEiv6f2qjdjrmmJPYeWdJ-->NodeStageVolume / NodeUnstageVolume / NodePublishVolume / NodeUnpublishVolume / NodeGetInfo / NodeGetCapabilities / NodeGetVolumeStats / NodeExpandVolume</td>
+<td data-page-node-id="Yda4k3HglZtcSTuHtWYbkr"><!--pnid:uQwCzstpdfxjxsrWr9eABP-->每个节点</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="tWmJedviYqIof2RYBOB22l"><strong data-page-node-id="0JLyVOQMGnZN7GxMyz0Ag6"><!--pnid:0ulWnGk4Y2c6TI47GrFEOZ-->必考追问</strong><!--pnid:fBo0W3D1NCA2QpVidT0QMM-->：Node GetInfo 返回什么？
+→ <strong data-page-node-id="s1eTexMGpIinyrtZX8kNO8"><!--pnid:JwMEYKYmYLol24hRwBK9KM-->nodeID</strong><!--pnid:jeAj5jzwb7iqzlRqWhcRoz-->（存储视角的节点标识）与 <strong data-page-node-id="k2yYIS65lZT2wYQsKZXtQW"><!--pnid:PaFnWuTEXwR2WGCASNHwhU-->accessibleTopology</strong><!--pnid:8bCJfqtCgTxCcfTlxhsBFd-->（拓扑段，如 <code data-page-node-id="wkKSI2LlsE39mYNIFL7qZP" data-pnid-children="ZqZqr4Kwf9aVs8ryeMgmgq">topology.ebs.csi.aws.com/zone=cn-north-1a</code><!--pnid:D76JnuaQacUzBfU25sNrl7-->），它们会写进 <strong data-page-node-id="6FYONaFvtsAUCaM5hfxwah"><!--pnid:BHJXTDQX6QHKU9vRGYow8Q-->CSINode 对象</strong><!--pnid:4T4cFrcUvucxOgOskjLklF-->，是调度器做拓扑决策的依据。</p>
+<h2 data-page-node-id="NQFyQMaNXO8NRASJkTgHic" id="a10-waitforfirstconsumer-csi"><!--pnid:k4UjTkf4STqQFjhh5NMpDY-->A10. WaitForFirstConsumer 与 CSI 拓扑的完整流程（和调度器联动）</h2>
+<pre data-page-node-id="85Gdd1J62JDetNYXyXhtYy"><code data-page-node-id="MYkZvChzRFPid5NbQPPYJu" data-pnid-children="q2DHOjrWa4NkSy1plrD7vd">① PVC 创建，StorageClass.volumeBindingMode = WaitForFirstConsumer
+   → PV controller 不立即供给，只标记 PVC annotation &quot;selected node pending&quot;
+② Pod 创建 → 调度器介入：
+     - VolumeBinding 插件查：该 PVC 未绑定 ⇒ 进入&quot;延迟绑定&quot;分支
+     - Filter 阶段：遍历节点，看每个节点的**拓扑 labels** 是否落在 CSI 驱动的
+       accessibleTopology / StorageClass.allowedTopologies 内
+     - 不满足 ⇒ 该节点被过滤 ⇒ Events: &quot;node(s) had volume node affinity conflict&quot;
+③ 节点选定后 → provisioner 带上该节点拓扑去 CreateVolume
+④ PV 创建并完成绑定 → kubelet 才开始 attach + mount
+</code></pre>
+<p data-page-node-id="t1iS4SD5z6moNOqNZt9LbB"><strong data-page-node-id="On4cECkcj4LGvgQpbPspZk"><!--pnid:DqL2VxfsCjZMEgYOzeoy16-->必答</strong><!--pnid:XcIFBa2Dw5GtxCjXePGdKY-->：这就是为什么 <strong data-page-node-id="q2QvVwT5UaGh9Zn4nEb696"><!--pnid:8QorpkHT0hhpynqMG3IlbF-->延迟绑定 + 单可用区云盘</strong><!--pnid:XgV3ddUFlCdBDm3T6Lnogj--> 是标准搭配；Immediate 模式下"PV 先落一 AZ、Pod 后落到另一 AZ"的经典事故就是这么来的。</p>
+<h2 data-page-node-id="m9iIToxMEHS3vsP8TgxVQM" id="a11-csinode"><!--pnid:TSgUfu4Nt0fUTadCSD7cI0-->A11. CSINode 对象为什么重要？</h2>
+<pre data-page-node-id="uzRgLX2wseDVg4xrhmJ3Wo"><code data-page-node-id="mBraoE5SAEhfTHF4EI4HbV" data-pnid-children="hjiBqvziHfVUiazxatKVug" class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: CSINode
+metadata:
+  name: node-1
+spec:
+  drivers:
+    - name: ebs.csi.aws.com
+      nodeID: i-0123456789
+      topologyKeys: [&quot;topology.ebs.csi.aws.com/zone&quot;]
+      allocatable:
+        count: 39            # 该节点还能挂多少卷（版本相关）
+</code></pre>
+<p data-page-node-id="n5UPjEvLdBPsTsudn145wK"><strong data-page-node-id="P6wyVeedgwvLsPY4fQqNGT"><!--pnid:p7avxK46ItFKPWbHpfXVdj-->作用</strong><!--pnid:ClZq7J6keWb3KAsGpBKikX-->：
+- 记录<strong data-page-node-id="c8selknXOSoIAsKhA0EcDx"><!--pnid:3Cd0I9eshsC6LkbBhy5R6o-->该节点上注册了哪些驱动</strong><!--pnid:nG5c7mhZzI3wfRBKLfPC3b-->、nodeID、拓扑键；
+- 调度器用它判断节点能否提供该 CSI 的卷；
+- <strong data-page-node-id="fGbUY4pu1w46FGGonzXAPG"><!--pnid:pttibdN7VqEVO0AeZJS8Lh-->节点上的 node-driver-registrar 挂了 ⇒ CSINode 不更新 ⇒ 新卷挂载全部失败</strong><!--pnid:KJ4UwFvY6GvEkwFC6fBtz3-->（已有挂载通常不受影响）；
+- 节点 drain / 重建时若 CSINode 与真实能力不一致，会造成调度误判。</p>
+<h2 data-page-node-id="TE4ZEkYjAauTiEwzDFK48C" id="a12-pvc-pv-terminatingfinalizer"><!--pnid:RSpKoUvx23ltWn7xcmhxjg-->A12. 为什么 PVC / PV 会卡在 Terminating？（Finalizer 必考）</h2>
+<p data-page-node-id="ypLh4Ejt0lEt4A6Ot6pafc"><strong data-page-node-id="jaMBPLSwwxRKf3QDlOfgzf"><code data-page-node-id="c6jWpgwWgdW2mQeVmRJR5i" data-pnid-children="TTWwEmSuztVLOLfaSHPXTH">StorageObjectInUseProtection</code><!--pnid:jeGeYxhE3YNBCGSJ9wOIOo--> 准入插件</strong><!--pnid:Alv62GLt8D06vVB8Wq6Q29--> 会自动给对象加 finalizer：</p>
+<ul data-page-node-id="8SEwvsVet7PxXRBK85lnuw">
+<li data-page-node-id="TDeR4R5kjfbajRnAgqXN5e"><!--pnid:uh3Zr8xV8bZEAOihieEpOV-->PVC：<code data-page-node-id="lTtXoyNwMSfkyTDFOhFZeg" data-pnid-children="wAL5YcLlWhg2jMDNMzDMYn">kubernetes.io/pvc-protection</code><!--pnid:18u22xe8Gixh0jWoiUPjih-->（正在被 Pod 使用时不允许删除）</li>
+<li data-page-node-id="dL7OfsLg76SKxvYVI95L35"><!--pnid:i35e2gno6Cavd4rmRMDQsG-->PV：<code data-page-node-id="horP2wwz84HjrShv4e1ylp" data-pnid-children="J7RSgG0C6PJpRUv5BjtrBj">kubernetes.io/pv-protection</code></li>
+</ul>
+<p data-page-node-id="r21te0c6LA46B6kA8MxBgE"><strong data-page-node-id="MS9JdPWF5QELWaPFjz9Hwi"><!--pnid:CjeEaICawjcwbsnTOkVLOa-->因此</strong><!--pnid:eP2aHluDyjyw6qAiS96s3q-->：</p>
+<table data-page-node-id="TGNNzfc7sYKNIvrVZUeAS3">
+<thead data-page-node-id="kg6LgTUJsQ8iApMVJY8wEC">
+<tr data-page-node-id="qdhPEciGbmf34I8tzI26UB">
+<th data-page-node-id="fDjIicLqNPznDjA1RNl1ZO"><!--pnid:0BLIkk1iXamqO8guPjNSuQ-->现象</th>
+<th data-page-node-id="5ZSPlKNKWY0s9xobeccngh"><!--pnid:Y4GcE3U2juxRtGTVz3ItIt-->原因</th>
+</tr>
+</thead>
+<tbody data-page-node-id="x6TYfWglNtRNDDghuxmnJD">
+<tr data-page-node-id="lT2q6ODqgaIwWUVa1MylHr">
+<td data-page-node-id="a7b2hHBVQr7iiNvg5LMdDw"><!--pnid:OhcffnYC3X9kTZqU6yRpBc-->PVC 一直 Terminating</td>
+<td data-page-node-id="jlSmAVnkFpdNs8AisqR7vg"><!--pnid:MioSXGBMVmpIlMUbyOT0IZ-->还有 Pod 在用（包括已 Terminating 的 Pod）</td>
+</tr>
+<tr data-page-node-id="tYdXS10JuVljhA9NSOMXZk">
+<td data-page-node-id="Rjzu5B34TKGuFBKqe5dIK2"><!--pnid:OeljuhP1K4V5aP8cA3Sbzd-->PV 一直 Terminating</td>
+<td data-page-node-id="6m87e7PkjRj6CaXhtBv3ks"><!--pnid:nSUkmY6NWdDi9tz68Upezv-->PVC 还在，或 storage 后端删除卡住</td>
+</tr>
+<tr data-page-node-id="qlVHgExF1XWIMiP6p2VE80">
+<td data-page-node-id="3ctAzAJkZgkBShZIXu5179"><!--pnid:9U9HHbgMK6NbZ8tuq442wK-->强删后残留</td>
+<td data-page-node-id="fzMU26XgkdBFUl6QvW5sTh"><!--pnid:wdFearJ9SI2no80Gm3oSY3-->finalizer 被手动摘掉后，后端资产<strong data-page-node-id="4kGLDsazNXP1Xxh0QKj2ZB"><!--pnid:dHxnAEAVXhXqtrY81xQ4nf-->不会自动清理</strong><!--pnid:woejalh2AVJgDhACM9KGNE--> ⇒ 产生"孤儿磁盘"（费钱！）</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="OgyHEVxvDtLhcbe8JVMTmU"><code data-page-node-id="BIQqiPr74e3qSWfCharvhl" data-pnid-children="2Q2zGOZCtUdS6olSDI6mNG" class="language-bash"># 正确排障
+kubectl get pvc pvc-1 -n prod -o jsonpath='{.metadata.finalizers}'
+kubectl get pods --all-namespaces -o json | jq '..|.volumes[]?.persistentVolumeClaim.claimName' | grep pvc-1
+# 极端情况（工单级操作，注意后果）
+kubectl patch pvc pvc-1 -n prod -p '{&quot;metadata&quot;:{&quot;finalizers&quot;:[]}}' --type=merge
+</code></pre>
+<h2 data-page-node-id="s3AECmYA57702W4tPHrC8p" id="a13"><!--pnid:f8FJHKXukowEuFO1wSkkjs-->A13. 卷快照是怎么实现的？</h2>
+<pre data-page-node-id="48v0Ejdnlkw9HG36DhSmil"><code data-page-node-id="weqNHqikA6bQ9LDUkmgw0n" data-pnid-children="Ok1MfThdQxxIaJ2TaPnlWf">VolumeSnapshotClass（模板）
+      +
+VolumeSnapshot（用户申请）  ──► VolumeSnapshotContent（实际绑定）
+      │
+      └─ snapshot-controller + external-snapshotter
+              ├─ 调 CSI CreateSnapshot → 返回 snapshotID
+              └─ 创建 VolumeSnapshotContent 并与 VolumeSnapshot 绑定
+</code></pre>
+<pre data-page-node-id="VkSglCyBrFFVaPcHpU7qNq"><code data-page-node-id="GCEnEbvl3DKh1esM0f2a1g" data-pnid-children="hCW02uCOkyc9cRaCNvcir7" class="language-yaml">apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: csi-snapclass
+driver: ebs.csi.aws.com
+deletionPolicy: Delete          # Delete | Retain
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: db-snap-20240101
+  namespace: prod
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: db-data
+---
+# 从快照恢复：PVC 的 dataSource 指向 VolumeSnapshot
+apiVersion: v1
+kind: PersistentVolumeClaim
+spec:
+  dataSource:
+    name: db-snap-20240101
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+  storageClassName: fast-ssd
+  accessModes: [&quot;ReadWriteOnce&quot;]
+  resources:
+    requests:
+      storage: 100Gi
+</code></pre>
+<p data-page-node-id="TZt5t21LhHJ2iLCdMunZWr"><strong data-page-node-id="gwl0ra6gS37ojG3hFoNK2c"><!--pnid:TN7Raudi20NQneqBR2ztV1-->必答</strong><!--pnid:IuF9b4okMWEohdyr2VQWNu-->：
+- VolumeSnapshot 是<strong data-page-node-id="p8PCM6LjcMang0yuSPKlE2"><!--pnid:VmKD2ynnMy5rslh88OijOS-->命名空间级</strong><!--pnid:TGO0gfmuLr8SdkzMWO5ppi-->，VolumeSnapshotContent 是集群级；两者绑定语义与 PV/PVC 类似；
+- <strong data-page-node-id="T4a4tBwbn4MPr2vaQ30W2V"><code data-page-node-id="xSL6fduvkb0eAP2dpbaHOq" data-pnid-children="ndwWXg1lXpS5VXFq6ZhYeu">deletionPolicy: Retain</code><!--pnid:167nengNC7UbBcqfdbRo1W--> 能防止"删 PVC 连带把快照也删了"的误伤</strong><!--pnid:7YmrGNQHVOMK5alTTGu3o6-->（备份场景强烈建议）；
+- 快照能力依赖驱动 <code data-page-node-id="2apjrpAM95W4cJ8GNeV2vg" data-pnid-children="yn2D6JNEMls3PcQyBLO9qx">CREATE_DELETE_SNAPSHOT</code><!--pnid:bptlgDRdZnSDrx7z4JNLMw--> capability，不是所有驱动都支持增量快照。</p>
+<h2 data-page-node-id="6BjxOpNNcY136L69w129FZ" id="a14-clone"><!--pnid:U6ciLqowuvORqkR0qg0sWo-->A14. 卷克隆（Clone）和快照恢复有什么区别？</h2>
+<table data-page-node-id="YBo1cT0nsDecegsl1Pj6Mr">
+<thead data-page-node-id="sys0t7urGIQQd1IhLpMkv3">
+<tr data-page-node-id="VtVQhwaxixEmUX6vDJO32r">
+<th data-page-node-id="Q5a7yiu7HNMRIRkUNEkrz9"><!--pnid:nN4Idq6Wofmx19D3l1nP6E-->维度</th>
+<th data-page-node-id="iO6XLdWfHdCF7vOwGS4HqT"><!--pnid:JR2Wxx3mGhLZ290nJhhJZ0-->Clone（<code data-page-node-id="pxHytRxb1Fh8WEYRtO1SLL" data-pnid-children="tubfzl2XyG1zkQ1vSbL4wx">dataSource.kind: PersistentVolumeClaim</code><!--pnid:8sI8CnK1hKuLXRanYVtify-->）</th>
+<th data-page-node-id="0dum5M20jWuL9GruQ9SCnO"><!--pnid:fRKmXK9ezhzp8ImCfxIs9Q-->快照恢复</th>
+</tr>
+</thead>
+<tbody data-page-node-id="0mxDpPZwFg3K6U3ie9nJiN">
+<tr data-page-node-id="Wd68CyGfqp0dPrTQErw2Gl">
+<td data-page-node-id="vtuo3sin8yCFP70lxSlTMW"><!--pnid:6r9yC6pWDzpTXSlAnA3Q7w-->数据源</td>
+<td data-page-node-id="pbS2gmNwqpbmTt1TfIQRBR"><!--pnid:bz9tydaH7e9GQ6Iosl2Smh-->另一个 PVC（<strong data-page-node-id="ZKMe4HiRDHBiECOM2be1BT"><!--pnid:oYOpyDAfil9GMJhn4yXw3u-->同一命名空间、同一 SC</strong><!--pnid:nQmivrtKPUCbfDzZzMt0Un-->）</td>
+<td data-page-node-id="ISYda2HYsSEIiyww3XSPMG"><!--pnid:ZjSPcrlLjzZyuxWTzCyxfp-->VolumeSnapshot</td>
+</tr>
+<tr data-page-node-id="SgkzfcQt2xYahzWvIlfmjq">
+<td data-page-node-id="EY9YfhtrACB3x5UBqsCQtt"><!--pnid:6OntJu9OHN0ZTWGaoMJIQ9-->CSI 调用</td>
+<td data-page-node-id="Mxrj4JLma36vm6GEnoO8vw"><code data-page-node-id="Qt8npEkb5NdPcnnvsDkDsu" data-pnid-children="STXa9dDqhBd0TI0w0Up9y0">CreateVolume</code><!--pnid:vbuzVllqKdYzNkcB86CRxk--> 带 <code data-page-node-id="lgraz7bkdgZC5aribvx5Zp" data-pnid-children="NEuHkoew0IqsPbaNAeGGP6">VolumeContentSource: VOLUME</code></td>
+<td data-page-node-id="3Y4NAm3cou1wlFgSpjfoIj"><code data-page-node-id="bkGceYWG8KCT5G75ODeIau" data-pnid-children="gfSV6CiwzqbxqbjsdiDSDV">CreateVolume</code><!--pnid:OMuXVRi3T2oInklW9akE46--> 带 <code data-page-node-id="Y6o5RG1SUQL676Pdhzyn6p" data-pnid-children="FHko5ohqhlKT1x2RqRo6ey">VolumeContentSource: SNAPSHOT</code></td>
+</tr>
+<tr data-page-node-id="whbJrWSHbvtSHrcP0DKV7L">
+<td data-page-node-id="Qto9BkPwgd4Z6tz9fPxT1e"><!--pnid:TxfCaritzuGSOz6a55Pum9-->时间点</td>
+<td data-page-node-id="j0Z2uv8XXbxIpggNAm9Pnr"><strong data-page-node-id="x45g6fQczP1NE7lbWhU9N5"><!--pnid:IeZadZ6tXxjVFiDKor28AX-->当前状态</strong><!--pnid:Wu6aBfkoCaaw1BV2Gw20cn-->（要考虑源卷正在写入 ⇒ 数据一致性风险）</td>
+<td data-page-node-id="vBzityHM1IYbMbikVDlpDV"><!--pnid:o400Y0JdbFIg1hkvDy9W67-->快照时间点一致</td>
+</tr>
+<tr data-page-node-id="LD1ZRVs8Megrw4wYLwdKTX">
+<td data-page-node-id="qkrPmcZkYzANqSCUvTrSaU"><!--pnid:i1JpmLB6tGL8q3frkZMmAj-->用途</td>
+<td data-page-node-id="QO9cq8oHTRtNqZFyV6Np4F"><!--pnid:JXILLPmIr1XUeghTyEiZ3a-->快速造一份同数据环境</td>
+<td data-page-node-id="QjBIJfJAbAvw2Xoby8NDLB"><!--pnid:rmidAf7ntnz0FgXgBtpJRG-->恢复/回溯</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="mpv0iOXiiq0ARodY1KXOxO"><strong data-page-node-id="MrYpQauYbuP7wmdNqc1LOy"><!--pnid:6BjKPcLY7cxMl8U0uTsLc9-->必答</strong><!--pnid:SHie8mVArX6im8i1ICzWEH-->：克隆在用数据库时通常要在应用层做 checkpoint/quiesce，否则可能得到一份"崩溃一致性"数据。</p>
+<h2 data-page-node-id="ub1cI8wy75woJDf1e1lPzN" id="a15-pvc-pod"><!--pnid:BIT2FjoijZxtra14lyhG8T-->A15. PVC 扩容的正确姿势？为什么扩了 Pod 里没变大？</h2>
+<p data-page-node-id="hTmaEzkYK2PUFOL0kmsU3i"><strong data-page-node-id="VIRD0l1J27NLD03MltVrQO"><!--pnid:geLj71nAIBTYauVXaIpTGT-->前提条件</strong><!--pnid:LgGJxE9zDB4BpcwsiQgSTN-->：
+1. <code data-page-node-id="GbAACk4w28yjkvv0NKMjYh" data-pnid-children="WUAFJKDzURkOKPj125kcpL">StorageClass.allowVolumeExpansion: true</code><!--pnid:rp3EHnPrqzKtLcB2bKNuse-->；
+2. 驱动支持 <code data-page-node-id="YAkDrP2CysjrwARZKFyJ9e" data-pnid-children="hbWdqRmB6dvCgGxHUVQCdo">EXPAND_VOLUME</code><!--pnid:x2vjx0hd7LrgnpkCxjQuJW--> / <code data-page-node-id="vx98nPWM6QZnPS7r9GbUeZ" data-pnid-children="TISOz561uS5Z9u0gxEJjzV">NodeExpandVolume</code><!--pnid:8JJGHUYPYO5fYvopJLrpFE--> capability。</p>
+<p data-page-node-id="lnl3IbRzIGnotlbi9WB6Cp"><strong data-page-node-id="GDL3MHwC21lqvTCe35qEZQ"><!--pnid:B9WQjVTlt0Nu2KMShkChER-->流程</strong><!--pnid:DEm6tmRV0HjeoNZnGyuf1B-->：</p>
+<pre data-page-node-id="RSKLA1jii8Tqi36KtBYdC2"><code data-page-node-id="6H64CcyD4oGYcLbVHuEoJW" data-pnid-children="xILrsqAXCww8fYgXhlVZpR">改 PVC.spec.resources.requests.storage
+   → external-resizer watch 到 → ControllerExpandVolume（扩后端磁盘）
+   → kubelet 在下一次 reconcile 发现 PV.NewSize &gt; 当前 → NodeExpandVolume（扩文件系统）
+   → resize2fs / xfs_growfs
+</code></pre>
+<p data-page-node-id="my5x8SvOXqDoNoehmNWHVw"><strong data-page-node-id="9pJzyqSgFRB4XxYyuveqTH"><!--pnid:0zR77Qoua8aharRo1VkJ7h-->常见坑（必答）</strong><!--pnid:Go7de61JvIcq35RpS7VlPu-->：
+- <strong data-page-node-id="Qn8S7nqzM31l5vzXserKbD"><!--pnid:ScotGlj27vCwumtRooghbB-->只能扩不能缩</strong><!--pnid:IqftysdVI9iLpTTQFD1rbX-->（spec 改小会被拒绝）；
+- 若卷<strong data-page-node-id="rw4nXRukvNhxKSCSyNq3mQ"><!--pnid:XPLs5emTMnnxFS4DrC5Kb2-->没有被 Pod 挂载</strong><!--pnid:nHtCADq09QKPI75Q7cK2ug-->，某些文件系统无法离线扩容 ⇒ 需要重新挂载才生效（视 FS 与驱动能力）；
+- <code data-page-node-id="pirjBKfRkhgJWmFnS1BatE" data-pnid-children="hW23A3R6Nwpvsyg47FMQ14">PVC.status.capacity</code><!--pnid:6auQ7UiR9kWsDychSUf9t2--> 与 <code data-page-node-id="fBiRP3QLkiJUY48YzAOcRd" data-pnid-children="brcRYaVW3WnykSHbEedKbf">conditions: FileSystemResizePending</code><!--pnid:9zMjupKNo4dA6HgTAvvxy3--> 能告诉你卡在哪一步：
+  - 条件是 <code data-page-node-id="IzhS4ksbPa7pAIh8Jgbcz5" data-pnid-children="hQ5ntl0xhI626ONbWcWwy5">FileSystemResizePending</code><!--pnid:0B9zUQx7dmT2PfRafDbP7U--> ⇒ 磁盘已扩，<strong data-page-node-id="t9XJyLuEOPJ8Dj2GVQ1urc"><!--pnid:DH3DN89OpGy1C2o5NfJLVF-->文件系统还没扩</strong><!--pnid:Ybo6jbSPv34jnnrZaFY9wq-->（通常因为没挂载）；
+- 扩容后要确认 <code data-page-node-id="NLdJK7Y0o6vFyHeYhoDPgu" data-pnid-children="Tri4VulP8Lfioh6agf6l3a">df -h</code><!--pnid:mCHK2IHy7dIqj7QXB5IGIf--> 在容器视图里也变大了。</p>
+<pre data-page-node-id="9lo77xMOXJehN6VM9rOsXA"><code data-page-node-id="OLelpxScSGufJWADEwVIWD" data-pnid-children="iAanNze0vnZRCKB92zq30Z" class="language-bash">kubectl get pvc db -n prod -o jsonpath='{.status}'
+kubectl describe pvc db -n prod | tail -20
+</code></pre>
+<h2 data-page-node-id="mU7Z7J0hzJ8VpATXqKGhfR" id="a16-volume-health"><!--pnid:X0kIc3GjuOHUguLll9pmML-->A16. 卷健康监控（Volume Health）能做什么？</h2>
+<ul data-page-node-id="eave5777SnGfvNMIXMbgXy">
+<li data-page-node-id="1icp60Zp8PoKWPEsRxQma3"><!--pnid:tCCzORVVPwJAH2GyefuTlB-->kubelet 侧周期性 <code data-page-node-id="JbTieeInVfFvw9sR4ByEwx" data-pnid-children="u82BNZEb44qKEHgfasITl3">NodeGetVolumeStats</code><!--pnid:SulIlmKpHoB1iToQt7qde2--> ⇒ 暴露 <code data-page-node-id="fuaROEr55kSmqYaz1qQOQm" data-pnid-children="78rk7C7VaXLLSvbjcWzmAA">kubelet_volume_stats_*</code><!--pnid:syGQLuZG6JLZT4pzJuPTwo--> 指标（<strong data-page-node-id="Wf2Uk8R4NWYWxABN5znPOO"><!--pnid:ZjMLhrnOMKUnH9QSbHRgRp-->容量/inode 使用率的真相来源</strong><!--pnid:ieEGv8fc30jwAm60AV9ML8-->）；</li>
+<li data-page-node-id="Y5okC9MCqO92xwpvoFByj4"><!--pnid:kolh5ZACu5cxkMfGRYCMHI-->CSI 侧 <code data-page-node-id="X19QpC3IT6d7cS9yj9MYda" data-pnid-children="bFO4WrJ5PtnzW8jtPEwNj3">VolumeCondition</code><!--pnid:qskKuVUpc7Zh9Nmp8Gx7Uw-->（Abnormal）⇒ 通过 <code data-page-node-id="2Vst7XycWmxzv7awMveGbN" data-pnid-children="b6kba3AqaD6luEFA3Y7jHF">external-health-monitor</code><!--pnid:2pqckoCn8W4ALom9atFytD--> 上报到 PVC 事件（该功能处于演进阶段，<strong data-page-node-id="6MGpV2dD9jVYBsU5dfIueF"><!--pnid:d5vGsAIZIccGLTNFGPh8k2-->请以所用版本为准</strong><!--pnid:aVMLXnvs9QCSWqlBYxuaXU-->）；</li>
+<li data-page-node-id="Oos3NUI7rOkbvrtj35xYLK"><!--pnid:9SspZr8bOh5i6yPayb34xb-->应用层仍应自己监控 IO 延迟/错误，<strong data-page-node-id="ZL9liL1SsDTn3cojgFDmbZ"><!--pnid:rcnNOAIryhZdbDrVFMqIbC-->不能只依赖 K8s 层</strong><!--pnid:5y8qeFlGUacY7Yzi3jeD8y-->。</li>
+</ul>
+<pre data-page-node-id="z9utEypKBwSYGpb8mgjKrv"><code data-page-node-id="MmoINHlbQ4V895ZoJJhfDK" data-pnid-children="PTIN84pW2RRhmDanPoMNky" class="language-promql"># 卷使用率（最基础的容量告警）
+kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes &gt; 0.85
+# inode 使用率（被忽视的高频事故源）
+kubelet_volume_stats_inodes_used / kubelet_volume_stats_inodes &gt; 0.9
+</code></pre>
+<h2 data-page-node-id="PG1ViJPHuZTmr1nPTucqTu" id="a17-emptydir-hostpath-local-pv"><!--pnid:xvbj2vlUUf51wG5ETio2lg-->A17. emptyDir / hostPath / local PV 三者的区别？</h2>
+<table data-page-node-id="QMLus3ozKtfRMcRVaYtsPT">
+<thead data-page-node-id="i5rKcKGdl8X5SxQwibXraw">
+<tr data-page-node-id="ygRiG7hPsAYVZQcApTXNMs">
+<th data-page-node-id="6kDr87ZvrR2C6GUdlfhrVK"><!--pnid:fzDTs5OFu9bGa8IcDuV8yY-->类型</th>
+<th data-page-node-id="ou47HcHNiwnPtizpnyMdmv"><!--pnid:J6Y4SYnj8YUi5lUorYAITC-->生命周期</th>
+<th data-page-node-id="KFztl4hk4sstb792rbRQ2k"><!--pnid:u9911xv1mp0NdORa5I1JAb-->调度感知</th>
+<th data-page-node-id="qKVobc9hoTDV2ln3Wk81Tu"><!--pnid:R5QeEm1evX2n4CUUsuZwM7-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="wzLP2fzQKhLys5oMANsVfh">
+<tr data-page-node-id="dyjLgdNIkr1nfzgUVlMkss">
+<td data-page-node-id="t6UehtmeGTTUzp3KWAgmGw"><strong data-page-node-id="bnfjzA0ifa1n1H5W6QgvwQ"><!--pnid:9uiZjwY0KWYsbRKenzIkjm-->emptyDir</strong></td>
+<td data-page-node-id="TBnS1Vdfmu4T3fRyqSSNhU"><!--pnid:ZsL7n7WqSMswFpyMOZgfzo-->与 Pod 同生共死</td>
+<td data-page-node-id="3rs8UUhgRxTKnLSpaDX9UL"><!--pnid:x8I2BJYG7zQWGMozotwYBm-->无</td>
+<td data-page-node-id="SpPbu7v3cLtgTMW4xDi9Z6"><!--pnid:FFSb8h1zqARVnSDE4SSMxF-->临时缓存、scratch 空间（<code data-page-node-id="gbrjtc4gCgUAzHq7SRwzqa" data-pnid-children="A0loCVOAS3pzViPtGhnlwL">medium: Memory</code><!--pnid:WEseYWjGeVlYvAOE8dXOHs--> 用内存，<strong data-page-node-id="e1h2rVC4y69XpSBlGSG7fi"><!--pnid:oePAkonaqydRrkBM5ORkUM-->会计入容器内存 limit</strong><!--pnid:Rpvdw5UrKkQxyqXpZIjWVO-->）</td>
+</tr>
+<tr data-page-node-id="sEwuK0PrHSXSGffzCxeQ16">
+<td data-page-node-id="9OGl0prYsYgFeKrKNvardB"><strong data-page-node-id="1AsFkGZ5Cf2PPnUhDPx0Jl"><!--pnid:3flr7cyIPyKQ1TWBuYSZmW-->hostPath</strong></td>
+<td data-page-node-id="UA06J9p5o5ySYHFjimIH4r"><!--pnid:tCwsSr9D2r1nK0g883fOQf-->数据留在节点上</td>
+<td data-page-node-id="sDoiqcvotwIq8yr7yfypSw"><strong data-page-node-id="ycoLacaw3MMOhXuQ3xX0D5"><!--pnid:8VlRTJDDvrv7GW6Ulh0k6u-->完全无感知</strong><!--pnid:WkyDSBIbpQBjt8YJohylfS-->（Pod 漂到别的节点就"数据丢了"）</td>
+<td data-page-node-id="vvPIgNuMR55tVWPpR7kNov"><!--pnid:82Gy7zAqwvXN15drkqdj6s-->仅用于读取节点文件（日志采集、CNI），<strong data-page-node-id="O0HFo5xOMMnJyPzTlQ3uQa"><!--pnid:T6dfgONhrNWI50Sp4FcyqJ-->禁止承载业务数据</strong></td>
+</tr>
+<tr data-page-node-id="hHPJRIuVa3sVUtJAQq8Srv">
+<td data-page-node-id="yHlDHXCcaEU7Yv2BAVEgim"><strong data-page-node-id="rR2BFNC6f51UNQoknNOw8r"><!--pnid:cEbiAsyqvhv2wNhlLTcTg6-->local PV</strong><!--pnid:36mulk98MvrmEK4o0LMaMT-->（local volume）</td>
+<td data-page-node-id="yJ4orulPv0A3gCqzLhNkp9"><!--pnid:nGa3vQBDKhbJpRnXdnXNNr-->跟随 PV（Retain/手工管理）</td>
+<td data-page-node-id="eARjbN3w6kKbxbOVykDI4L"><strong data-page-node-id="jSgdWaPwSYrlarMlurOTNv"><!--pnid:g4AZEdtWoWRbgdGhEtXsd1-->有 nodeAffinity，调度器看得懂</strong></td>
+<td data-page-node-id="O7sjV3epTWxNuoJ1FhE0KV"><!--pnid:2KPsE8f2haKRty5BLFOESC-->本地 SSD / 高性能缓存类有状态服务</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="aAf5nVYDWI4LCSRWls4TVG"><code data-page-node-id="qGzDc3cMtVkxccnOSYTAzl" data-pnid-children="lj4cPTUqLnzgm7SGVLRvrM" class="language-yaml"># local PV 示例（由 local-static-provisioner 自动生成）
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-nvme-1
+spec:
+  capacity: {storage: 1000Gi}
+  volumeMode: Filesystem
+  accessModes: [&quot;ReadWriteOnce&quot;]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-nvme
+  local:
+    path: /mnt/disks/nvme1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [&quot;node-7&quot;]
+</code></pre>
+<p data-page-node-id="JmCtDSo1R3RVmA3vOM8KhM"><strong data-page-node-id="WgG8h9UHaplSbITqkR33ru"><!--pnid:Sky0DhCs7UJ7YfEp56BhIu-->必答</strong><!--pnid:wqu8jYeKNYSBYHrY0XEJt4-->：local PV 的高性能代价是 <strong data-page-node-id="7vDGglXqdZYIqsHzyVJpqN"><!--pnid:nzv5XxQyHxiaduEdTcwdXt-->Pod 被钉在该节点</strong><!--pnid:S3zDYnBeIaeQYkOuXOHXcB-->（节点故障 ⟹ 数据暂时不可用），因此<strong data-page-node-id="A600JlcX7RGR1jscPGtsu4"><!--pnid:Q1B6WGcH8VXdHjhX1kUkbC-->必须配合应用层多副本或存储层副本</strong><!--pnid:aE3P9aLwi73SRvWlcDvO3T-->。</p>
+<h2 data-page-node-id="neqQJqTA23tOAdfUsA0DUo" id="a18-projected-secretconfigmap"><!--pnid:YYOtEX6OyJB4M9RZr0dlwp-->A18. 投影卷（projected）与 Secret/ConfigMap 挂载的热更新？</h2>
+<pre data-page-node-id="eVMvnotan2wjygm2okfVts"><code data-page-node-id="QxLuvGBr9sqkCpvC28cQzF" data-pnid-children="bHc1Bu4y0spTZ2gL22yaJ1" class="language-yaml">volumes:
+  - name: all-in-one
+    projected:
+      defaultMode: 0400
+      sources:
+        - secret:
+            name: db-cred
+        - configMap:
+            name: app-conf
+        - downwardAPI:
+            items:
+              - path: labels
+                fieldRef: {fieldPath: metadata.labels}
+        - serviceAccountToken:
+            path: token
+            expirationSeconds: 3600
+</code></pre>
+<p data-page-node-id="F0CnIM5ReWPh20SiaOl8S2"><strong data-page-node-id="Me4SKqtQ72jElMKaCuxnTf"><!--pnid:MbV0z10eccGBW2WQz3LPK0-->必答</strong><!--pnid:h69QUIfe2uzm2jzdurRykC-->：
+- projected 卷把多种来源合并到一个目录，且<strong data-page-node-id="ui1b6cScHYZfLxN6vnUJxB"><!--pnid:6jR1SA33lNejjH8owLZxrw-->更新是原子的</strong><!--pnid:rxRAscPEwPw0gqAHLwYbYZ-->；
+- ConfigMap/Secret 作为 volume 挂载会<strong data-page-node-id="ORfrpV4C7Q97WccFjwmFE2"><!--pnid:ciNQCzkWOGzL9dfsKiDdkS-->定期更新</strong><!--pnid:ZhvyKWU1314y2ZD9re8qBQ-->（非 subPath 时），但<strong data-page-node-id="9b82keDZgRmR2cQmGQsgpS"><!--pnid:XXWn5ihCIYCldLlcRFF7Se-->环境变量注入不会更新</strong><!--pnid:criEQ9x1vsrlxH96YP9Im4-->；
+- <strong data-page-node-id="FNraBKLJZzq7Rjlkaqdc2r"><!--pnid:5LGLthThKDyUNfk1ZmRL1a-->大量 Pod 挂载同一个 Secret ⇒ kubelet 会 watch 它 ⇒ apiserver 压力放大</strong><!--pnid:gYqDeliLiX16nxA3mJtwz1--> ⇒ 大规模场景应使用 <strong data-page-node-id="lKcxJIZSykjIazF0bBxQrm"><code data-page-node-id="UYW3YA3fwBYahBkuvIIsdU" data-pnid-children="xhRLhz2e34C1DhvzVqFNHT">immutable: true</code></strong><!--pnid:gcuextfdvyyOyw8l8BOpk8-->（减少 watch/拉取成本）。</p>
+<pre data-page-node-id="aHuBTivIf3g2WqyR7eWHKG"><code data-page-node-id="CBCw4bKzFTxVamcmBZh0vu" data-pnid-children="UNkLxEFutG97wED3ZzlVGJ" class="language-yaml">apiVersion: v1
+kind: Secret
+metadata:
+  name: db-cred
+immutable: true     # 大规模建议：不可变 Secret 可显著降低 kubelet 侧 watch 成本
+type: Opaque
+</code></pre>
+<h2 data-page-node-id="9FM10O5QWksMUTVkt3SYoD" id="a19-fsgroup-pvc"><!--pnid:BtgjmAs05gxT14TkIlwfyI-->A19. fsGroup 与权限：为什么 PVC 挂载后目录不可写？为什么首次挂载特别慢？</h2>
+<pre data-page-node-id="RMQFVWh00xvCV61yqo4Sjj"><code data-page-node-id="fs0qOYe2xGlS5kfg07fG7C" data-pnid-children="UAp55PqB3o8wE9dSElA1M2" class="language-yaml">securityContext:
+  fsGroup: 2000
+  fsGroupChangePolicy: OnRootMismatch   # ★ 关键优化项（版本相关，请核对）
+</code></pre>
+<ul data-page-node-id="bfupGQVeu88HfR8RNinWh4">
+<li data-page-node-id="rEa2Nzw9dbHhBfnmZ0GjWm"><strong data-page-node-id="ZV4lsPPXSVY42wpDY60pp0"><code data-page-node-id="l2mcpFbM1uiKvxaceX1Y2Y" data-pnid-children="ybrCwotKb0D1eqsNZfQdDV">fsGroup</code></strong><!--pnid:rBse6Y7m0uUC4v9zWgHSQr--> 会让 kubelet 递归 <strong data-page-node-id="jhFuW88eGM7j0xKlvIPzM7"><!--pnid:WRSG5T11PuVV3Y1vy1iNlp-->chown/chgrp + 设置 setgid</strong><!--pnid:3mS9dRYfz8AOVPOdOlBJ7j-->，让 Pod 有写权限；</li>
+<li data-page-node-id="KEsBvxW1qs2ThsXYBDYDBI"><strong data-page-node-id="Af6hHnEpr7SR9vm1hkttBG"><!--pnid:783syuSf0deKVxl4vN30RO-->痛点</strong><!--pnid:ehCpbaWv21Z0AWGu8tj6pB-->：卷里文件非常多时，递归 chown 可能耗时<strong data-page-node-id="WIvjzfbz3nr2Tf3ANqXAKJ"><!--pnid:m3VHR3kVusKBVfcodN5WKP-->数十秒到数分钟</strong><!--pnid:t9tRIHgiZs7KwSleijCOsw-->（这也是"Pod 首次挂大卷特别慢"的常见原因）；</li>
+<li data-page-node-id="Ds1ciraicZJ9Pkod2XCbp8"><strong data-page-node-id="IVCDiC5GAAZPDQTRQAxtKx"><code data-page-node-id="ri2LC8gkGiMlmTlP0WZPmh" data-pnid-children="2uRECrV8FB05NvsNYBxtUY">fsGroupChangePolicy: OnRootMismatch</code></strong><!--pnid:UkvIDH1IXrZCa5ORisUcE5--> ⇒ 只有当<strong data-page-node-id="g0eIr3lZUwT9z8oEwWJLMG"><!--pnid:K1g7WbZE5Nv0OzEzf4hgoM-->根目录权限不匹配时才做</strong><!--pnid:kTCPtwbCQxDW1Cu9qm6Un1-->，避免每次挂载都全量递归；</li>
+<li data-page-node-id="cJDCCDkbW6UHxQx7AsiA60"><!--pnid:zF7hoX6nRSXoYvtv6j3i2X-->另一种做法：在 Pod 里用 <code data-page-node-id="SMC04yS4CONytabzQR4q9m" data-pnid-children="b87daqQFfKqFtAtbr8nEan">initContainer</code><!--pnid:3r17d1MQ9WxyhJ3oMtJ8hw--> 显式 <code data-page-node-id="YEuGOTkC8iHKYkmBFIXhL6" data-pnid-children="YpiOuRZ7hTrjLkVeCpcCfK">chown</code><!--pnid:O6TLiWtUnMwzyN6qTa4PW1-->，可控且可观测。</li>
+</ul>
+<blockquote data-page-node-id="zozXgkIHf6NEz0LaQb8yow">
+<p data-page-node-id="cAuuGHlJ0jICGHAv3ym5RW"><!--pnid:OH3FN83uVCfrSR39poc6HP-->注意 fsGroup 配额 (<code data-page-node-id="wXs5eeDI8l2pixRZwcO5kh" data-pnid-children="WuWyAaPaglW3yUVlaDxhBA">supplementalGroups</code><!--pnid:Td7ieRFbfbx6jmwXLpGbY9--> + <code data-page-node-id="Z6YlxnhBI3iwJsCHG21Hyv" data-pnid-children="gPgPdk6tOMmTtiA1AmKsv0">seLinuxOptions</code><!--pnid:hq6ivVdEWAANAPUZ4NAJZU-->) 也会影响。</p>
+</blockquote>
+<h2 data-page-node-id="UpSGgUmhOSwuA5rEXve2oA" id="a20-subpath"><!--pnid:QipQy19yyqHJmGMkDA0V13-->A20. subPath 有什么坑？</h2>
+<pre data-page-node-id="H3IfFh1vCVOyXg7vIuZQV5"><code data-page-node-id="4ZWAaScZN2fcoSXEHKnyD1" data-pnid-children="j2kHVG2iARf12CUhoW7rQm" class="language-yaml">volumeMounts:
+  - name: data
+    mountPath: /var/lib/mysql
+    subPath: mysql        # 只挂载卷里的某个子目录
+</code></pre>
+<table data-page-node-id="2s6fRewBOohnbjffio4Adi">
+<thead data-page-node-id="KHwXO3g0u7pM5OURX7fdVa">
+<tr data-page-node-id="AhTHLPEnyAitNvQJtLN9yI">
+<th data-page-node-id="kNWEDHrvt84177JAM1qHWs"><!--pnid:wMzukNOOQwcBooZZi5D547-->坑</th>
+<th data-page-node-id="e5o9FzH6Ne1oBB2PJshYvp"><!--pnid:W2vCdxtlAaCWP9ESbYfvIz-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="3MmzNWm7b2WdsbpC4Kb8fi">
+<tr data-page-node-id="UVdouSbo6xwtCMcgKsoPoz">
+<td data-page-node-id="RNiWnOBc8vEwYHmIqRM5Ez"><strong data-page-node-id="NtPhC0RWz4roian2TWBrgI"><!--pnid:htPesX4s9WwoOvCUC9KncQ-->热更新失效</strong></td>
+<td data-page-node-id="h95NTf4uBK041w5BMdU4EX"><!--pnid:0xasSW6Dk8KyhhalI46fFE-->subPath 挂载的 ConfigMap/Secret <strong data-page-node-id="RS9HJJp7yLUy6egdEfGRGI"><!--pnid:Y399CoOAg7xUBxvKYzq3AR-->不会热更新</strong><!--pnid:wTH0pynUTGifYUtYVfxXPC-->（符号链接切换机制失效）</td>
+</tr>
+<tr data-page-node-id="Fk6PQ4JHelI6iYuMtPOirz">
+<td data-page-node-id="Cx6ncC88jZHURi2wsPLXfl"><strong data-page-node-id="xPONGqYvoZupUPx27vMfeZ"><!--pnid:1m1ahHJMsEf69z5Hh6WBGF-->扩容/ cyanide 行为差异</strong></td>
+<td data-page-node-id="MBY0O7KN1mkg0RTofWcwzn"><!--pnid:gWeLP3BDU61GTKTTvW2Fd0-->有些行为与整卷挂载不一致（例如某些检查依赖卷根路径）</td>
+</tr>
+<tr data-page-node-id="wXuGxTNBhKwEGVHt6VORhh">
+<td data-page-node-id="Ilm0vXuaYCRdPcwMCquKKK"><!--pnid:Y2MpiJXH7j7EBK1wSQ1t7K-->变量替换</td>
+<td data-page-node-id="Qvf46VMKiDl2smH4kivWEV"><code data-page-node-id="QAWtzjuH0QYCV6JABW2auM" data-pnid-children="Zxt1A1HaKs5Ia7oQmIObr8">subPathExpr</code><!--pnid:cD7AH7aAXX43rXX7cBc0sJ--> 支持从 downward API 取值（<code data-page-node-id="dJDhFv3u0sZY0mFZH3QsRW" data-pnid-children="gPSESr2RyTMfaMh5AwnPo6">$(POD_NAME)</code><!--pnid:MeYvDqDMrU3Qz7MF8WmcUL-->），可做"每 Pod 独立子目录"</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="zz6mohJTcybMTUu8LNAc18" id="a21-mountpropagation"><!--pnid:nhdRI3OQBep5X0Cn83SL5N-->A21. 挂载传播（mountPropagation）什么时候必须配？</h2>
+<table data-page-node-id="3OfT6R7XVKuEpwAkQ5sgRa">
+<thead data-page-node-id="TIJPPP7fhxBTQ9S6dN83O3">
+<tr data-page-node-id="eDIIuTUUJq27YPhVmRl3On">
+<th data-page-node-id="a3HMYaw2oD7rH1elaqxW60"><!--pnid:48YDraBJfmb5vKDsBm9O3f-->值</th>
+<th data-page-node-id="8ky3EJA53o05JdVjwkbUVD"><!--pnid:l3AaPbOcbYUedIyYCO2bHV-->行为</th>
+<th data-page-node-id="VsrOhxCfk9AaNHgFvYbvFl"><!--pnid:M9kfKdi5Mq2oy6YXLpJFna-->典型用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="KCbLHZSuvkHXbH6zhv3fj3">
+<tr data-page-node-id="U1QshKKyZZiTfMOzyQPyfR">
+<td data-page-node-id="GdnBvGpyY5ka0oJmQfRHl8"><code data-page-node-id="Hpp7dFBbtnh9WRXh1ImKXQ" data-pnid-children="mlGE6VHNc0BWkBGzP4C6SK">None</code><!--pnid:AjVr3m2nBVMqpG54IsQDzn-->（默认）</td>
+<td data-page-node-id="CzTHpXQOojNrQ4ezb82QZ5"><!--pnid:ZqGRWaFCxFPCRI2O6TaPDO-->完全私有</td>
+<td data-page-node-id="RxZ5SWb9q5uJLvhnWF7x6e"><!--pnid:vCNGay2EbdRZyX4eXYwzVx-->普通业务</td>
+</tr>
+<tr data-page-node-id="hleRPhUZrKSedGlDZrXRoo">
+<td data-page-node-id="OeinkWKL6sfQPA9US3A9Rm"><code data-page-node-id="awFPJT4AaeRmKEkdIhEM9t" data-pnid-children="Zu8cgW74s5YAzUlNNEOAaP">HostToContainer</code></td>
+<td data-page-node-id="LVNrI0mIBtI6C7csNQsh32"><!--pnid:qp3zAlDM44br8MXNivSvQs-->宿主机后续 mount 能传进容器</td>
+<td data-page-node-id="hJc239j5SR36yi8I6Yg9Z4"><!--pnid:GRvlAg4lzcaStquUJSAIuQ-->想看到节点新增的挂载</td>
+</tr>
+<tr data-page-node-id="TIAdgF1XgFULFg3RQInRLC">
+<td data-page-node-id="yVxRrUmkgW8wmsWbifMhDg"><code data-page-node-id="h8tgLRTHgOcz94hHbztYL5" data-pnid-children="SNjx5QuE1aAIWxyukKLdnS">Bidirectional</code></td>
+<td data-page-node-id="UyH2oqa92S7DznNMfMpY8Q"><!--pnid:9xn1bxmWqDqm7rFGuxLGMB-->容器里 mount 也能传回宿主</td>
+<td data-page-node-id="gxDixw488vN9i01vqCyDv9"><strong data-page-node-id="iqsQtyWt00VAlPz5X6gCxc"><!--pnid:OAyxtNR9abHeosgqQbFECF-->CSI node driver、块设备管理类 DaemonSet 必须</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ktzd3TE5CJFqqjrSMvFVOb"><strong data-page-node-id="sLndTu3w9jDfLC49PtmDID"><!--pnid:RwcOyAhY7VTc4uUwwnM7ZO-->必答</strong><!--pnid:qkuxg5bV1LQns7Xt9tHCPI-->：忘记配 <code data-page-node-id="FxpTa0i2EIU3ecKRnTzZQJ" data-pnid-children="o4fADVjQu9Vx5G1UNbYjuS">Bidirectional</code><!--pnid:FIAK7oCNitmDbbFomLDdAW--> 是"CSI 节点插件在容器里看不到宿主 mount / 挂载不生效"的高频原因；因为它是特权能力，通常需要配合 privileged 或更细的能力授予（<strong data-page-node-id="aoyODUpKxnmE5RVMSkH69S"><!--pnid:TdBmuvzO1jCOvPiljQeqXl-->注意安全风险，别全集群放开</strong><!--pnid:QkRXiTtZnr9oooTanFd62C-->）。</p>
+<h2 data-page-node-id="3hi2xj42rDWLYPRhlnePbK" id="a22-statefulset-pvc"><!--pnid:mrjcHjKRjItwqz9uBKDJFA-->A22. StatefulSet 与 PVC 的关系？磁盘为什么会泄漏？</h2>
+<pre data-page-node-id="NPg4GR5urjFGdbBJx1s5Jg"><code data-page-node-id="I0plJta7yWkCraSTj8m0Fa" data-pnid-children="SCp2sBnbeu1d13Q7OTnK3V" class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+spec:
+  volumeClaimTemplates:            # ① 每个副本自动创建 PVC
+    - metadata:
+        name: data
+      spec:
+        accessModes: [&quot;ReadWriteOnce&quot;]
+        storageClassName: fast-ssd
+        resources:
+          requests: {storage: 100Gi}
+</code></pre>
+<p data-page-node-id="6NXpaHsyzU5OLhf0MilK0m"><strong data-page-node-id="bZ6AVsCWN77QjRyDwxBxuV"><!--pnid:VPH7aTfq1xkQ8QOLuQ4CLt-->命名规则</strong><!--pnid:JHJy5hpyrBykXiQbLo22Sh-->：<code data-page-node-id="xOnP8hnmzS6D7sr5KybMxx" data-pnid-children="EkD0aImAnBxeQAgxwpT1PZ">&lt;claim-template&gt;-&lt;statefulset&gt;-&lt;ordinal&gt;</code><!--pnid:9faMFAo6GXeEgEebSXJF0G-->，例如 <code data-page-node-id="2k2gzg8ujuK787a0LAI9r3" data-pnid-children="NqqtFj7ved7qASJ292HfWw">data-mysql-0</code><!--pnid:zhraPCpq3Rcl4j6QUPIyND-->。</p>
+<p data-page-node-id="jq3KvyAVi8XVfTfqyACeyf"><strong data-page-node-id="B54ZLeYYjYSyQpYgO87erE"><!--pnid:fITN9umLlhzlGWm30wguaS-->必答的三个泄漏来源</strong><!--pnid:3k0yWf8ReXjC8SCO9Rhcsi-->：
+1. <strong data-page-node-id="xbrVhQKVbXZfPZN2Nc5EfB"><!--pnid:0GQPMy2rQVtDEegE6aCo0W-->删除 StatefulSet 不会删除 PVC</strong><!--pnid:uEwheokUPPIxLir7qkv1Qa-->（设计如此，防撞误删）⇒ 需要人工清理或用 ownerReference 方案；
+2. <strong data-page-node-id="UMWxPY4HbVt0RV2CJzaSMi"><!--pnid:n49dJut9y6DboMWpNVoHZk-->缩容（scale down）也不会删 PVC</strong><!--pnid:0wkAQGGbxNono3tWD6UZ8g-->（保留数据以便扩容回来）⇒ 长期缩容会留一堆闲置盘；
+3. <strong data-page-node-id="rNVILTKE5S1kRUffXKuUb3"><code data-page-node-id="XB9vYdTA0gFZJpO8LQkKkY" data-pnid-children="dFjNiHMwaBQTUhzaeqztKu">reclaimPolicy: Retain</code><!--pnid:Zfq89qYXH4d7BWhkr5biF3--> 的 Dead PV</strong><!--pnid:aBbxdME0qmYNi48wU5oSlM--> 没人管 ⇒ 孤儿磁盘持续计费。</p>
+<p data-page-node-id="wn73ge5SS5QonPy9vOFYur"><strong data-page-node-id="szk3dL2XWlgPivUvuChRsq"><!--pnid:w5OBRPar9JJIaAjwOBcQq9-->治理</strong><!--pnid:iWewmu6xRGfDxIgYUoOCVv-->：
+- 建立定期巡检：找出"未被任何 PVC/Pod 引用的 PV"与"后端的孤儿磁盘"；
+- 给 PVC/PV 打 owner/team/cost-center 标签，做成本归因；
+- 删除流程必须进工单，并核对是否有最近的快照。</p>
+<h2 data-page-node-id="ED3vBtkqYzlsBsrVgcTpFH" id="a23-csi"><!--pnid:bpnURleKQMX39alaFGpymf-->A23. CSI 驱动的"凭据"与轮换怎么做？</h2>
+<p data-page-node-id="yEiYTzF1sXCIJIWNcpiNoU"><!--pnid:EBMWMbobzIDmCXv3DKfTYm-->CreateVolume / NodePublish 常常需要凭据（通过 <code data-page-node-id="tM20Z5GKtLPC1E22M6q746" data-pnid-children="Weu1LMPsYDTJ9TDtpqv3Ct">csi.storage.k8s.io/node-publish-secret-name</code><!--pnid:rp9cilOZw3GR4wJRrcE4dw--> 等参数引用 Secret）：</p>
+<pre data-page-node-id="H1i76CS87KfYSIV9wndpD9"><code data-page-node-id="pw34GnGhg9dtkopXmMZhDp" data-pnid-children="rDC64UjutKZUS0imfnb1Jx" class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: secure-rbd
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: &lt;ceph-fsid&gt;
+  pool: kubernetes
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-system
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-system
+</code></pre>
+<p data-page-node-id="4UMptesvKIl1LDnWWBWehi"><strong data-page-node-id="nbchiGljofc75voyI33xco"><!--pnid:BuwUNnpExADduDSpf3fxg2-->必答</strong><!--pnid:7pvjvhivRbf1M1yYWuuEIS-->：
+- 凭据泄漏风险 ⇒ 严格 RBAC，Secret 只给 CSI 相关 SA；
+- <strong data-page-node-id="uLHCs9tcC5INBF8sq5QJaD"><!--pnid:2vqGBGo7Yfoynkjt3gQ4aT-->轮换要有"双凭据并存"窗口</strong><!--pnid:DwEKh1eJKO1XQLR3wVwZwO-->，避免轮换瞬间所有挂载/供给失败；
+- 凭据失效的典型表现：<code data-page-node-id="t3M6oq0HWesusuBEHqxEHF" data-pnid-children="yHh8QFtk7C6IAu7g3mwCYE">Failed to provision volume ... AuthFailure</code><!--pnid:Uu0F87DHpHLAA4A2Akoq3u--> / 已有卷无法 mount。</p>
+<h2 data-page-node-id="dmgZwaIEz5vbK9VsIDW5XC" id="a24-csi-driver-csidriver"><!--pnid:DibOAArsq6Lp0GQ9yVtH2E-->A24. CSI driver 对象（<code data-page-node-id="b4ykxVi0ouPY8gC8sIBTdp" data-pnid-children="Mv4PCZrEL5PCyJJYvMfdBK">CSIDriver</code><!--pnid:JjdApPDAx8hg73GEl0Jfqx-->）有什么作用？</h2>
+<pre data-page-node-id="Ta6tcgsBlhjsZWBQpUhd47"><code data-page-node-id="jv0iTo1lYUXBde5lfPLjwh" data-pnid-children="8Ld9tfKkSUF0EWAsfn7h9Q" class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: ebs.csi.aws.com
+spec:
+  attachRequired: true              # 是否需要 ControllerPublishVolume（attach）
+  podInfoOnMount: true
+  fsGroupPolicy: ReadWriteOnceWithFSType
+  volumeLifecycleModes: [&quot;Persistent&quot;]
+  storageCapacity: true             # 是否上报 CSIStorageCapacity
+  requiresRepublish: true           # 是否需要周期性重新 publish（版本相关）
+  tokenRequests: []
+</code></pre>
+<p data-page-node-id="Lgy8Vbqe8kiAjpWDl0i4VY"><strong data-page-node-id="Zf9XCGy92QIiphLVuDHfM0"><!--pnid:eyzTGtDIjPLxTZY06ijkA1-->必答</strong><!--pnid:gpx2ZK3lEamlb47LgpXCyY-->：<code data-page-node-id="pluBuspaO9kU1zAnfschKi" data-pnid-children="yHkQaUb3XyBFyn3PPuKJkn">attachRequired</code><!--pnid:zzTiE9kkOrSuA7fj34Ceok--> 决定 <strong data-page-node-id="U1SAL0RINoDVzBi1KiG0Nt"><!--pnid:xdBqIVhTVzTTGWEpuUshQU-->是否走 attach 流程</strong><!--pnid:L7huj1kqHfzKJGqGy6tqwH-->（云盘 true；NFS/CephFS 通常 false）；<code data-page-node-id="5r3jRAl6ecYVdhh1RwiX6A" data-pnid-children="lkDglJdlM3IaoPhOW6Axaq">podInfoOnMount</code><!--pnid:zUbkgdDn8HMAhUAChuS38v--> 让驱动知道是哪个 Pod 在挂载（用于按 Pod 鉴权/审计）。</p>
+<h1 data-page-node-id="p8T0wOXWfh4C36T0ONpJXC" id="part-b-18"><!--pnid:flgmhEgkg72uJnql0L9uya-->Part B · 常见存储方案 / 模式专项篇（18 题）</h1>
+<blockquote data-page-node-id="w22pMYwOG0xzlaTN5VBLiQ">
+<p data-page-node-id="jpcAqvYxhHVjCJjgMt9oLS"><!--pnid:4kAY35xsf0kgBbbzEiHFvG-->这一篇按"方案能力矩阵 + 各种模式的取舍"出牌。</p>
+</blockquote>
+<h2 data-page-node-id="rHOOCpNyORmaRMh1sc14QD" id="b1"><!--pnid:m3429bK5P54GI7ARkipUj3-->B1. 先分清楚三类存储：块 / 文件 / 对象</h2>
+<table data-page-node-id="ynF2CGvNfKofyPwGr1y3RU">
+<thead data-page-node-id="vDqVKHo8KRBGLeqr9XynNw">
+<tr data-page-node-id="J9LECWr77W4urZfauDSczO">
+<th data-page-node-id="t35lt6G5KGHnt9QtXY7d2M"><!--pnid:iBUUBVWt4nJh2aTnI1KZoN-->类型</th>
+<th data-page-node-id="34brPW8hh5iiLx8cbFKWXW"><!--pnid:NeIMXTnDeMcmQg3dft7wK2-->语义</th>
+<th data-page-node-id="ai1Maesix3vbClbqyqdRrs"><!--pnid:k7GHp8P3NB9LQuyYO4T7Fn-->K8s 里的消费方式</th>
+<th data-page-node-id="XWUwUY5hmDHbQY8Me5NYiJ"><!--pnid:4m0uWZ6Pjrko2iTr5Q4f37-->典型用例</th>
+</tr>
+</thead>
+<tbody data-page-node-id="d3AqdDf7gnGKTavJMDLf0O">
+<tr data-page-node-id="qaUUlr7Nvm6dW2vUAtD3hy">
+<td data-page-node-id="IuZiG4qeXYM1yUIF7jHdRD"><strong data-page-node-id="8QD7tUWRSwNnaP0yES6Gzx"><!--pnid:k6hYxaaZJAiTwea5WrfUKo-->块（Block）</strong></td>
+<td data-page-node-id="Cszm0sIwqaFIjZA2oVVGYB"><!--pnid:q2KiWmAP2pHbyoHSEj9Rw5-->裸磁盘/裸设备，自己格式化</td>
+<td data-page-node-id="bcXmnCwsQ0tKVmqnzmVeE9"><!--pnid:hD8RomlEUQ6OXa33HNJuWy-->PVC（RWO）为主，可 <code data-page-node-id="QI3ObNLyqZaW7GULUaYnxb" data-pnid-children="hr6E7es2SCXIWUgxxiEqYa">volumeMode: Block</code></td>
+<td data-page-node-id="Ujn7vy2Noo23hFO8zxPpgC"><!--pnid:zJvhRvE0R7tymGA4enLvb4-->数据库、Kafka、etcd</td>
+</tr>
+<tr data-page-node-id="pyPgp4eQVuf00dbx60khPg">
+<td data-page-node-id="ncAAVNAyvpTJGZUqHBIvbW"><strong data-page-node-id="5Du5DBm5URexZdDByiAsaw"><!--pnid:X2JvRpMl7Fr6nNzLpszN2i-->文件（File/NAS）</strong></td>
+<td data-page-node-id="JUWJAa0f0SrOKzSXdOvXED"><!--pnid:4yDBfFG6CFUtW3UeuA1pUr-->带文件系统的共享目录</td>
+<td data-page-node-id="MGAlF9e1RVWBJCC8SWlBF2"><!--pnid:rWjng9I5aS05ZLe6L4N79T-->PVC（<strong data-page-node-id="FgICx4euWbIL91nm2YMFeC"><!--pnid:yFKZWDgGFYbZxym6BUGX9b-->RWX</strong><!--pnid:pcT0P89LPTF4POzB4HoAQv-->）</td>
+<td data-page-node-id="nuENWyZ1qPST0inM8X3Apc"><!--pnid:dZLo2JMxEVgs08vcNr4Y0E-->多 Pod 共享内容、CI 缓存、媒体处理</td>
+</tr>
+<tr data-page-node-id="l8H1JbbMMKRtuVVL22LkTm">
+<td data-page-node-id="wN707QgpGLmdCAZjNQEPdO"><strong data-page-node-id="i40hL6lYyMppsyzjvPBo4W"><!--pnid:nbZVypGMIau2Q3AYBaLGPO-->对象（Object）</strong></td>
+<td data-page-node-id="V8R5r0LQWfcIrMzHDXQsCU"><!--pnid:k5ZntngFURA1wT5tHTWawV-->HTTP S3/OSS 语义，非 POSIX</td>
+<td data-page-node-id="zZjXDyfGDcClaidZdnp11Y"><strong data-page-node-id="hO3pKNOCyAxMgRCL0VNa23"><!--pnid:KLOwzMV0mlkh3qd8d6eNol-->应用 SDK 直连</strong><!--pnid:AIch8zKAcpZ7XE0VAq53sC-->（最正统），或经 CSI/FUSE 挂载（性能与语义有损）</td>
+<td data-page-node-id="XdGamIs33THn7mKsptPFqA"><!--pnid:lT8XOmr580aVK6KCsAlJVj-->图片/视频/备份归档/日志</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="8AZZIppoNPmkWTEQsXfypZ"><strong data-page-node-id="XFg8yq1cJtvWlNu4qSPPYE"><!--pnid:QuQKopL20HBe0u6IXE8f19-->必答</strong><!--pnid:lDCFR8NnZBIJiGNs27Xsps-->：把对象存储当 PVC 挂载通常要点游览从来都不是最优解：POSIX 语义受限、ls 慢、追加写成本高。<strong data-page-node-id="aZ5ZDJHp3gfXt21dq02gFY"><!--pnid:sVw4qSgDsshuJLKlHLLtR5-->选型铁律：能用 SDK 就别挂载</strong><!--pnid:f9TkOhQD8fNzTPIjHk58st-->。</p>
+<h2 data-page-node-id="pQYcIvixk2hqToKfizkw8S" id="b2-csi"><!--pnid:T8LsUzezrfuN0wivX9NR9T-->B2. 主流 CSI 驱动能力矩阵（背这张表足够）</h2>
+<table data-page-node-id="PBUw9Mxo6zf2nZ71iktzBM">
+<thead data-page-node-id="l3J18iqSPZwE9ROYVrBgJD">
+<tr data-page-node-id="j5MLEqEIOEqkr0YvNRmQBe">
+<th data-page-node-id="mBbu7ggIUTk6ZCh0ETNip9"><!--pnid:VGYEkCIdRXB4ONZR6iGSnz-->驱动</th>
+<th data-page-node-id="CrBJl5AEoMcWMlHQTCbLLl"><!--pnid:aaBIwKcoOqqdUaFEn6pq2I-->类型</th>
+<th data-page-node-id="EKXsFiqXsqBUC9dfbkjrSI"><!--pnid:DhF04oKIc8IrAhhQ6FcF4m-->典型访问模式</th>
+<th data-page-node-id="rmT1Pg3DY1ZDJXDABW4OsH"><!--pnid:68yF80dPapPMERTfCmGinm-->AZ 约束</th>
+<th data-page-node-id="bOmgRFZujXDDpk55F2o1Zq"><!--pnid:UReO1zGoKxOpQjVNCgd23g-->亮点 / 注意</th>
+</tr>
+</thead>
+<tbody data-page-node-id="22DXcpiXkqfdE90pJsYx6L">
+<tr data-page-node-id="nvxKWJBVWwQvr8T4dmomlV">
+<td data-page-node-id="vV2NM3Yh49OnlVioAZTKcB"><strong data-page-node-id="Wi7kGI46KZ60yZqljdDib1"><!--pnid:TNyzJBWXZjjj6YumJgdVRu-->AWS EBS CSI</strong></td>
+<td data-page-node-id="E4J6aiNj7zdt3Ruls8cEFV"><!--pnid:OW2HcQOBTH0NUjcMSQheOv-->块</td>
+<td data-page-node-id="FggHEmAqv5FKF68OLAHraT"><!--pnid:WyxAZn5iIfi9mUiLWM3gtF-->RWO</td>
+<td data-page-node-id="OAHM7lzlKPC4yAxYUpriLt"><strong data-page-node-id="RPOiVsLUEUGdSaHnr5aTMu"><!--pnid:I7H2M8zclXOYRMmtqYw8Sm-->单可用区</strong><!--pnid:BvQiUorjRZMybfoyVaeERc-->（盘与 AZ 强绑定）</td>
+<td data-page-node-id="N3GH9PtKSmYJ9saQ0v2EA1"><!--pnid:HXT009qinkg02HVytCakjI-->快照、扩容、加密；跨 AZ 会挂不上</td>
+</tr>
+<tr data-page-node-id="QHgmC92os0bhuwfaTlSnW4">
+<td data-page-node-id="3zYhrTUSJjTPlW0KAVraNH"><strong data-page-node-id="hNswKo6LgtcM5l5kEvfOZw"><!--pnid:naFsJn1MOlrw6BiKw78sKD-->AWS EFS CSI</strong></td>
+<td data-page-node-id="xyIW20rcuT1IAd0xZ6AGms"><!--pnid:6U3QaqKg8wz55UlrgMKAtl-->文件</td>
+<td data-page-node-id="vPfI16n6n8bEukLyMNnz4p"><strong data-page-node-id="5NxviDaKAKgZiijVUpSbYO"><!--pnid:LmFPdTlCYIs4YvGoQ1357w-->RWX</strong></td>
+<td data-page-node-id="DQ0bT0cHIHX8yNimMn3j8F"><!--pnid:olAz4jScLrsO9v1xof7bnx-->跨可用区（Regional）</td>
+<td data-page-node-id="x8bGC5dcaOx4Wjak3KOlRM"><!--pnid:B6eIqywQ6BKRWEm395RpG4-->多 Pod 共享；注意吞吐模式（bursting/provisioned/elastic）</td>
+</tr>
+<tr data-page-node-id="St2AXz678CouLlfZ1a04My">
+<td data-page-node-id="8WV5uu4CilP2Ej9Gk76lhz"><strong data-page-node-id="1ovXac348QLNxZYeXXg9nw"><!--pnid:nKvIyHcsIvdLc3zwQLNVO3-->GCE PD CSI</strong></td>
+<td data-page-node-id="0QDL43VD9XtzH4DzHiiCE4"><!--pnid:RoylSuAd3U617KLw3kTHy6-->块</td>
+<td data-page-node-id="6CpqCzXDalq8oaF2xrF1Y5"><!--pnid:jOxsAksTCzfZjuEv6D8pvI-->RWO</td>
+<td data-page-node-id="nGsCaoCp4BnVJ1EX8T7jhE"><!--pnid:askXOGLaSQO4wxXm3TdwBL-->单 zone（另有 regional PD 选项）</td>
+<td data-page-node-id="ZzwoZJmVQPqS7YrBKQDXKq"><!--pnid:sxirQ63cMSUL1mqNhTqOQM-->hyperdisk 等新形态请以厂商文档为准</td>
+</tr>
+<tr data-page-node-id="CKcgPqPBFr0d4JjIgQJ8Le">
+<td data-page-node-id="uYJxsGLaHkSMBeusL5fnh4"><strong data-page-node-id="ix66AyCdpjUExxyUdkgBjX"><!--pnid:DypbgU9DRi4pqvMBusVZky-->Azure Disk / Files</strong></td>
+<td data-page-node-id="EmwbCwEZ6NBZLAyo3C541u"><!--pnid:jLrW6XBM7K8iomZveXabHA-->块 / 文件</td>
+<td data-page-node-id="NqKkr3z69ecj6n7R9WGBFJ"><!--pnid:oGxeClmVjfEqZ9NOffqgzi-->RWO / RWX</td>
+<td data-page-node-id="zGjN4DvWudblvMaZwlBtE2"><!--pnid:O2aSwmijioI6HGEOgNoHZB-->Disk 受 zone 影响</td>
+<td data-page-node-id="1ZOFFn6OO8BS8ey2TvohK4"><!--pnid:eJXOIsUhmTcQozSzhd1QDi-->Files 走 SMB/NFS 协议</td>
+</tr>
+<tr data-page-node-id="II1dzumcXKSZnPMYMWpORC">
+<td data-page-node-id="qGIwOcRwMDoh7iToeTkAls"><strong data-page-node-id="PnpRX1ZNMteqTh2OUa3kJ2"><!--pnid:dUhAyKYH0sqYywG7wv42lC-->vSphere CSI (CNS)</strong></td>
+<td data-page-node-id="1mEMDkNjRNY1IOyJ47LoTO"><!--pnid:Oy8sPUYc0gs3XzdAntqjqO-->块（VMDK/FCD）</td>
+<td data-page-node-id="WnUiHmza3TxyWKSo1L9QDK"><!--pnid:0FC4gYdIsLPdbCFhhicGJv-->RWO</td>
+<td data-page-node-id="LWohrZ4WUNTlG3UzEL4QA6"><!--pnid:oYaRURDmcR3JwtmQLKzkhe-->受 datastore/集群拓扑约束</td>
+<td data-page-node-id="7StVvdggiHrejYkOxLRsv2"><!--pnid:sCHIAEXCXZaVqKtNmuIENV-->与 vSphere 存储策略（SPBM）打通</td>
+</tr>
+<tr data-page-node-id="fKtneFfue9yH7C5dcDXB1i">
+<td data-page-node-id="7VISJN2oQ6FbCTrXcjHKca"><strong data-page-node-id="um5GRvS8rtCYJTUqGKJe0H"><!--pnid:e1NuWVe6InMSWlQaol62BP-->Ceph CSI（RBD）</strong></td>
+<td data-page-node-id="LA6iwtE1y7QA6nS55lnI8r"><!--pnid:5gehUde0gRWyBPpqEy2HgF-->块</td>
+<td data-page-node-id="9RP30GYNy4vyJ6KfLhtF0H"><!--pnid:NflofLUL01FtoaruuF3123-->RWO</td>
+<td data-page-node-id="rxI18YXDXxnFuGow9pDGRS"><!--pnid:gK5XTyQPnkqu3TopK6vDov-->取决于 CRUSH/map 配置（常见按机架/主机）</td>
+<td data-page-node-id="x8SBcOpjj66Pvvt74JOYj8"><!--pnid:ekn3fCAwSphUZuwyCGCnLZ-->强一致、性能好；运维复杂度集中在 Ceph 侧</td>
+</tr>
+<tr data-page-node-id="jDanh6NiyZxBf5JX2SIWVj">
+<td data-page-node-id="cPGQV8UmQulet0ERnLnCRe"><strong data-page-node-id="a132lm5T3kYxrRmIWhRW2f"><!--pnid:MRGl94fO34gP2Id9glNiCI-->Ceph CSI（CephFS）</strong></td>
+<td data-page-node-id="O3xWkezZs63Z2G5GrIrCLm"><!--pnid:1LTTauAPp0jXFYJ698UfG1-->文件</td>
+<td data-page-node-id="fObsHbfn98IhEYvvzFv1Wp"><strong data-page-node-id="AxiugKtokEHAbwvFYbakky"><!--pnid:n2XCXWzQmH9jugfcsiBMIt-->RWX</strong></td>
+<td data-page-node-id="eT85FAmhRFfcMn6LVLJAJp"><!--pnid:DQZFEE98JUFVNHs5dn85Ev-->同上</td>
+<td data-page-node-id="imgUcoYpKSJ65uUJgYBFfB"><!--pnid:ZH5n9fMhJA2kxi7DNeNWV1-->多 Pod 共享；MDS 是容量/性能关键</td>
+</tr>
+<tr data-page-node-id="iFM1AgoyqqXE5ydt6CM3gE">
+<td data-page-node-id="N3yQFNC6qy6cGTti6NLCrr"><strong data-page-node-id="FPwBImWM5gxDijOAYUe44w"><!--pnid:kIZFDz6tgwRU6vqZbauWMz-->Longhorn</strong></td>
+<td data-page-node-id="qD9gViBUal7I577LV7ng7I"><!--pnid:USbyldTHvZj1JJr5rTMO0O-->块（iSCSI 数据面）</td>
+<td data-page-node-id="HuGSVUFdmn8CgNfodIQ9XS"><!--pnid:5TMvy6EETowSD4PGCp4GnV-->RWO</td>
+<td data-page-node-id="bmLXYCnPvInihM358DMYUl"><!--pnid:r6pOJ87u5OVaw3CA0NkHoW-->副本跨节点</td>
+<td data-page-node-id="mLzr1vG3DVlgYrpfA7uLef"><!--pnid:gw3qWLBSZe49cK3jCD8hGt-->轻量、易部署、适合边缘/中小；数据面成本在用户态 iSCSI</td>
+</tr>
+<tr data-page-node-id="dux1CadNzoiFygUc6nrYWV">
+<td data-page-node-id="zR25m7AyZhq5bZtwmmpfaz"><strong data-page-node-id="8Sab6dmnAKhYFaTWg469FX"><!--pnid:f9awKWaXHNoG2xIpQwYQBG-->OpenEBS Mayastor</strong></td>
+<td data-page-node-id="3eR7fQT8G8MjCC24T3PRJg"><!--pnid:hXaFwNHAqsgdcuSDsQDOep-->块（NVMe-oF）</td>
+<td data-page-node-id="uNbcm9WapCzrHbxPsl8uLe"><!--pnid:RRaAqB5usDQARLCmIWBiTS-->RWO</td>
+<td data-page-node-id="BQVk8N3Jqn5zcZSfxdEAE5"><!--pnid:8redzq0QNn2KXdFLzV6DPs-->取决于副本策略</td>
+<td data-page-node-id="whTsLiG9u8IZsbTcTIUlcG"><!--pnid:daehkBr3L9B4i5oAQ3qCFj-->面向 NVMe 高性能（容量陷阱：需要 HugePages/CPU 预留，请以版本为准）</td>
+</tr>
+<tr data-page-node-id="xggAGDnwLTsjcciq530z6J">
+<td data-page-node-id="8p6WFDuzyG7x49NOUmMT4G"><strong data-page-node-id="IRn2Kf0l36B3A668UWXHKe"><!--pnid:n5MTeIZz1LnVp1KLVK7PTM-->OpenEBS cStor / Jiva</strong></td>
+<td data-page-node-id="3TB6FRuOO5ZsAFl9ExHnEp"><!--pnid:84yuScPBRUCfO0TiV8fqWB-->块</td>
+<td data-page-node-id="7tyJmZYaUPi4nQdqTZ50jh"><!--pnid:N5XzZp7HEgseu2BcQsm4Ei-->RWO</td>
+<td data-page-node-id="gfOXHOon8y9c1DPvYMPs1T"><!--pnid:iTKPa0Z4VMIOtQM2FNrwJa-->—</td>
+<td data-page-node-id="MiKXcRsnnI7VaRe0wrICcZ"><!--pnid:k567j6bxfKT7ddjzFCeCPk-->Jiva 已逐步退场（新版本请以官方说明为准），新部署建议 Mayastor/localPV</td>
+</tr>
+<tr data-page-node-id="HO6z7PhWwuBoNQA3v8zHhZ">
+<td data-page-node-id="4UE8wZF9p2AkGa1AoN92N5"><strong data-page-node-id="DU7YCK6Qln1l2R4KZvqvNS"><!--pnid:WYtlkzGO9MaUjuaCnLDW12-->NFS subdir external provisioner</strong></td>
+<td data-page-node-id="hjliGPgJ95XNVwbLSNNOiO"><!--pnid:CFjparFovETTXwrvl1nd9h-->文件</td>
+<td data-page-node-id="ybKuBLGCLHiIt5wirKBm1u"><strong data-page-node-id="x7wtnNP7s1UA5noCXnVIR2"><!--pnid:jUiaRhZg5JrTA6hqL30Zu2-->RWX</strong></td>
+<td data-page-node-id="JGdACSJ38kWV73EjDYLOYy"><!--pnid:Ks83Ienin5QFULFnGIX4EW-->无（但依赖 NFS server 可用性）</td>
+<td data-page-node-id="CA9sEKXsqONXB3MNquTQio"><!--pnid:DO6wFvwpyaSwWpSKuSd6eW-->最简单；<strong data-page-node-id="vPiRdC91GOLdGHzwgJ1Xuk"><!--pnid:gYmY4PWVdQ2wrtXq8olPAP-->官方 nfs-csi-driver 更推荐</strong><!--pnid:GxDzRmveeBBejpsFImWPx5-->，务必区分二者</td>
+</tr>
+<tr data-page-node-id="8AtDkwT8AW7tZ3lWRDQKsC">
+<td data-page-node-id="zCUoyWqGAbyKr9K4FOlF3w"><strong data-page-node-id="Ez1OACvFHtcXouSy1miOTL"><!--pnid:8L7hEINJHY00nUB2ffuy4z-->JuiceFS CSI</strong></td>
+<td data-page-node-id="jg4zFm4QllTGqCYA6duT1f"><!--pnid:x8P1i6LYwPfeORFmP0IfQH-->文件（对象+元数据服务）</td>
+<td data-page-node-id="4ZzyzLjkwV6gUWmUW98F16"><!--pnid:mc5QCVbobS85NAXb3AkppS-->RWX</td>
+<td data-page-node-id="yM2QxwUS8AFow83qkkRzH6"><!--pnid:7hOeEiLdi3u50COKR7AUEF-->跨域</td>
+<td data-page-node-id="MFqlpgHM35iSyaMRYlXk55"><!--pnid:1LvjknWrokD7xoBuVpmDWy-->挂载进程在 Pod 侧，POSIX 语义较好；注意元数据性能</td>
+</tr>
+<tr data-page-node-id="CudwoJyhoZeaM6JOn3rzvZ">
+<td data-page-node-id="ZH7lSId8S9nUg2BDLPN91S"><strong data-page-node-id="e9lpdTcdE7p9pe1a9GDWO3"><!--pnid:L6vWBq9kkZNyFTJhe09TIC-->Portworx</strong></td>
+<td data-page-node-id="Gh7ARKmxm01dxAhDazz1a9"><!--pnid:Z6NZWvzCzKmFlU0Uu43dRc-->块/文件（商业）</td>
+<td data-page-node-id="QhC6mSE56iQvtE4VpJGl8J"><!--pnid:v9hG9qGK0zTt8OIHjqWsBO-->RWO/RWX</td>
+<td data-page-node-id="aKuyCtv3wZ3DI3lJnAl66z"><!--pnid:WNZ66dOqPb1Q2WV3koXxgK-->副本策略灵活</td>
+<td data-page-node-id="evxAzvk73IYOczszGZ3Lor"><!--pnid:XqF5KE4UZhG46S2ALBBgwD-->企业特性（加密、DR、auto-扩容），有 License</td>
+</tr>
+<tr data-page-node-id="izwRbPDmqOWgMOX8KRCBRD">
+<td data-page-node-id="q2be74mkGkiHRsimbs1jeF"><strong data-page-node-id="6rr3tWz1eDwrsvJbl9JDYF"><!--pnid:D6FsjaOg5gGcCMyXLKmvl5-->local-static-provisioner</strong></td>
+<td data-page-node-id="zbXX3T0AIUkBEG7mNfQmu5"><!--pnid:KXVLb3owBPfLH9B4I2fhY9-->本地盘</td>
+<td data-page-node-id="nWNRcGdu0L9svqZMhtb3uE"><!--pnid:9ZrM44SCTizVxu4Iky4Dsc-->RWO</td>
+<td data-page-node-id="chTvl4j1aZELpprVw41OGq"><strong data-page-node-id="0GATWSFQjdTuTS2kjRxt7f"><!--pnid:CNrepaHV4Gq7h8HMDROYpc-->节点强绑定</strong></td>
+<td data-page-node-id="jOhiWAuVuddQYkJAB3FrI3"><!--pnid:PcJIQD4TmFfwpJYSOxnTsk-->最便宜的高性能；故障域最大</td>
+</tr>
+<tr data-page-node-id="o8loZ9tQLs35zC1TAUU5qR">
+<td data-page-node-id="ljjylNvug9cBULix3HDGG7"><strong data-page-node-id="T4Yc4MYUaYmJ210FYNPRrT"><!--pnid:r7cHkZB3n4MOVqSNUyjXnx-->GlusterFS</strong></td>
+<td data-page-node-id="YX0kHvjfsZUe8bLt1fy8R8"><!--pnid:7ARpDfwwfNvvlbFZiCTBsg-->文件</td>
+<td data-page-node-id="PmFv6pJYFTaU52tO5hiBK0"><!--pnid:8RWyDNc3oHd1Wq22Z5K4zd-->RWX</td>
+<td data-page-node-id="kKIGMrmFMPI0TgKFXaoV4X"><!--pnid:0tthKX7v7fF12ex2fHdnXm-->—</td>
+<td data-page-node-id="IcpDsEB3ir5WzXt6gUFJ4y"><strong data-page-node-id="wtc7TheKLwWEoxs8vx85BZ"><!--pnid:IE1EQ4ohfDylTKTewsgHZ7-->社区已归档/不再推荐用于新集群</strong><!--pnid:ieMktIf4V5Pi53CnKOfb27-->，面试时点明这一点很加分</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="EvUEMSbVBPTmzeZnSKU5dz" id="b3"><!--pnid:Bk4yjEwWKmo9icZPthSb1p-->B3. 什么时候该选"本地盘"而不是"网络分布式存储"？</h2>
+<table data-page-node-id="KjLVt6Vt7xb0aVWh6ifh93">
+<thead data-page-node-id="9YUNgH3h4hDPrEWcxPR9af">
+<tr data-page-node-id="YBBmrRus40MXk1yx5ueqX9">
+<th data-page-node-id="T3KOT7lVGDWvUlWz7WiY45"><!--pnid:k8CDKtFo49bfiib3cHYEgW-->维度</th>
+<th data-page-node-id="Hay2PlVpbKAUAZp2sxT022"><!--pnid:xUBu64tgJZydW7kCjqL2e3-->本地盘（local PV / 实例 SSD）</th>
+<th data-page-node-id="ZUZxhXnzBA1uMn5lLtC62K"><!--pnid:K0rOLRdUHGEdOaZ9pnEl0C-->网络分布式（Ceph/Longhorn/云盘）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="gbfmFw63wRvvVSzzcVTbsR">
+<tr data-page-node-id="4qZjfz9oDkJUzFE5FcOamT">
+<td data-page-node-id="zvRootjvn9yB0q8lJwq9Z0"><!--pnid:e21FRbf3OOq3i70aNcdNqF-->延迟/IOPS</td>
+<td data-page-node-id="PrMynLIm18tyzPhuf42ire"><strong data-page-node-id="3RXEm69Rowhes9lfnCDEC1"><!--pnid:9P3E5m84qw3AAtxVt28DBB-->最好</strong></td>
+<td data-page-node-id="fiNqXW8hzH0Gu8jSkuE38b"><!--pnid:8BRDkfPTNNUYazePPowhQo-->受网络影响</td>
+</tr>
+<tr data-page-node-id="gl89oC498dwEKvF8s4a9xd">
+<td data-page-node-id="8sy7mmfAcfkwRj7nWYIuM1"><!--pnid:YsVWEZtzHxVJcmQLkVf6hi-->单盘容量上限</td>
+<td data-page-node-id="WzEDZmc1P585WWLgxtIfnu"><!--pnid:sK1fAJP5imG9waE4HULnoP-->受机型限制</td>
+<td data-page-node-id="GU8OhBnC1HfURuXMECnH5Q"><!--pnid:LKfTVdRObVfiNXkwceq5fJ-->更灵活</td>
+</tr>
+<tr data-page-node-id="cK89wb7PIQIfOssF0Swpk1">
+<td data-page-node-id="Seqk9EQiIHSwhDUDFWIGW1"><!--pnid:b3240qa9e9kihQg5egrZmD-->节点故障影响</td>
+<td data-page-node-id="PQPuPDYlGhSlTWxx63T20W"><strong data-page-node-id="KnGmInjR2LOKD2mvuwR5mB"><!--pnid:RE0dZNqQdJ9VRWSJP0BaYW-->数据暂时不可用</strong><!--pnid:rojuW5GZDNxFr6xSwJiWs5-->（需应用层多副本）</td>
+<td data-page-node-id="Ly0JW73Pk0AvU75OQkqIf9"><!--pnid:xSlfBoZ7ZSk6myNKuiUFbY-->存储层自动切副本</td>
+</tr>
+<tr data-page-node-id="vrdl2aXcsbnxWPJzdW2BPx">
+<td data-page-node-id="3OjXTHFQSJo9nMnZJCoqMN"><!--pnid:Yj53foIhwWCCtWxqBO7Wrl-->调度灵活性</td>
+<td data-page-node-id="68iNW2pClXTEriANWiVsOa"><strong data-page-node-id="UGcmuiyyibaWf8bfQfBnko"><!--pnid:oJ7mX3NfUHPFYB2ryIudxQ-->Pod 被钉死在节点</strong></td>
+<td data-page-node-id="5osAQeHgr68g6Ktm3CRqcM"><!--pnid:bYnV1qKNnqCXWLe1Ih6rDA-->可迁移（取决于实现）</td>
+</tr>
+<tr data-page-node-id="C8FYhuVp0iHhPdthekz5Qx">
+<td data-page-node-id="NmX3PZT7gWS3xbLheP3aml"><!--pnid:c4jnnBBlu3EGinKjPNjWvs-->运维复杂度</td>
+<td data-page-node-id="fZaAndtylYvkwSJWqeghu0"><!--pnid:LNRNtRp8XvzNIosBpAIDt3-->低（但要管盘的健康/更换）</td>
+<td data-page-node-id="tNdk5yikC5t48NWFYzyB1m"><!--pnid:FdNmFyrceX3c2b6LcvgvrS-->高（集群、副本、恢复、容量）</td>
+</tr>
+<tr data-page-node-id="LzJP2s9fY7ePhxCS5R1Ssu">
+<td data-page-node-id="4v1Oqc98G3uqHEOuD476tB"><!--pnid:KX5BVnnaVcxJgMQfBkHFKS-->典型场景</td>
+<td data-page-node-id="XQLz7KCS5oKbSiK5ifHcea"><!--pnid:A91AhhDsN6EoA6inhXcCR5-->Kafka/ES/OLAP 这类<strong data-page-node-id="pmZrD60IKqoKaMKIOvZApJ"><!--pnid:8EwNEwIBPybNbSVQFlRUda-->自带多副本</strong><!--pnid:nuEHYwpwXatKTHNqDOKWFY-->的系统</td>
+<td data-page-node-id="kO35xgIyksHoNCDHDI15rt"><!--pnid:W8e81qteDXWen9uQo17Lp7-->数据库主从、通用有状态服务</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="tdCBn9vBDNpacXCnfj1kmE"><strong data-page-node-id="UZiNsK1vF9cYXg8u3AvuKt"><!--pnid:LyXDLReS0MprrIAphejmrb-->标准答法</strong><!--pnid:Ejw0tqNaFO09o1rGPJSQbV-->：</p>
+<blockquote data-page-node-id="FNouMDBMYBiawGXjB4dzhl">
+<p data-page-node-id="o3bMDBGFkXX6Mdk2KMibng"><!--pnid:YPUcinjEfAPBFT7TpAisPB-->"选本地盘的前提是<strong data-page-node-id="5dYUCM6gpJ4tJE74wSMepm"><!--pnid:A7nGk8Gos7SN17UMwhAlXG-->应用层已经提供了冗余</strong><!--pnid:IIBBFfHYup5pGU3HLgTAmG-->（Kafka replication、MySQL 半同步、ES replica）。如果指望存储层做冗余，那就别用本地盘；反过来，如果应用层本来就有副本，用网络盘就是给同一份数据付两次复制成本。"</p>
+</blockquote>
+<h2 data-page-node-id="T9GTHZ19oEOi8Y1xey4kmA" id="b4"><!--pnid:mNlu3DmGDAZiCd41jrLX5j-->B4. 云盘最经典的坑：跨可用区挂载失败</h2>
+<p data-page-node-id="LLonQnXvTj8MiyegGBPWlA"><strong data-page-node-id="eMf7udj0VUo205Ewjen2qe"><!--pnid:UDe26cmggag3V6urU4IFV6-->现象</strong><!--pnid:gIh5rgwjsukfaTbYPl01T1-->：PVC 显示 Bound，Pod 一直 <code data-page-node-id="Ce3KRd7nvrLFG2Xa6TdtIW" data-pnid-children="0LgT98MCoFRC4cEqHf1Eoc">ContainerCreating</code><!--pnid:zrknm0frjxMOBN8FW5TBE5-->，Events：<code data-page-node-id="dEcDzI0Ol5FMs1phWrQmLt" data-pnid-children="Wp4ENJfPgcJiqZiIEnaYBD">AttachVolume.Attach failed ... volume is in zone X, node is in zone Y</code><!--pnid:SqKCURQMqU5Uy2fZqBWIGs-->。</p>
+<p data-page-node-id="3zcP3RvBMG5WkrG3MCvkCZ"><strong data-page-node-id="a00fW8lsLBjQmcZIGwGa4l"><!--pnid:6iHvJHUDD15TXWayTmI5ao-->成因</strong><!--pnid:tBD1OTsUYnE52dqy0Kw5wB-->：云盘（EBS/云盘/Disk）是<strong data-page-node-id="bGgYOfY2IpHN0sJYI0wphQ"><!--pnid:xduI1cKVPLFUwBDO6Zxq76-->可用区级资源</strong><!--pnid:DuFwiPKFCQl1rKddnF7iNG-->，只能挂给同 AZ 的虚拟机。</p>
+<p data-page-node-id="Izap13HmGzQM8IdNfAWPr2"><strong data-page-node-id="PGb9waXD3t9sghgvVdu3Lf"><!--pnid:aLfxMWVVGnjkTaBGDu20uW-->治理清单</strong><!--pnid:uyg8P2GSyOXyy4kzmByDnk-->：
+1. StorageClass 一定要 <code data-page-node-id="IL4cFMvn8ELLD3s8vYZ7AK" data-pnid-children="i1wscncGlqKdjMNif6Mx7e">volumeBindingMode: WaitForFirstConsumer</code><!--pnid:qiQHZab5hxEH7G3U01VuEo-->（<strong data-page-node-id="f6bFcIQWuZoEaSZFjoXhqp"><!--pnid:YW85BbOoXdLBGslNrDdZIg-->这是第一要务</strong><!--pnid:t79YREfXsVbdxlbZEAYhw9-->）；
+2. 需要保证副本分布 ⇒ 用 <strong data-page-node-id="HWysuzsQ3ZCOMar05uhQqg"><!--pnid:4Pla7utKhZI0uRb9RVjkSf-->TopologySpreadConstraints</strong><!--pnid:2EQt1H30jH2wM7R81SgYQv-->（跨 zone）+ 允许等待也可以用 <code data-page-node-id="iRlZJTj9GVP6FqdaVNZIWC" data-pnid-children="ZxTQaZCPfEjF9z5zKe5SIB">allowedTopologies</code><!--pnid:b7xmbXO1TwoeWyZfpsVbPs--> 限定范围；
+3. 恢复/迁移场景：<strong data-page-node-id="L725pTZFd8YsLoj078BmMr"><!--pnid:adYiH8ubpSP1nQvLyIhx3u-->先给卷做快照再从快照创建新卷到目标 AZ</strong><!--pnid:ceRget63jx9lvQOGYW4Hl5-->（这是标准迁移路径）；
+4. 严禁跨 AZ 共享同一块的"土办法"（会数据损坏）。</p>
+<h2 data-page-node-id="5H8sCCw91lKA0XyseFD5uj" id="b5-rwx"><!--pnid:icZOuRpwdncrfAyURE6vn5-->B5. 需要 RWX（多节点读写）时怎么做？</h2>
+<table data-page-node-id="DUsZiTZJmV1IS9LhVutsJ8">
+<thead data-page-node-id="5cVdQZB8835OpM1bC9wTFK">
+<tr data-page-node-id="VahqOJoi6T90GPBR7e2aQj">
+<th data-page-node-id="fQS8xQ26JziWg0CUUzy35I"><!--pnid:cifnye3hF86wxKh3MD200u-->方案</th>
+<th data-page-node-id="gNlzXaDWN8Df1SPPnSOuzN"><!--pnid:n41rXXQRcJBWf7xLjdwSDm-->说明</th>
+<th data-page-node-id="hfmlYQ8RYZ78ZEPlIh5jpF"><!--pnid:0VE2cF6nnZGQ2AYy2g2zf4-->注意</th>
+</tr>
+</thead>
+<tbody data-page-node-id="UVSz8zxYPVmTAePYOTVE12">
+<tr data-page-node-id="nhSdD6GVPdRGmIZWLjpPP9">
+<td data-page-node-id="tr9bm5EstwqQwUqqYCcj4y"><!--pnid:vmnMklM0bdfFQgpIDCX8Z5-->NFS CSI</td>
+<td data-page-node-id="dufGs4LifqHcsYEvCDXSlh"><!--pnid:kXVEpfuxIrwfDOmCvFMLiy-->最通用</td>
+<td data-page-node-id="i2V0vHSL9dLd0O0Q5zjb9B"><!--pnid:AMw8Sz1Xm50Y2iT1v2CGFg-->NFS server 自身要高可用，且要注意并发一致性语义</td>
+</tr>
+<tr data-page-node-id="CorN5ZHLfsj3jED8MdwXKr">
+<td data-page-node-id="KFw26YHaiEy3iXzhTjUJiv"><!--pnid:SErHino1mcyvBsMT053ZNU-->CephFS</td>
+<td data-page-node-id="8ChAa50ttqBHPQbAKQHzY1"><!--pnid:oX61BQi4Do1qMmFfDU7ViI-->POSIX 语义较好</td>
+<td data-page-node-id="h8FUcwo82341FQwc5pO5fX"><!--pnid:L1mKFXV0zUDpJbCsvjHVDJ-->MDS 需要容量规划与高可用；配额要提前配</td>
+</tr>
+<tr data-page-node-id="KRadMrsmf32flHQ4wy0rMC">
+<td data-page-node-id="wRNpsfP2QkaoozxJ95qxF7"><!--pnid:FOPDwHq2G0D80OdQ4ZOxKj-->EFS / Azure Files / NAS</td>
+<td data-page-node-id="P6Wy1h1f6h5sexVLYe235Z"><!--pnid:WRFHlJQOT1FGKj3QmoIUNr-->云托管文件存储</td>
+<td data-page-node-id="QIfahnnQwK2RLyJaAhUm7n"><!--pnid:XiDq35Qlyt6udkM9jWvA2Y-->关注吞吐模式与突发额度</td>
+</tr>
+<tr data-page-node-id="vJuUeqBaCaajCgn4msRJNQ">
+<td data-page-node-id="LmSJBeuk4q9BZFVQm6Sj1a"><!--pnid:12qSB5JhK4KyTGQrfdXyvk-->应用层上传对象存储</td>
+<td data-page-node-id="AHIsFBKGYoQNtGGUuvcqh6"><!--pnid:uJ7kkhZcdsfISWZYjoqbDR-->最利于扩展</td>
+<td data-page-node-id="dJic2Z5mMtKXWEK39PYqS1"><!--pnid:1G28fVqR1pYHgV8LXlbQW6-->语义要改造</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="MxZbWbStesTXygF3aQc7Xi"><strong data-page-node-id="rZtR32EopDXFYZTSj6noLy"><!--pnid:KabrJNqbOphCKMsdzEpNPU-->必答警告</strong><!--pnid:TMIzYdbqNvSX2bZXZsmi8F-->：
+- <strong data-page-node-id="QRrQiarcNW6UKgEVOHWZvC"><!--pnid:3QjpPWN1kSSAx21Vvn2Uak-->绝大多数 RWX 文件系统都没有跨节点强一致锁保证</strong><!--pnid:DadhrpXcVb5w8rkwZGaMKT-->，同一文件的并发写要靠应用层协议（如数据库绝不能放 RWX 卷上，除非该存储明确支持并完成验证）；
+- 关系型数据库、etcd 这类组件<strong data-page-node-id="ZXIOEmlH4kyHGlUz63dvqN"><!--pnid:A9qoDPAVPV4Ogvt50er1Gx-->只用 RWO/RWOP</strong><!--pnid:prs7oItFTADVwkbuX6wZ6K-->。</p>
+<h2 data-page-node-id="V6u5HesSaymVSBsUnuKXHH" id="b6-rook-ceph"><!--pnid:S3r2hdeRMyUwVtp0c3OQPP-->B6. Rook-Ceph 面试会问什么？（分布式存储代表）</h2>
+<p data-page-node-id="1KAhjh2PS9wGeTMb4mTj6t"><strong data-page-node-id="DFT2GbIoifsoy043UmfyBk"><!--pnid:JpA5WyjCPfqJBgBBXaeaVy-->核心组件</strong><!--pnid:EfXW5o7NXrCBSUXnqn7A7y-->：</p>
+<table data-page-node-id="rMszNELE5bmEFiXfHYyfoQ">
+<thead data-page-node-id="xHItOd74uknhY3VccHcYfR">
+<tr data-page-node-id="69BMPRyTV9qjahhm2kSv9j">
+<th data-page-node-id="VkrjXsBoeIEgtlX6scTkbH"><!--pnid:xWtpTLhzQe154YaMgr7Bwu-->组件</th>
+<th data-page-node-id="uYt2UoJJTE5kIyXKOr7JXY"><!--pnid:ceRrseJOCV5rHmERE9q43U-->作用</th>
+<th data-page-node-id="djm2J5pMWqhdunruNPmBrO"><!--pnid:OKKf4UKVokTkdlwfJlH0xq-->规模要点</th>
+</tr>
+</thead>
+<tbody data-page-node-id="dwR6HsPUqjqCqtUJXQd3U5">
+<tr data-page-node-id="0l51fFLojnhXFK8PHz9b0s">
+<td data-page-node-id="74xBvz0pDAYa0Acgx71xoL"><strong data-page-node-id="IbnRZDYpsuEe0Bu4mjAejJ"><!--pnid:nldDSX8bjguGOoTQ3xq3D4-->MON</strong></td>
+<td data-page-node-id="pkJEkMG7G5Q5OIJTjJ3kqV"><!--pnid:BIC5h6zbyRQOsCJjW8ggwb-->集群元数据脑核（维护 cluster map），<strong data-page-node-id="lWn2X131mi3ej9B5HWwjKw"><!--pnid:UrDhNf5cMMOD6w7pFqRfEq-->依赖 quorum（奇数）</strong></td>
+<td data-page-node-id="nSWVzYhgfUUNpDI2e0Z1eB"><!--pnid:eVisCyY5GcBAdCdpaFxz7N-->通常 3 或 5</td>
+</tr>
+<tr data-page-node-id="HzztpTmhZwoM8LpFcoduT1">
+<td data-page-node-id="3lRiln6SrTwr8S8Q8ILd1j"><strong data-page-node-id="3vEvs7KtsEmRcpOJX4PU89"><!--pnid:sQJ0ySgEAw47oqGJ6Gqxq1-->MGR</strong></td>
+<td data-page-node-id="AOr8kuLY0iHF2hzZtfFGpL"><!--pnid:bs9zz4gNw7bBzduKKyGrXa-->对外展示指标/管理通道（dashboard/prometheus 模块）</td>
+<td data-page-node-id="5yxwjgWMk4v9wgKxEXCxKH"><!--pnid:9x0sgiZgxKKPtJiPJ0u0Ze-->至少 2（active/standby）</td>
+</tr>
+<tr data-page-node-id="3Hdw6A2laaMncuK0tR033I">
+<td data-page-node-id="qAxbyYwSdcC8iY49MDY6uX"><strong data-page-node-id="N0mqbWTrI0no7uHuaauEpZ"><!--pnid:aXuluK9pnpjdqM6pZSYyWo-->OSD</strong></td>
+<td data-page-node-id="E8IsJTqPnxWxidjpck3NEW"><!--pnid:0Z9rusDBRMNFnBJoWvgRG8-->真正存数据的进程（一块盘一个 OSD）</td>
+<td data-page-node-id="cnZSl7zTf0utlJlaVXMN7V"><!--pnid:q2icF1N2n6Nfr5HllcfADy-->数量决定容量/性能/故障域</td>
+</tr>
+<tr data-page-node-id="6KqjxizyFYxe0r2nlJSide">
+<td data-page-node-id="47Wgoh8XAVizGaQQqjXejz"><strong data-page-node-id="RRzPcf441EoW47u9KOi9LM"><!--pnid:FNiTwRpcimzzeAXgaPimJ4-->MDS</strong></td>
+<td data-page-node-id="UjpTNbjoSZsyvtMAYwp7My"><!--pnid:DSX5iKMnUwl910jOUY9hXA-->CephFS 元数据服务</td>
+<td data-page-node-id="gkcrgbrPIn2BU6Yij84j5J"><!--pnid:BAw2cNgPRYJiFfovQ9NXtN-->RWX 场景必需</td>
+</tr>
+<tr data-page-node-id="2jv5Ej1VLXDP9Tic5diTqi">
+<td data-page-node-id="QfJQ7L6MMEDiKgw3jFzS9E"><strong data-page-node-id="fB0AIjuE6OETWbas0QDMj5"><!--pnid:Yg06oA05BaZTIXK1VQm3g2-->RGW</strong></td>
+<td data-page-node-id="jrPaR4yAPirUa82mmwFjF8"><!--pnid:DZJf5onEqJ1IcbYMfkgTJF-->对象网关</td>
+<td data-page-node-id="dK9WLCKoqQalMOALABIoEL"><!--pnid:5cvnMYaWievutk3WvTrOmq-->走 S3 协议场景</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="oR7hL0RhOeserdvJNhQp85"><strong data-page-node-id="dnr9yDm09VwQcWXX1UXceO"><!--pnid:mCKjygU5uWLRhrWjRzYbh1-->运维要点（必答）</strong><!--pnid:jqZ0iE4QstTfJolnV4EH8e-->：
+- <strong data-page-node-id="7zF4kxggloPQ7BevtNHVZx"><!--pnid:5n4id02kpESHz3yVgzgOj7-->PG 状态是排障第一语言</strong><!--pnid:NrhrF4SqupwP4M1NWmlqKR-->：<code data-page-node-id="IEbe5I7dGYFy4PDQc6RZVf" data-pnid-children="btazB1TJH92sdfj6Zbdnon">active+clean</code><!--pnid:mjfiVjoMKarN5BcB7qcu2z--> 正常；<code data-page-node-id="F9RgYWwjT3fRd7za0ENc41" data-pnid-children="lyOTSlPKARttVVOvWoi6qH">degraded</code><!--pnid:rJU4PuWdcRroqWgzEpxzwp-->（副本缺失）/<code data-page-node-id="ocgSWnM78a6fvGYsaEBru0" data-pnid-children="pvMR99vThbGAkLprniH75D">incomplete</code><!--pnid:Dltv9AFzxuekT9lcChX7Oy-->（PG 不完整）/<code data-page-node-id="HupH8uK7dGK88EWR83DYHM" data-pnid-children="0biV5Gfstme0UbhkOgBVZz">inconsistent</code><!--pnid:fni5ye8ipH2hjWtColPVWD-->（scrub 发现不一致）要立即处理；
+- <strong data-page-node-id="AXkpJgMHjANS6caDCPMaCO"><!--pnid:JPxMCgutronGk5J4FlMAID-->副本 vs 纠删码</strong><!--pnid:vc7ktGDizMyAuq2VQjY65K-->：副本简单但成本高（3x），EC 省空间但 CPU/恢复成本和读放大更高；
+- <strong data-page-node-id="weRpzWL7FY0mIhY2mjnpc4"><!--pnid:JdQ7n1wC5rhhUc1sSXaRRY-->failure domain</strong><!--pnid:XiQpCQBmbxDtxWS2FHCyLs-->：按 host/rack 分布，别让副本全在一台机器；
+- <strong data-page-node-id="eSBbAOvX5dYD15mLKOCRds"><!--pnid:iK1n4XjoJyRYn4zpunMjVd-->恢复与再平衡会引发 IO 风暴</strong><!--pnid:a6tRSITnOgZ5Q5MuyUNO0I--> ⇒ 要控制回填/恢复的并发与优先级（<code data-page-node-id="okvaJCzy4c8qJijQcUdeD7" data-pnid-children="GPyUREFWulnFqkRwHaj3Kt">osd_max_backfills</code><!--pnid:XRaIo44bKI92sTa11iq1zD-->、<code data-page-node-id="jJAD1Ep8LLBr1LsNqogIdc" data-pnid-children="c75sr496bqoKd5tSoYWHHN">osd_recovery_*</code><!--pnid:Hg8dJfXQkLt6fTlXpnTjim--> 等参数，<strong data-page-node-id="BxUs4wGxysbOD4GQtsGwNt"><!--pnid:Z4Z8b1vsph5B28BxfyEP9c-->请以所用版本 official doc 为准</strong><!--pnid:btHpxKw4IQGPPR30ex8Vec-->）；
+- <strong data-page-node-id="QljliFj6GiniqLeXm2BIwF"><!--pnid:HuuAUU6wUGOsx6uDu1qkZB-->scrub/deep-scrub</strong><!--pnid:NLkb84AcZ9T6jX5j2KnbTq--> 会消耗 IO，要错峰；
+- 网络建议 <strong data-page-node-id="e8k8LGniu5CFWGaVf1nuEw"><!--pnid:ViqAEMHnw9R202qLmrgWiu-->public network 与 cluster network 分离</strong><!--pnid:L3gDfhEy2xuaCbx6Pbv6Cd-->（南北向客户端流量 vs 东西向复制流量）。</p>
+<pre data-page-node-id="0rZzJxSLB1AktR4jxt2eKu"><code data-page-node-id="sLvhXlj2Cn64aC3MyXdY9i" data-pnid-children="aH1ySVH1QVdBn2iXTsTMRU" class="language-bash">ceph -s                     # 一眼看 health / mon quorum / osd 数
+ceph osd tree               # 拓扑与权重
+ceph pg stat / ceph pg dump_stuck
+ceph health detail
+</code></pre>
+<h2 data-page-node-id="wn3ECI6REhtFUp3laDXO9B" id="b7-longhorn"><!--pnid:zunCz56BLCCzxXSTxuk7dB-->B7. Longhorn 适合谁？它的短板在哪？</h2>
+<p data-page-node-id="938cCghaIExiOf4S79anVc"><strong data-page-node-id="0MJyE7nL652IPjcnEzTSAb"><!--pnid:TeDtVbT5mgRuzCSu7vqvjh-->适合</strong><!--pnid:1KtuxWZQbU4dOgzCYX1Ezs-->：中小集群/边缘/测试环境，追求"部署简单、能看到 GUI、社区活跃"，单盘容量需求不高。</p>
+<p data-page-node-id="qBZSXA676QDFKatMKBHDUF"><strong data-page-node-id="6GJzy8s2r8BfTuGfMoy25k"><!--pnid:IK0rx4vX8PyArKodIBg1bk-->短板（必答）</strong><!--pnid:zsoRt6Tp2Hkv6SVv95xVE9-->：
+- 数据面走 <strong data-page-node-id="7k9qIhh9d03xYjT2jrvcEt"><!--pnid:i99RvY3OZaINk27Gyms27R-->iSCSI over TCP（用户态 tgt）</strong><!--pnid:gzqETQHv8wavKdjW8rh1Aj-->，高并发下的 CPU 开销与延迟明显高于 NVMe-oF/原生块；
+- <strong data-page-node-id="4K4MzKYmL0tPTnNN2mMlkX"><!--pnid:DtFDwJCWvTqdCuTlmmpNrj-->大规模下会出现 iSCSI login/session 抖动</strong><!--pnid:0QH7fzcBPsI9ZMBlG9WOa8-->（成百上千卷时尤其要注意）；
+- 副本重建会占满网络。
+⇒ 结论：<strong data-page-node-id="VGIOhql2vAFbN4qwqfnCbS"><!--pnid:4mGqKziBSrtpsoZtfGH8gH-->不建议在大规模高 IOPS 的核心生产上作为主力</strong><!--pnid:FpFBHclB9vIctEH2s7HYxf-->，更适合边缘与中等负载。</p>
+<h2 data-page-node-id="z6pOVMR98Uy1jB3WrV67r4" id="b8-openebs"><!--pnid:Ag0612gWXjuIeFPFJYjrBG-->B8. OpenEBS 各模式怎么选？</h2>
+<table data-page-node-id="82eRKU0gqkD7Em5intX85E">
+<thead data-page-node-id="TYFR6mrhFfmdesVgAU0AVf">
+<tr data-page-node-id="OfNsr9Fom4oOjrcQZXErk0">
+<th data-page-node-id="ZlOdZKOqzRLBa0xZwCNIOC"><!--pnid:X6MOOlZpucM6tv1xy70E1L-->模式</th>
+<th data-page-node-id="BltRBn2PWtJ6I4I3Oa3cnZ"><!--pnid:FVFiVXDG8ShgtAo1VqXQwZ-->数据面</th>
+<th data-page-node-id="hcvG9Cs3QROzBRkShSues9"><!--pnid:TCXd8QvAMbikf8ijvOr1pS-->适用</th>
+<th data-page-node-id="dtbjAzuwNBzouZko55jR1O"><!--pnid:NsAjf62et357hUhrfPv6gf-->备注</th>
+</tr>
+</thead>
+<tbody data-page-node-id="eKjQzRIGOAQbAlI5LPuxM3">
+<tr data-page-node-id="GdtmseTtOsWhNXlo6AtQVr">
+<td data-page-node-id="vFcRxgVdyn4HGhAaEY3nC6"><strong data-page-node-id="LAosZ8firwyRdigaeXibFK"><!--pnid:myxOJOTWPrDXTXvO8QfzCr-->localPV-hostpath</strong></td>
+<td data-page-node-id="NUknUTp1FgCvCXhD3jfNfc"><!--pnid:vFk5DjRIS7iQvfw2jcYHcr-->本地目录</td>
+<td data-page-node-id="tlL5ufwiuqUlGMebinAwUU"><!--pnid:0Hc9fX0uauJP0fPPCKASqo-->追求简单、可接受节点绑定</td>
+<td data-page-node-id="xLaM2TcFcTa7VSdgL2VTtz"><!--pnid:yOaC2o5bZqJHkVRMX4yO7b-->常用于快速搭建</td>
+</tr>
+<tr data-page-node-id="vZXiJvUQCOd2M8v23KkaOi">
+<td data-page-node-id="BSymXAmwSZWf0wdTB4MbZa"><strong data-page-node-id="j3E4mcSyTZluFufgfjC2oM"><!--pnid:wJwT3rjbcjrYeJWEQTkFo1-->localPV-device</strong><!--pnid:PgJk5VXnsxotBwXKWEykPE-->（LVM/ZFS）</td>
+<td data-page-node-id="3G5yxr1Rbi7k19GXbA5qVC"><!--pnid:BRQn7LGje5P1VFRtk8stop-->本地设备</td>
+<td data-page-node-id="vwvhXjwzQdvD8BnTHnIcKM"><!--pnid:N6Pflg5Vggobq4dDjYUodh-->需要本地裸盘</td>
+<td data-page-node-id="a47vIFVBjpcTmXytONBXfD"><!--pnid:M3Bm1HG1lkDg0PqUlnCnhs-->TopoLVM 类方案也在此生态位</td>
+</tr>
+<tr data-page-node-id="Zt984yC7r6UG2DAkNEQ0jm">
+<td data-page-node-id="NoXAyfG4mkW04C1P9PMw8V"><strong data-page-node-id="X9u4aM9N62G6DcDcll7omp"><!--pnid:G9qZk5MnDrBSQpeuWvAYjT-->Mayastor</strong></td>
+<td data-page-node-id="rvnoOftbbhVI6kjMXrJRk4"><!--pnid:6UCX8v8zR13gHtuGb8XzC3-->NVMe-oF（用户态 SPDK）</td>
+<td data-page-node-id="p653HunxYnGY3WJCiU3X9d"><!--pnid:QqGTxNd0NWAOzkmXpa1tMi-->高性能本地网络存储</td>
+<td data-page-node-id="lPqcyrgdOjYqw86f3RHAgi"><!--pnid:AIMwRaA7JGbpCMLAQovqrA-->需要 CPU/HugePages 预留与节点能力校验（按版本确认）</td>
+</tr>
+<tr data-page-node-id="aXaD69tE9QUBYC6xr3KTvc">
+<td data-page-node-id="Yze5sY9qIU523Fss1E6oiM"><strong data-page-node-id="rZ7b2xWsUTloiwGoHyqnzx"><!--pnid:tbG2COKlvf8ynGLzuLayra-->Jiva / cStor</strong></td>
+<td data-page-node-id="GFEsxFcfqKKRrSGAZFpkia"><!--pnid:MtSAXSFaMnuIm7vvwRuuTj-->早期分布式引擎</td>
+<td data-page-node-id="Ygie9eQ2tUiLVrhXzI8uHl"><strong data-page-node-id="xLy1VQfNYDmgNTVR1ORmaZ"><!--pnid:i6ZqRUWOxshu1VMRzA9XWL-->新建集群不再推荐</strong></td>
+<td data-page-node-id="qImpW6IEDpWDb9hEdKSeWy"><!--pnid:WFuwuTfhDE0B8s1B8rGlpz-->请查看官方当前推荐路线</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="seiZJauAf1zi2DPIOsRB07" id="b9-iops"><!--pnid:Hi1R03rUslkrXCcTt1INWu-->B9. 云盘的"性能档"怎么选？（比如 IOPS/吞吐突发）</h2>
+<p data-page-node-id="0Mr28YHQBXQJnrrQwdAxiL"><strong data-page-node-id="Wvt0JCcNa2AIRnsC7xmg2e"><!--pnid:tLjSeIn1Dw4alJ0O8x04V7-->要点</strong><!--pnid:74BlodgadaOOLfHLCLw0Ey-->：
+- 云盘通常按"<strong data-page-node-id="xPJO7wILOhXxEwOnGuSC6E"><!--pnid:3ZKOQD7i3a01hty316kLI5-->容量越大、配额越高</strong><!--pnid:C9jkeXneqbF9qfjfhme0ZO-->"或"<strong data-page-node-id="JDBnFQYicvbXJ51Xe2pW0X"><!--pnid:NdBjvEeZ7E5PKKaIVNzqSm-->可购买 IOPS/吞吐</strong><!--pnid:emsZU1Xj9MvLuKJzOUFCUQ-->"两种方式给配额（gp3/io2 之类的命名因厂商而异）；
+- <strong data-page-node-id="FnILGlPm0IGNpkxyn2qI0n"><!--pnid:Xlb5QNuKDnpjciHyG0S0zR-->突发型（bursting）盘有积分机制</strong><!--pnid:we3bpGGOsLIsg1EYoo9XDk-->：小容量盘扛不住持续高 IO，积分耗尽后 IOPS 直降到基线（典型"跑一阵子突然变慢"）；
+- <strong data-page-node-id="vqYjZYByeLVkSfTnNSx3CU"><!--pnid:JX9Vqk6nKPfA91haqOekX0-->治理</strong><!--pnid:38wvLGjVtFa5BZKmo2iKEf-->：
+  1. 用 StorageClass parameters 固化 IOPS/吞吐档位，避免有人手抖建低配额盘；
+  2. 监控卷的 IOPS/吞吐/延迟（云监控或节点层），对"接近配额"做告警；
+  3. 压测要覆盖"稳态"而非仅看突发值。</p>
+<pre data-page-node-id="CoN8gaW5hiCIvYA6aa2nRN"><code data-page-node-id="PaVYyW2mMbfm1weAvpz84Q" data-pnid-children="UtT4rJv8vZu3alBNXYkP1G" class="language-promql"># 卷接近 IOPS/吞吐配额（具体来源依赖云 exporter 或节点侧采集）
+# 通用做法：采集 /var/lib/kubelet/pods 对应设备的 IOPS 并与云商配额对比做阈值告警
+</code></pre>
+<h2 data-page-node-id="PEwhryS8weeQ7H4aKvezwk" id="b10"><!--pnid:0B3LzOznrFkIuJZIiDcqLE-->B10. 卷加密有几种做法？</h2>
+<table data-page-node-id="ON2N1jNLH7uPzFJ1poe8ma">
+<thead data-page-node-id="szjnabyCDtPDTkF71NKMsS">
+<tr data-page-node-id="KKJEWHr85qfRsQ0Ga8FELG">
+<th data-page-node-id="SAYi18sqChaVrt1aoyXoF6"><!--pnid:lHixefl92xvk7PPG5j9XVj-->做法</th>
+<th data-page-node-id="3ZyjEDbnR0LrA7fVqQlsVW"><!--pnid:eCpPEXzjj2N9LrNxex50RJ-->层</th>
+<th data-page-node-id="pIup7S6DdVF7wWdSoColH4"><!--pnid:wvfSVGQWcdjkGrsxYhrPHA-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="zmUAEu7dY9lUczXwGbTj4V">
+<tr data-page-node-id="z96a72CaFMv2PDv4Np1g9y">
+<td data-page-node-id="MJIg8yBkWNPxNMLdCA28YH"><!--pnid:QBJr3elajAsvqYyiECYQX9-->云厂商静态加密</td>
+<td data-page-node-id="em1sW7oPR8iDNF7yPh1tyJ"><!--pnid:2MU97lPaIwEoPEGP6yN7P3-->存储后端</td>
+<td data-page-node-id="zITugjcUBXmSbT86XC6k4K"><!--pnid:EZQ2dAp8LEGSmrAvLhOFB6-->最简单，通常默认开启，靠 KMS</td>
+</tr>
+<tr data-page-node-id="UzB1kdXij6VbnzlGbkhLYs">
+<td data-page-node-id="2DmdKtCGIrOYM7bsDF1ELl"><!--pnid:0PYv6KlBaziCJXnFwRXAtw-->CSI 层（LUKS/dm-crypt）</td>
+<td data-page-node-id="oXnV799yysKwM038h7FIjg"><!--pnid:hjSBEJMKW9gX4yETb7c3Jk-->节点</td>
+<td data-page-node-id="x20RZJvH3CdSZTc6Ja3iMn"><!--pnid:VAbVDj0DvfzFVlg3kioASs-->云无关的通用做法，注意 key 管理与性能损耗</td>
+</tr>
+<tr data-page-node-id="jXt1fktyKb6sXYEi8cKh6Y">
+<td data-page-node-id="B1t5L43TSj01lQYbtt0knJ"><!--pnid:tYHtmXHHtzW2c61TZd5Y36-->应用层加密</td>
+<td data-page-node-id="zGRZ5byZMueXAwazt8nrFI"><!--pnid:u3sv09NqPmJwnrOemxoa5e-->应用</td>
+<td data-page-node-id="mA4fzLVE02uLCUNQLKzGEy"><!--pnid:u5prr7kryVAI5grEXNJ9Tf-->最细粒度，成本最高</td>
+</tr>
+<tr data-page-node-id="wJFKaJte6tQa9DobATrvNO">
+<td data-page-node-id="zrKcGHHuXEhJ1cFdqe5P0q"><!--pnid:G53OFdGCuHbyM9WMvUxskF-->Secret 静态加密（etcd）</td>
+<td data-page-node-id="kHv5BkB4svBuHoDmoNTP3u"><!--pnid:BGaI2kkln00gSSrUwysabm-->控制面</td>
+<td data-page-node-id="sMGtTvGRyAy2ncAQUAjWPR"><strong data-page-node-id="05RBIQjuzs7jErjGF5mOXA"><!--pnid:mLffNC19oph6KO5M4gwSvA-->这是保护 etcd 里的 Secret，与卷数据加密完全是两回事</strong><!--pnid:MqONNUmXjmaCObxGV77j5Z-->（面试常混）</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="DFmZn7iXzBo4nUAj7cPnue" id="b11-velero-vs-csi-vs"><!--pnid:bWVqxXMh1pjZxnEE6bIs87-->B11. 备份：Velero vs CSI 快照 vs 存储侧原生快照？</h2>
+<table data-page-node-id="yiqr8wfhukglGLdOKHuxwu">
+<thead data-page-node-id="5YgUl8M1s2ATKwfR7PehVi">
+<tr data-page-node-id="kdDnLKRgbMsRa7LMGVHCdN">
+<th data-page-node-id="Cr5eGSHVetkelID82Vv5Xv"><!--pnid:RV158oZZgzPeNAxIusIsZN-->方案</th>
+<th data-page-node-id="TXk4y8w56lIA4rruRQOgD5"><!--pnid:OZ1qepqwUhmRT7mgBXEgO2-->粒度</th>
+<th data-page-node-id="7xwVCGHAeXbxBMqM9Encj7"><!--pnid:1Mi4VrdLOcZDpIE4618QEy-->恢复方式</th>
+<th data-page-node-id="3gZmnEq1mC1MrdXrwj51F1"><!--pnid:7fIs6WwTCGQhwyGrTFXyI6-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="g6B2jzjJacIZ6XxrsM3CeF">
+<tr data-page-node-id="Y7JmALxb4VgTS5FhY9vqWo">
+<td data-page-node-id="FxOyMoEN3982jfu0an0LW1"><strong data-page-node-id="CVeybRPQ8BNI30TmqVOYoF"><!--pnid:e8UiseacnAEsrD9n9Frs8i-->CSI 快照</strong></td>
+<td data-page-node-id="hSitQHHhMwYVmI5Tkk9l5g"><!--pnid:3OFDJSziyBlR2IftCUYNF2-->单卷，速度快</td>
+<td data-page-node-id="7LLWOyENqrdDeu6zsdNarh"><!--pnid:Hyvvb98KiG1WAT84dgePBI-->快照→新卷→重建 PVC</td>
+<td data-page-node-id="6kX2gu7h1asIztQsfGjh1m"><!--pnid:jw055qOLoD3XF1DGD0WqXQ-->快速回滚、同集群/同区域</td>
+</tr>
+<tr data-page-node-id="xVlGGxhT7LD1usjTurW0rc">
+<td data-page-node-id="NdqNzH3EyFgn3MZlq9NYki"><strong data-page-node-id="GkX1VLzUtlpfSFJaayfYMP"><!--pnid:WUaIr8AgzCZHFZLFBNKRXl-->Velero</strong><!--pnid:TS8nDEoFaZlEQBJfY5IoVK-->（支持 CSI 卷快照 + 文件系统备份两种模式）</td>
+<td data-page-node-id="EZ2HpT1K3OClzAZBuIImlv"><!--pnid:yVtMWzpu0iRlw8eJ0GTv6T-->命名空间/标签/整集群（含对象清单）</td>
+<td data-page-node-id="qWzzlDQm7saKBwIQHr9q9E"><!--pnid:BP9JJVtfYgikL2dVuvH1IH-->恢复到原集群或新集群</td>
+<td data-page-node-id="GUcnYqtLaCi8jFmPwKElaE"><strong data-page-node-id="0ftCdmXTCTko6u2BdXCjvQ"><!--pnid:SdOEvHmtpateZ1pbhJ3h7a-->异地容灾、集群迁移、误删恢复</strong></td>
+</tr>
+<tr data-page-node-id="SMaBIfYV18xg2liddNSGx6">
+<td data-page-node-id="lepkadFZERKnu2DbQSJ7gI"><strong data-page-node-id="zT7aX9EOLHRgnYRRgQ8esU"><!--pnid:iR6ayuZFh5VFUrr6ciC1gk-->存储侧原生快照</strong><!--pnid:sc9gylBsrSlIjJfc1SrLsn-->（集群自带的定时快照）</td>
+<td data-page-node-id="fJHbfR40VJsJ7XbcFznPkn"><!--pnid:w7mGde0cPgZy2IgAvCjWns-->存储层</td>
+<td data-page-node-id="lYIYDUDVCN9hqgHn8fm6qN"><!--pnid:u1PxqMyzghK0kzaqO27wcO-->视产品</td>
+<td data-page-node-id="UAtwlBae5Br155Oqfxpo7M"><!--pnid:Zf5AX1HA3oQfDder0gOINj-->与 K8s 对象状态不一定一致，单独用风险大</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="WADSfqXDcKtXGOfSDQ3qnK"><strong data-page-node-id="nFcK21xjiGA1MnX0CDbRGY"><!--pnid:dzxdtcAVwwujXY0GdkeesI-->必答</strong><!--pnid:t8IYWdbMHCRKUolU09KzjQ-->：<strong data-page-node-id="ZpzF30HNO4AJ5XcUd0gDgU"><!--pnid:3XwxydjSwJ5MsrVwVD4P2Q-->Velero 的价值在于"对象清单 + 卷"一起备份</strong><!--pnid:SHuxeqR8h4HEjt9tSuPvwE-->，纯 CSI 快照恢复时缺少 Deployment/StatefulSet/Service 等对象，两者应该配合而不是二选一。并且要定期做<strong data-page-node-id="22Sjtlm3ISaGai0FaKcVHM"><!--pnid:YgH3CO2pfvHfEvIE3NflbV-->恢复演练</strong><!--pnid:lohKS74bkEiBbiU8I6fnKj-->（没有演练的备份等于没有备份）。</p>
+<h2 data-page-node-id="Je4LoiNyjse0iUZyEcYIJv" id="b12-volumegroupsnapshot"><!--pnid:Zxcc9knsqQJxGKcY9sLNOd-->B12. VolumeGroupSnapshot 是干什么的？（多卷一致性）</h2>
+<p data-page-node-id="a9ht0kwPg30vJ8KSSel5x8"><!--pnid:FekcsY6g83EkJeouseHKe0-->一次给<strong data-page-node-id="eX40lHoFZp6aKxdY05exus"><!--pnid:rjlhsKmuxYEcDt0u222BxA-->多个卷</strong><!--pnid:563ZzDawNzPpnWit8gmYN4-->同时打快照，保证跨卷的时间一致性（常见于"日志卷+数据卷"或分片数据库）。<strong data-page-node-id="0F0U4TNuthdFvxY5hSqQtY"><!--pnid:LIS4NPDwLNzDxOacsUxYGt-->该能力为较新特性，请以所用版本的 Beta/GA 状态为准</strong><!--pnid:yxCmQZSoHsnUvaSEMhaA6F-->。</p>
+<h2 data-page-node-id="fgFbInNNhKVcWp1c9knbYG" id="b13-readwriteoncepod"><!--pnid:LYCcRqtEQIxT4eILM8KrjA-->B13. ReadWriteOncePod 的真实用途？</h2>
+<pre data-page-node-id="fBIeGEMQ7tALrjiPherP5Y"><code data-page-node-id="KvAfoIWPz2sbfPMtCzWgpM" data-pnid-children="b23kmFmUxSB0xW34c1fZdT">RWO：同一节点上可以有多个 Pod 挂载同一个 PVC
+RWOP：整个集群仅限一个 Pod（kubelet 强制）
+</code></pre>
+<p data-page-node-id="8dMYJPCUJwj88MjlSoGlmB"><!--pnid:L1zPJ6x4uc3W0cZx8Ofue5-->用途：防止"运维误操作把第二个 Pod 挂到同一个数据卷"导致文件损坏（比如手工 debug Pod 挂了生产盘）。<strong data-page-node-id="uIqzQlJTunGJ6gwpYT1jT2"><!--pnid:SQt0X2sxcJH0JprNpNYg2Z-->注意它不等于 fencing</strong><!--pnid:2cGtN10TiW8vHYwhLt5Cio-->——存储侧未必知道谁拿到了锁，只是 K8s 侧的单写保护。</p>
+<h2 data-page-node-id="XiE7VTNxkVemfm4XN1vdQ1" id="b14"><!--pnid:gZwAow1xbgKtFStXFGUUQH-->B14. 有状态应用上线的标准清单？</h2>
+<pre data-page-node-id="74ZByC7SOQmg9s0m7zmZbB"><code data-page-node-id="Va8p3eXfNfDkTzHiZ0yuXe" data-pnid-children="TBoi99d6mEGGDj4ZWyiszq">1) Headless Service + StatefulSet（稳定网络身份）
+2) volumeClaimTemplates + 合适的 StorageClass（带 allowVolumeExpansion）
+3) PDB + TopologySpreadConstraints（跨可用区/机架）
+4) terminationGracePeriodSeconds + preStop（优雅终止，避免脏数据）
+5) 探针：liveness 只查自身，readiness 区分&quot;在同步/在 serving&quot;
+6) requests/limits 与 QoS：数据库类建议 Guaranteed
+7) 资源隔离：专用节点池（taint）避免吵闹邻居抢 IO
+8) 备份：定时快照 + 跨区域复制 + 定期恢复演练
+9) 监控：卷容量/inode/延迟/IOPS + 应用层 db metrics
+10) 升级策略：逐副本滚动 + 先扩勿删 + 明确回滚（含数据回滚）路径
+</code></pre>
+<h2 data-page-node-id="iQ6Zx9U05IZ9LGXgwNa58y" id="b15"><!--pnid:EcWp8HY88cm2QjIxoEkcbS-->B15. 每个节点能挂多少卷？谁在限制？</h2>
+<ul data-page-node-id="P8DQH6r878ZNpYCTNfLeQb">
+<li data-page-node-id="t5AHm25KzOHuedhg30Dwiu"><!--pnid:RL1TYGRJKb5taOZ8n5mWjl-->云商限制 <strong data-page-node-id="ROaqx8khbUOCeMBEQU6084"><!--pnid:5UfWQbou5VzZSA5WRSMbW2-->每台虚拟机可挂磁盘数</strong><!--pnid:p2lEkBzeXGaad0WI4oUv2V-->，K8s 会把它体现为节点的 <strong data-page-node-id="vSEPP86D41Odtpp6BDGl4D"><!--pnid:0R1E6UrqwFGwoG1hNz5aOO-->allocatable 资源</strong><!--pnid:cn9SyELbLgqNSUgvjorjuY-->，形如 <code data-page-node-id="fkaKBegitUee6rN1Emdjso" data-pnid-children="i4OaTXbxnIMDwt2PH9iIgB">attachable-volumes-aws-ebs: 39</code><!--pnid:WTy4HDcbqZtlqewxbUnqtz-->（数字随实例类型而变）；</li>
+<li data-page-node-id="Ok6GXBNDKWFxUQtsBztPgP"><!--pnid:QfYNS0KS5kfGYviz7Zgaea-->调度侧有相应的 <strong data-page-node-id="IBE3P4u6lz76Xd2wWPnCVI"><!--pnid:y0EA7JdWXEFpiTkrLEqtUH-->NodeVolumeLimits</strong><!--pnid:0vZdIzuN0kNNjcgXLcRHYC-->（versions and csi-specific limits 以版本为准）做前置检查；</li>
+<li data-page-node-id="AHQaLULwZwkYx4jXBEOpFI"><strong data-page-node-id="gsMyTj87FOXUbclETQy7Cn"><!--pnid:wcKaIp5jnwU1TBFSRjmXTJ-->超限表现</strong><!--pnid:AzkmGvmKBHtHXvnoDHZRqc-->：Pod Pending，Events 会明确写出该节点挂载数已达上限。</li>
+</ul>
+<pre data-page-node-id="9Fi43c6Li9fCpyHn5a7Xph"><code data-page-node-id="nxg2zzzSjVmHHdvrx6tazq" data-pnid-children="KlkBPp5PZwZxPWeXOe7keQ" class="language-promql"># 节点已挂载卷数 / 上限（依赖 kube-state-metrics / 云 exporter）
+kube_node_status_allocatable{resource=&quot;attachable_volumes_aws_ebs&quot;}
+</code></pre>
+<h2 data-page-node-id="W7xspK1BVQGgoL1OG7Ir34" id="b16-csi-driver-ha"><!--pnid:ocjGoZDnwauYaPzzlSNCWO-->B16. CSI driver 自身要不要 HA？</h2>
+<table data-page-node-id="exD8iwm9gANOVdCHysP29n">
+<thead data-page-node-id="5aGPBzCoa5NmY3vYVdI0EN">
+<tr data-page-node-id="A9EGOwRHpdLmU1BkMpLtMe">
+<th data-page-node-id="E1SCvzY134zC04DqAzshhu"><!--pnid:1Kg4R2se0L6LxlKICEJPmy-->部署</th>
+<th data-page-node-id="ah7ojUtTNfbXD7FTXz50mf"><!--pnid:hSpzEG0GqmFD46DMlJCqYZ-->HA 做法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="vXDCjonzmTcPNjj5xTFqz6">
+<tr data-page-node-id="Bq4SuJpl18ShrPVyZunb6m">
+<td data-page-node-id="CMLFTCUmBMtaQ9wUUiTFdj"><strong data-page-node-id="oiy1ENICPBwryG7xzHhGh1"><!--pnid:ixqCiMuKyB9k4ohU3bNb0H-->Controller</strong><!--pnid:cRYqAoiFnP1z6VGJAJuQmr-->（Deployment）</td>
+<td data-page-node-id="rGuiVoQU5gIE8I9sJL52fr"><!--pnid:5PqgXyuFZQlPlbLKrkmLHr-->多副本 + <strong data-page-node-id="3Du4r85JSHv9cVeJnZuqQa"><!--pnid:GgoQWA3mJqGo7HNQyfBy7g-->leader election</strong><!--pnid:4OCsuLJaj4KoAKqm9Eac0E-->（sidecar 内部选主）+ PDB；跨 AZ</td>
+</tr>
+<tr data-page-node-id="TwAEmCQT8d8leRoJDSppND">
+<td data-page-node-id="RhDYfOl9zWCYZfpdRablQu"><strong data-page-node-id="qg5UMsVJx0crk1w0bDhdjy"><!--pnid:pLyWkNJrs5kmFfS2BCX8BI-->Node</strong><!--pnid:YrqU6syKmjT7Qr3Swa3DJq-->（DaemonSet）</td>
+<td data-page-node-id="BBb96nFeFQHVNtwtmh0CpX"><!--pnid:eChWYBu1NloZPI9vOhUdqp-->每节点一份；<strong data-page-node-id="3RLWfp3pdxkiUWMFXHaAOh"><!--pnid:Prx4aGCEi7NuD2LV5YrEez-->本身无 HA</strong><!--pnid:zaUV8bmYV4Dp9z9V2xKCi7-->，故障只能影响单节点 ⇒ 用节点池/灰度发布降低爆炸半径</td>
+</tr>
+<tr data-page-node-id="EgI4l5QVRvIuQ8Y4tb05Ss">
+<td data-page-node-id="G6EQEv5xWamT9hHqKMZwTk"><strong data-page-node-id="6eHfgab81Dskfs2XpJNLC9"><!--pnid:eMt0ALEAF0X4iDdxmn66GR-->livenessprobe</strong></td>
+<td data-page-node-id="ewEkSqO4rnTpEQVDd1lTDg"><!--pnid:scnCCsOgGcLCAdY611ogA8-->探活 socket，暴露健康状态，便于告警与自动重启</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="WmqPHdFvFueDpPS5kGxJ02"><strong data-page-node-id="xNdEfo7UAc5v1I6reALfhj"><!--pnid:LRO8PlVvru0UTkDKVN6zvY-->必答</strong><!--pnid:GM208BTHL0mXcS8KcecP3i-->：Controller 挂 ⇒ <strong data-page-node-id="KGEniTgK8cTpuzzQYBVDQX"><!--pnid:KAl1Neej2Z1BXHRX4KD7Yn-->全集群新卷供给/attach/扩容全部停摆</strong><!--pnid:bG7GSfYtlxBN3gggST24ZQ-->（存量读写通常不影响）；Node 挂 ⇒ <strong data-page-node-id="KLkyT2wIVIRFFJatdSpO6o"><!--pnid:BbvoRLWCyvzemLWEBWGaLO-->单节点新挂载失败</strong><!--pnid:9mPHTfEoDfuRPYBVusj20r-->（已挂载的卷通常不受影响）。</p>
+<h2 data-page-node-id="IT9xzDGY2ux1SBmMHccu61" id="b17-csi"><!--pnid:VDyVltpBlWzQq6wuu1stww-->B17. CSI 驱动部署的实例配置（一个通用骨架）</h2>
+<pre data-page-node-id="AOHFjMSPMLumfgYau8KAMz"><code data-page-node-id="LLf7wzin1ouiWJS7qxeIVa" data-pnid-children="7mgPARLJJi3sxCQMcu6G7A" class="language-yaml"># Controller（示意，务必以驱动官方 Chart/ manifests 为准）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-provisioner
+  namespace: csi-system
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 1}}
+  template:
+    spec:
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v3.6.2
+          args:
+            - &quot;--csi-address=$(ADDRESS)&quot;
+            - &quot;--timeout=60s&quot;                 # 建议：明确超时，避免无限等待
+            - &quot;--leader-election&quot;
+            - &quot;--leader-election-namespace=csi-system&quot;
+            - &quot;--extra-create-metadata&quot;
+          env:
+            - {name: ADDRESS, value: /csi/csi.sock}
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.4.2
+          args: [&quot;--csi-address=$(ADDRESS)&quot;, &quot;--leader-election&quot;, &quot;--timeout=60s&quot;]
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.9.2
+          args: [&quot;--csi-address=$(ADDRESS)&quot;, &quot;--leader-election&quot;, &quot;--timeout=60s&quot;]
+        - name: csi-snapshotter
+          image: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.2
+          args: [&quot;--csi-address=$(ADDRESS)&quot;, &quot;--leader-election&quot;, &quot;--timeout=60s&quot;]
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.11.0
+          args: [&quot;--csi-address=$(ADDRESS)&quot;]
+        - name: driver
+          image: &lt;厂商 CSI 镜像&gt;
+          args: [&quot;--endpoint=$(CSI_ENDPOINT)&quot;, &quot;--logtostderr&quot;, &quot;-v=5&quot;]
+</code></pre>
+<blockquote data-page-node-id="3YGAVvRMYMknJnEq37zJCZ">
+<p data-page-node-id="XYB2WwaYHdaBDtPNS5bCtx"><!--pnid:WANrJuOHmPaIR2XBFRZp62-->镜像 tag 请务必按自身版本矩阵选择（<strong data-page-node-id="yrsdX9UH22VT7QcL3oRpSm"><!--pnid:lT8e2ROxIlG0KPAVYxsFJh-->sidecar 与 K8s 版本有兼容性要求</strong><!--pnid:Ss6u6OAgmmiSKYhFf5Ho47-->，这是升级前必须核对的东西）。</p>
+</blockquote>
+<h2 data-page-node-id="i1QrVDPdVzYjZzDcbC6rdM" id="b18-csi-driver"><!--pnid:1L2L292vNSSw8uRzenNvFq-->B18. 常见 CSI driver 故障的"现象→原因"速查</h2>
+<table data-page-node-id="wiwCRzqj82GSuOQQYzvi7a">
+<thead data-page-node-id="ShEbvZyXJFyWa1uDHNxozx">
+<tr data-page-node-id="qaP11uDS4CNWE48Uldkn8v">
+<th data-page-node-id="n9WqPK913W66uKrM0FuRO4"><!--pnid:bk9y8u9oKcJzMd1D03RcPn-->现象</th>
+<th data-page-node-id="47F76ydF4qOQwKcWPSNy7G"><!--pnid:adXGEaTS4DHVe4HarVOgT2-->常见原因</th>
+</tr>
+</thead>
+<tbody data-page-node-id="y03bAYSecZjtNH9ptCP7Oe">
+<tr data-page-node-id="qrMICvvc5KsYFNPaQevCqE">
+<td data-page-node-id="2LII7Kw8lUcofOAsMERn5B"><!--pnid:4onXd4eShXai9xqGoX2KXz-->PVC 一直 Pending，<code data-page-node-id="SYQWXV5Ku6609ymX8iocCq" data-pnid-children="s4Q0MQHJKnWLIGQT2B2sNd">no persistent volumes available</code><!--pnid:6Msa2gJtCqTb5FHHnrNPG6--> / <code data-page-node-id="iL9BLhQS1AoY6zSFjm7X3o" data-pnid-children="A2WgvpPfjFwZPN8gSYUPIQ">ProvisioningFailed</code></td>
+<td data-page-node-id="B18hVwHv9zvhJgCRelj0Ks"><!--pnid:cUiecdxi3H0ouy0t62w10T-->provisioner 没起来、StorageClass 名字拼错、后端配额不足、凭据失效</td>
+</tr>
+<tr data-page-node-id="csUJkt22Q4IDMvtPgX3I4l">
+<td data-page-node-id="u1WiuOgOfv4QMuAuwaQkiT"><code data-page-node-id="NhGfv7LDMvwJPkeY106m7T" data-pnid-children="6JibqJ9QFAntDI6nKJmqvu">FailedAttachVolume</code></td>
+<td data-page-node-id="GMmUA5tewKrtHC4EJoB6Ld"><!--pnid:StQbdDMcyB8B3JhbsJruZX-->云 API 限流、卷在别的 AZ、已达节点挂载上限、上一次 detach 未完成</td>
+</tr>
+<tr data-page-node-id="36dthpasC7R8ieKGliQjKM">
+<td data-page-node-id="qXvtlzeELli26mdG3ye3zu"><code data-page-node-id="ofaJBfXldAm10JMRWQPzQX" data-pnid-children="jg4XN6Ncd01GHcQDZSa515">FailedMount</code></td>
+<td data-page-node-id="RJjuzmquUnL3kFFq4UVDNo"><!--pnid:bqNjZm3YCnaM7I7239JcUL-->kubelet 侧 mount 失败（fs 损坏、mount 参数错、node plugin 崩）</td>
+</tr>
+<tr data-page-node-id="dZFabOyYSqx3vR7OkVUT82">
+<td data-page-node-id="mcmR61LAXunY7T5sukK8PJ"><code data-page-node-id="mRyFElbheYCJbkZ2vnssa2" data-pnid-children="X3fLiaQMMoS5p4fsanICgw">VolumeAttachment</code><!--pnid:2O6WvigvhQmpVrXOotmA9w--> 卡住</td>
+<td data-page-node-id="fD1dJkuP5BANj5mmSTmbgP"><!--pnid:mQAAf9eVlwb0uGESJtaLxF-->ControllerPublish 超时重试/VolumeAttachment 残留未清理</td>
+</tr>
+<tr data-page-node-id="QO1MrgKqKEEFQx4ljTi6bR">
+<td data-page-node-id="mBwrvTCSSOIdfIDNcsaNTZ"><code data-page-node-id="0NN4DdK934xnUQduGC2zqp" data-pnid-children="O5yqM6LzPffD8J0nxvA3Wq">node(s) had volume node affinity conflict</code></td>
+<td data-page-node-id="sW084EougUeJ59wvRU9WOn"><!--pnid:xeKIMUHFN6UekJfDF0Wobi-->WaitForFirstConsumer + AZ 拓扑不匹配</td>
+</tr>
+<tr data-page-node-id="RmMeOWI0TFYh90qlhDhYsr">
+<td data-page-node-id="Bsf9tQyjrOklcuFslqjusN"><code data-page-node-id="TF2t35Wo5Wjyaa99A3g3sc" data-pnid-children="A4QpFwT7CT0GKtJR6S8M7b">Multi-Attach error</code></td>
+<td data-page-node-id="0WLaYQtjnkObo9j389KTOz"><!--pnid:vCNzB02k4Fy3mOft4cq5l0-->上一个 Pod 还没完全释放卷（周期性驱逐/节点故障常见），或有第二个 Pod 非法挂载</td>
+</tr>
+<tr data-page-node-id="vwUEeRnKXO6xzaQFtVBXyu">
+<td data-page-node-id="H5fZsuViveHXqa1WfdVpak"><!--pnid:VVXT7NgLGbwSPBcHdQVr79-->卷挂载后只读</td>
+<td data-page-node-id="K4gcHsFqrmnMjcNrLonMM5"><!--pnid:2XavDlVobQxqwXwsn582qa-->文件系统损坏进入 read-only、或两个 Pod 同时写</td>
+</tr>
+<tr data-page-node-id="mVzZYF6xPvX2PeTRcIVRLh">
+<td data-page-node-id="t1XpDc81IUB43kL6fACw7o"><!--pnid:S4z17jxGRbBvBbEfxr4qcP-->扩容后容器视图不变</td>
+<td data-page-node-id="fyv9zBZ8M4BMA4eSrTKp7n"><!--pnid:3U9doHEE6JCl5A4iVN4Ikb-->NodeExpandVolume 未执行/卷未挂载</td>
+</tr>
+</tbody>
+</table>
+<h1 data-page-node-id="tnPtEyEsFBeeGlIZB0zTso" id="part-c-14"><!--pnid:RLZgd62OhCB0WsiNrJepmU-->Part C · 大规模集群存储优化篇（14 题）</h1>
+<blockquote data-page-node-id="r39VO5Ej81JSrBkvPrss12">
+<p data-page-node-id="gkSr7isngqOLDNIgB7lMOu"><!--pnid:fDBjA6tJ4qbKqPRTjiqi6q-->定义：<strong data-page-node-id="xHZIBbU2xan4jxf8vk4Mtp"><!--pnid:lcLzIsLVZEhgF2L5zBjZ0S-->大规模 = ≥ 1000 节点 / PVC 数万 / 单集群有状态服务上百</strong><!--pnid:w5cNF8hNPCEgdRcjG7razg-->。</p>
+</blockquote>
+<h2 data-page-node-id="sxw7PBgJtq6WKxQEcO50Qd" id="c1"><!--pnid:1B78OaVaYChJehcIi46x8a-->C1. 大规模下最先出问题的四个地方</h2>
+<table data-page-node-id="1GIoEgEK4v4rnj2QHIaQgS">
+<thead data-page-node-id="udPxq9E51FXZaDGA0h2oer">
+<tr data-page-node-id="3yVZ5rDsR1hpAXmBlDF4cF">
+<th data-page-node-id="gMNdj0MEuaUYtOtqwTdYK9"><!--pnid:O8I08K3bwu410FwRo9JayM-->#</th>
+<th data-page-node-id="Lk6J3bBSgRmjtzTuBxvrWS"><!--pnid:vQm5sxQJNYPglqWkk2D7NB-->位置</th>
+<th data-page-node-id="D0nHZJMlql249iWapyWdnK"><!--pnid:HrBaqoZ8q6mTDj3qdb374C-->症状</th>
+<th data-page-node-id="jSa3SkcV3xJRSl7HRF6EvS"><!--pnid:ZwQLSXrpJpVbCsYHB96Rcv-->治理方向</th>
+</tr>
+</thead>
+<tbody data-page-node-id="K3zaglkqd8srZEWhLoD0kw">
+<tr data-page-node-id="EDkQZwxMqHF5DIxMdD2M95">
+<td data-page-node-id="YHJyrEFabo1vOqjwikfsHE"><!--pnid:6yGERtW6xjywCKqo6zad4Q-->1</td>
+<td data-page-node-id="k3B0lAkkp5Rl092GxDyxEo"><strong data-page-node-id="zHltPNmaqH0Dhxqwp23rNK"><!--pnid:dWgcKiwBRMEMNRIXteoJaT-->对象数量（PVC/PV/VolumeAttachment）</strong></td>
+<td data-page-node-id="Hz9rLrGbkInVWuK4BivbdB"><!--pnid:9ys1tc8jp3ro2EBF2VTwl8-->apiserver/etcd 压力、list 慢</td>
+<td data-page-node-id="wm6RlU7mfVnuAARSJxq3nV"><!--pnid:DDNv0cpa2z8i4PorljmMaG-->控制 PVC 数量、定期回收孤儿、审视 VolumeAttachment 残留</td>
+</tr>
+<tr data-page-node-id="31oLZ4u9fRdEpyasqyLlCS">
+<td data-page-node-id="1C2RzrRIFBeGzJJTOaLbSv"><!--pnid:QY6O2vKqxcIxSCrZ1pqiVL-->2</td>
+<td data-page-node-id="WKF9dFGZVEwfcp1lcnVa66"><strong data-page-node-id="HhZTgasAk3DM236ev4m9LR"><!--pnid:emeIC2PC4MIy18H2KUIvYu-->调度侧的 VolumeBinding</strong></td>
+<td data-page-node-id="mLYuBweLuwUKBIwlBSCXaR"><!--pnid:CLA9UaN8nzkVoUUBXu8sKI-->调度变慢、pending PVC 堆积</td>
+<td data-page-node-id="H19qTbJgdkeyalkv81rwbJ"><!--pnid:AMReTqRcwRp0DR23r8eqXt-->收敛挂载卷 Pod 的比例、减少等待绑定的 PVC</td>
+</tr>
+<tr data-page-node-id="nrr67BtGN7KjqAj9iL5CZA">
+<td data-page-node-id="ZmQUOcTUTn13OJRaOHQJPM"><!--pnid:aR369KTogIjEWm3WXJVVSu-->3</td>
+<td data-page-node-id="Tnm44SU4IR7vRSfdpJyBld"><strong data-page-node-id="0jiOSUNKvVh8twVTac3FA3"><!--pnid:oK1HkI3pIkqJrvyYvzK44a-->Attach/Detach 串行 + 云 API 限流</strong></td>
+<td data-page-node-id="cEERkaX1YcPjDYfuvTtiDs"><!--pnid:KRULrl1K1naH8tMFgx1ZdW-->Pod 卡 ContainerCreating 十几分钟</td>
+<td data-page-node-id="PLgGjfZ2I4D7bdl82mfDNC"><!--pnid:zKY5uGhuQwkggEzt5njw0U-->分批创建、限流调优、避免大规模同时重建有状态服务</td>
+</tr>
+<tr data-page-node-id="9C4klNYX3lcGaRpPDGhzsR">
+<td data-page-node-id="ew4Rouh2mL0EOjV1ND36yu"><!--pnid:7Qppmc4qjQMw7yOvNTA0uZ-->4</td>
+<td data-page-node-id="nVbKtCWUt0nkwpESAUxqV2"><strong data-page-node-id="9k2gXerlFnbpIh2yJmXmmH"><!--pnid:g6BDTjCPsGYH0TwDgHKp4h-->节点挂载数上限与单/多 SAN storm</strong></td>
+<td data-page-node-id="8iC1AoSttZeY4WsbJkmN1r"><!--pnid:jitDryqi24jpJHk1bV1G6A-->挂载失败、iSCSI 会话抖动</td>
+<td data-page-node-id="6AyJxFXPvBvwIizx6Yn25H"><!--pnid:hkmwFL19CsgxJ5a1TjCtOd-->节点池化、异构规格、控制单节点卷密度</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="ZkpOsABHvh6NA4ke1EHsfm" id="c2-pvcpv"><!--pnid:MBzv4ebF4j7vlEP2OE9Df9-->C2. PVC/PV 数量对控制面的影响怎么量化？</h2>
+<pre data-page-node-id="qg4Q8MtnqD7lmgwFRPjXJX"><code data-page-node-id="7pMM5cnpJVZVET7B9qFy3o" data-pnid-children="NFNx1bIa9M2dvjH96su0W7" class="language-promql"># PVC/PV 总数增长趋势（依赖 kube-state-metrics）
+count(kube_persistentvolumeclaim_info)
+count(kube_persistentvolume_info)
+# VolumeAttachment 残留（不该长期存在）
+count(kube_volumeattachment_info)
+# 处于 Pending / Lost 的 PVC（异常信号）
+count(kube_persistentvolumeclaim_status_phase{phase=&quot;Pending&quot;})
+</code></pre>
+<p data-page-node-id="zRVW0L2TdGi3vfGBgPNlCD"><strong data-page-node-id="GjNIooD9IzddDQh0kdgrxB"><!--pnid:xwH3KYeuDs1zVkz5MBZG5a-->治理</strong><!--pnid:BwrRPRJrNLRlIZBS2T7iN4-->：
+- 建立 <strong data-page-node-id="WYMYujd8pG2GZNfxPhBPCW"><!--pnid:JV2NPMsMbYCE2sfkuTuZIT-->PVC 生命周期归属</strong><!--pnid:FrtY435XuGfNu4oaAWmxoX-->（owner/team 标签），定期清理无主 PVC/PV；
+- <strong data-page-node-id="fmy7HTembE18us79nbAHO3"><!--pnid:a1H4kFF1n0C7tyDInT5dny-->孤儿磁盘巡检</strong><!--pnid:kxGiAbSOEHt43bWdevuSKx-->：平台侧（PV 列表）与云/存储侧（实际卷列表）<strong data-page-node-id="XU9wQ1suBhKDESyshnxaFU"><!--pnid:gAMm9TSXVjj24hgEUcpEqI-->对账</strong><!--pnid:dxvUiqHxoIDn0ijTENO9b6-->，这是最省钱的一步；
+- 对"每批次重建大量有状态 Pod"的动作做<strong data-page-node-id="3fai6wbsVuwTaaXBYcQpH3"><!--pnid:5gYFMeyAJizD2DlnuKD7y7-->分批限制</strong><!--pnid:UpeXxH3Xpm8JHtKiEwfndW-->（否则瞬间 VolumeAttachment 洪峰会打爆 controller 与云 API）。</p>
+<h2 data-page-node-id="pERhdsHDdBLJgzfDwvrTfN" id="c3-pod"><!--pnid:tt1nJnDuM638mWIapjZwFM-->C3. "Pod 挂着卷十几分钟起不来"怎么排查和根治？</h2>
+<p data-page-node-id="WT4i75sUMLSm3dxm22wB7j"><strong data-page-node-id="09iJ9LY9QapnZlT47PFVLd"><!--pnid:unAs3WXtQgGC4tNeXkaJT8-->定位顺序（必会）</strong><!--pnid:TB9qeHjSlus3cH0wQukdtN-->：</p>
+<pre data-page-node-id="1AGqgYNwZBSEpjNSA3pdML"><code data-page-node-id="S1BPSopiRjU1Xoxxx1xde3" data-pnid-children="kLTDAav21vrJ0BaNo34RTn" class="language-bash">kubectl describe pod &lt;pod&gt;              # 看 Events 的时间戳，判断卡在哪一步
+#   00:00  Scheduled
+#   00:00  SuccessfulAttachVolume  ← attach 完成（或这里一直是 FailedAttachVolume）
+#   00:01  FailedMount / MountVolume.SetUp failed   ← mount 阶段问题
+#   00:15  MountVolume.SetUp succeeded
+kubectl get volumeattachment | grep &lt;pv-name&gt;        # 有没有残留
+kubectl -n &lt;csi-ns&gt; logs &lt;csi-controller&gt; -c csi-attacher
+ssh node: journalctl -u kubelet | grep -i mount
+</code></pre>
+<p data-page-node-id="zG1cMW0myW76qb7ebDaWsn"><strong data-page-node-id="GU2ti02Iue1LF1ONGWQedC"><!--pnid:OjdsuObBlpEkEVFOxskDHd-->典型根因</strong><!--pnid:n3O1BhjSpVOabJL9zv17me-->：
+1. <strong data-page-node-id="ZaU3Rs3J6xU2tw9sCHpF3J"><!--pnid:72Ng3NCqYWnTOvxTkzahYu-->上一次 detach 没完成</strong><!--pnid:4tBBiQX060VzKFWz0iELzx-->（节点宕机/强制删除 Pod）⇒ 新 Pod 一直等待，直到 detach reconcile 超时解除；
+2. <strong data-page-node-id="iOdCpmkB1KYhV3Rs1A8vmw"><!--pnid:8kyp0j1cJ5kbX9VaT9UUfT-->云 API 限流</strong><!--pnid:7frrd0wXexH17kwS7lFFXy-->（大规模同时 create/attach）⇒ 需要给 controller 侧 qps/burst 调优 + 业务侧分批；
+3. <strong data-page-node-id="qPVnvCWTwthK8tnaHqMrN4"><!--pnid:2OPehEybEHNkBHslBszicm-->文件系统修复/check</strong><!--pnid:cWgQxSO3R9D9kTo7QmxiOQ-->（例如卷被脏卸载后 fsck）⇒ 时间不可预测；
+4. <strong data-page-node-id="D7LMsiA5ROCi2xr4Y0rPBp"><!--pnid:oZHc5sNrs3HE4WZl45ym5h-->fsGroup 递归 chown</strong><!--pnid:4tpZL4zFaasMoiVxfA0cdp-->（大卷）⇒ 用 <code data-page-node-id="bPt91oRN2hNaUyQpKSsrCL" data-pnid-children="uAqN0kYnGEelUywoAh7e2M">fsGroupChangePolicy: OnRootMismatch</code><!--pnid:rFIb0K2hEXfvBomgZCxQNI-->；
+5. <strong data-page-node-id="wybE8cxfTKJDEfCHljbDzn"><!--pnid:iDTkXGdBimNpfgXyRpw85N-->Node plugin 崩</strong><!--pnid:qZ1D92BeEf5yGXhLpJCYJ1--> ⇒ 该节点所有新挂载失效。</p>
+<p data-page-node-id="nhVoIo5zm35xuIwx8qZ7wt"><strong data-page-node-id="I4KZ6ruJCkmzab6UeEYxPy"><!--pnid:Fyrqqo7XnaDN9THQgO6ir0-->根治</strong><!--pnid:r3gAUhZQ7DN2Ti2LZ9dW7s-->：
+- 有状态服务的重建<strong data-page-node-id="dIzYC4rB4o8YuQq0Kyrdzx"><!--pnid:LaofVXJRiG9IgFzZHONFJY-->必须分批</strong><!--pnid:Msu4zO38V2ByoY3wqWIAbH-->（Deployment/StatefulSet 的滚动参数 + PDB）；
+- 明确 clean detach 流程：<strong data-page-node-id="dDIuCeLpWf6aUJeulOteDo"><!--pnid:m3u4Y5jLHOCBmf3wAVDSNh-->先删除 Pod 并确认 VolumeAttachment 消失，再重建</strong><!--pnid:JVyXJl5IMq71WMMrmnjAwP-->；
+- 监控"卷操作耗时"并建告警（见 E 篇）。</p>
+<h2 data-page-node-id="f60RfS4vnZGxEF3bnE343B" id="c4-volumebinding"><!--pnid:Zzn0KVbeapeQzPjfWCQxUx-->C4. 调度侧的 VolumeBinding 会成为瓶颈吗？</h2>
+<p data-page-node-id="7AWXt6M3sBABUL4OKOLbMA"><!--pnid:GjvIGmb54K3yzt3uhCQFKU-->会。每个<strong data-page-node-id="shYWeSFEboRK3yO6tBQudr"><!--pnid:U6AWMmzbvx69UgvCqw18C1-->处于等待绑定状态的 PVC</strong><!--pnid:w8jUse9WNI96rXbMg9DrN4--> 都会让调度器在 Filter 阶段做拓扑匹配计算；大规模集群里"成千上万个未完成绑定的 PVC"会显著拉长调度周期。</p>
+<p data-page-node-id="DU4PY8ojdGJFeMqAjZXbRp"><strong data-page-node-id="ETVt1RfBagZnQFYyBJk3LW"><!--pnid:lkk82gyCAOJ7n8u3OTw2E5-->治理</strong><!--pnid:tittddoUCTQSrhxJjR8p1w-->：
+- 用 <code data-page-node-id="OnjBbsTqgLA6t3cMbqNqoM" data-pnid-children="xy6Et87rI4NxZuvJKpAOtj">WaitForFirstConsumer</code><!--pnid:OLb5X20sRGnbxcts5qOZr8--> 但同时<strong data-page-node-id="PExw0Qoz4W7pP3IZkgTx4Z"><!--pnid:K32Zru4LQxyde3aPJWhdes-->避免积累大量无 Pod 消费的 PVC</strong><!--pnid:hRrB9ulPQ63pvLIkWnBqsJ-->（无用 PVC 直接删掉）；
+- 尽量避免一个 Pod 挂<strong data-page-node-id="r01CGYQ1fLZaKEpFjLWrB2"><!--pnid:JDFBOrRekEHJxFxZWYe7GP-->过多</strong><!--pnid:iMXIPiQ1W7kf6fijp3L3Pt--> PVC（每个都要参与调度计算）；
+- 关注 <code data-page-node-id="HnRXC4QfokhsyGBQHGC60i" data-pnid-children="OY3ICuV5mpIfjLJrMk4GBR">scheduler_framework_plugin_duration_seconds{plugin="VolumeBinding"}</code><!--pnid:XmNoFZ7PNMGEIlSiiauchs-->（见调度篇 L1）。</p>
+<h2 data-page-node-id="X2Zt7SaNuQutxEV1EA3ljx" id="c5-csi-controller"><!--pnid:BGyclFbZW3GiEXl97rZXUA-->C5. CSI Controller 挂了怎么办？怎么预防？</h2>
+<table data-page-node-id="5SKFeCvmWyQju15oQuXcg9">
+<thead data-page-node-id="MDMTvUZ54gL5qL44oXOtIS">
+<tr data-page-node-id="laXCZtLOBS8twQTjzsU1Ux">
+<th data-page-node-id="T9A5d6E0CKtLVOSZvmhhD0"><!--pnid:vuyB5kcruMpgl4BnNYwgre-->影响面</th>
+<th data-page-node-id="wXg7ep1j9H15XwzDxDuhHT"><!--pnid:1VW67N50A3ZviY7ZCNKUXu-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="wRaUaPGFQgP2EIDe4xMaN5">
+<tr data-page-node-id="31yPWB0kGN23ey0jviTS2F">
+<td data-page-node-id="iOljoMnXi0Cy64P7gXK74w"><!--pnid:nf5zmrahvkc0inYZzKs8Fb-->新卷供给</td>
+<td data-page-node-id="Dhq0DL0lfez6olALGT2IR6"><!--pnid:SqhDIHUJGp1HZobyzL78RM-->全部 Pending</td>
+</tr>
+<tr data-page-node-id="Fa8ZBDIeeiQRGKzxZBmVFd">
+<td data-page-node-id="rsFEvGfAPZOiDXYZERSjYt"><!--pnid:IuOOmjjCVokMrXSWTuyhMM-->attach/detach</td>
+<td data-page-node-id="10AqFTIHqrY34gpaTZo4OJ"><!--pnid:5Lht1RDaVLVgj2DUaFiTZv-->全部卡住（<strong data-page-node-id="C1aXs328cAojrH1bimrmns"><!--pnid:0hzVp6WF4s38OBD1pAQht1-->会影响 Pod 重建</strong><!--pnid:PVdhECG7cnj4BtpZnVZYhB-->）</td>
+</tr>
+<tr data-page-node-id="3EK60ABNuAZI1Si9dmKgmS">
+<td data-page-node-id="HIsqrabllk0Mvl43F9yrP0"><!--pnid:rPr9VuxVRfXgKH2Z6XdD5b-->扩容</td>
+<td data-page-node-id="99KVvOqhmfrGdV5GlZOjD1"><!--pnid:PDo53I9PHC758vlogobUWj-->全部卡住</td>
+</tr>
+<tr data-page-node-id="qrFPTHABjulGyUxeaZMfwF">
+<td data-page-node-id="U0ykKm3iRKMGsBJpwI5v71"><!--pnid:xip1Z73yWT98SlbWjVKg0L-->存量读写</td>
+<td data-page-node-id="JJCL5JzqNI6GyWd3ukgd3C"><strong data-page-node-id="mJ8YVBBS7nPktuvEo8L96U"><!--pnid:aQV0mKmTJaNaRzf38w9vA6-->通常不受影响</strong><!--pnid:Ic9YVICsp90dhqW0bo2IT1-->（这是重要的冷静判断依据）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="OCN6hYgVYt18PgygBlJWc6"><strong data-page-node-id="4DMYQNFgR1HC0gm8o09vn7"><!--pnid:Bz48cNTdJSr9v4V051yLV2-->预防</strong><!--pnid:ueqUFB7PTW2epQmngCQNIz-->：
+- Controller 多副本（一般 ≥2）+ leader election + PDB + 跨 AZ；
+- livenessprobe + 自动重启 + 告警；
+- <strong data-page-node-id="UKJJhASDNHA3akHpKLsiK4"><!--pnid:jkClLDUuFBhpjOzgiXNmyJ-->给 CSI Controller 单独稳定的 machine/cgroup 资源保障</strong><!--pnid:W2J3WUv0ZUJgNNKuKE0Uad-->（它被系统/OOM 干掉会很惨）；
+- 变更（升级/配置）<strong data-page-node-id="dW0aKAXLteP1jenFWMGilw"><!--pnid:wNYDRGWRFjin6NbDKjlmGA-->必须灰度</strong><!--pnid:MWqGgDTmMCrQ4lFIs0Sinx-->：先在测试集群或单 StorageClass 上验证。</p>
+<h2 data-page-node-id="QKFZ0OxM68ObxEIPlhg79l" id="c6"><!--pnid:lhEG5v7S1dRhn9KAINYm0B-->C6. 单节点挂载卷数量的治理</h2>
+<ul data-page-node-id="4VQCKkqFYOiw0BqnzuPdVi">
+<li data-page-node-id="wUJ1ngW7sQg7wmGSPUZzrJ"><!--pnid:dnQbMxwpsgoJPcfgX6YlqG-->通过 Scheduling/allocatable 天然限制，但要<strong data-page-node-id="CwDu8EKZUFu9mAzORM0jAC"><!--pnid:n6r093FRdhJgtzQ3teKncC-->在容量规划时算进去</strong><!--pnid:IWWy0DZppzR1MDJMQ8RCDi-->：<code data-page-node-id="ffaOy37lGTlWkL6Qq5lD8f" data-pnid-children="R6PlZfFss1RPIoi4e8zC2H">节点数 × 单节点可挂卷数 ≥ 期望 PV 总数</code><!--pnid:oJeb5M8d1rIQpr8lzDL5Q9-->；</li>
+<li data-page-node-id="akv4CXRe2hxLUcYOfWE9yl"><!--pnid:AzK63SXSIcHyIz17QTc7yY-->有状态服务的 <strong data-page-node-id="p0eeZ1m0HqZwuxp4MRvVwA"><!--pnid:qU88GvDZuHRAi0S8fmTzUq-->Pod 密度要低于无状态</strong><!--pnid:QhOnuLkkRzPZtekoG5fCe7-->（给 DaemonSet、临时 Pod、扩容留余量）；</li>
+<li data-page-node-id="50d2O5jF76P5PcE94DSV4Y"><!--pnid:D9AvpqWFRKmCnrRxGnvPKB-->倾向于"少量大卷"而不是"海量小卷"（对象数、iSCSI session、attach API 调用都会减少）；</li>
+<li data-page-node-id="d7UINQi2CkxXWG25DXvqpt"><!--pnid:OfSPYxmzYawmRYmlOPJDgP-->对"每个 Pod 一个 PV 的分库分表"型场景要做好上限评估。</li>
+</ul>
+<h2 data-page-node-id="85SktqiWxiXZj7Bya4sm0T" id="c7-secretconfigmap"><!--pnid:1H1zEyyLr31RQ041fIHa9R-->C7. 大规模 Secret/ConfigMap 挂载怎么优化？</h2>
+<ul data-page-node-id="jYU0JHu0FcU5xfhO4nkXcx">
+<li data-page-node-id="yNVfa0IvmbmU48BsZ3o9z3"><strong data-page-node-id="KPjwRDAKUOQUWMUsosRxyQ"><!--pnid:b6wFFehV8bvu3CUyjNtPGh-->不变即 <code data-page-node-id="5NyBKBNoc4CZCg5A5Zp1Ms" data-pnid-children="rSHUqILanesGI3FH7Izud1">immutable: true</code></strong><!--pnid:kVXxLnDy47Jw8NiXdVUPNG-->（kubelet 不再频繁 watch，显著降低 apiserver 压力）；</li>
+<li data-page-node-id="cVKkhXI8ZUk0duo3OEjq5N"><!--pnid:qFO4rwqwOk1iKo3n29nA18-->避免把大量数据塞进单个 Secret（会拖慢 list/watch 与 etcd）；</li>
+<li data-page-node-id="EN6ACffDtCuMtSk410o0mC"><!--pnid:2xFicMxo6mdd9qJyZu1Wka-->避免"成千上万个 Pod 挂载同一个 Secret"这种放大结构（改用投射卷/环境变量/启动时读取方案视场景而定）；</li>
+<li data-page-node-id="tnhPdhPEx1IJ4hxeXfVN5q"><!--pnid:Dh3iSr5VkY02mTLpFgJCu9-->定期审计未被引用的 ConfigMap/Secret。</li>
+</ul>
+<h2 data-page-node-id="ZYGBEn5iXBZynoqiUiAFdI" id="c8-fsgroup"><!--pnid:4Qwvf04AlL691jBSsKnRYX-->C8. fsGroup 与大卷挂载的性能问题</h2>
+<p data-page-node-id="JXuPuYTfcZ3pvuXtmPXgZn"><!--pnid:FmdVzzz64YTiEUsykeGiqy-->见 A19。<strong data-page-node-id="MIPhSKjZAsYsExY9BGd649"><!--pnid:OW9Oit4YAsmY4sXwbYFKbB-->重复强调因为它是最容易被忽略的性能杀手</strong><!--pnid:XqSTJhvH7AKRArJHfD91M0-->：</p>
+<pre data-page-node-id="2oSTjmHVXB4OWMe3PK9up3"><code data-page-node-id="u9TKM6nA6aMxZmsxwMisgJ" data-pnid-children="cNFkMEMjhuqUW8wXFKigJS" class="language-yaml">securityContext:
+  fsGroup: 2000
+  fsGroupChangePolicy: OnRootMismatch    # 大卷场景强烈建议（版本相关，请核对）
+</code></pre>
+<p data-page-node-id="mkIcnES6trmG6alc6fFZvF"><strong data-page-node-id="gi6QHH8U1KwhqxfxeMxhkk"><!--pnid:xpvQp2BlkktgU4osv6P9HV-->验证方式</strong><!--pnid:C3K0dJkYcuXAwXUgfq3hzZ-->：对比开启前后同一卷的<strong data-page-node-id="h30iZwmI0P97hvHtBaU6FF"><!--pnid:12yMWJaTI4KRIBpoXBpv62-->挂载耗时</strong><!--pnid:or3Y1KCfTGiCZRGHDYILCE-->（用 <code data-page-node-id="T5y7qiXfLNr7oSEarsHP8t" data-pnid-children="X8Ls0rpJ3gSgqyclg6iCPt">kubelet_pod_start_duration_seconds</code><!--pnid:fAI1LBevnVOlt3QtClAXRZ--> 或 storage operation 指标），而不是凭感觉。</p>
+<h2 data-page-node-id="Kr41HEKCq31cbKBvi10U5Z" id="c9-storage-capacity-tracking"><!--pnid:kVUwAPDONjDAdJuQX5VR4S-->C9. 卷容量平滑治理（Storage Capacity Tracking）</h2>
+<ul data-page-node-id="H7PCi5kbq4N9PzBQw1R6gw">
+<li data-page-node-id="G5iSp0tvj8MrrPHfKg4Uu5"><!--pnid:1TlvqnFKcKahdD7Xe0eKbr-->CSI provisioner 可以上报 <strong data-page-node-id="cjRgDZLFlcqlo2wbMQ3tS9"><code data-page-node-id="opnfbWQIraMFpvXsG0ivYe" data-pnid-children="7hcvvs81YpKp9koclf1Tex">CSIStorageCapacity</code></strong><!--pnid:QnNirKvEDBCPLG8Fuq22DB--> 对象，让调度器在"后端容量不足"时提前避开/做出更好决策（<strong data-page-node-id="Fn4aYlOUqIvb4ppmHvpT7i"><!--pnid:u55dhjhxu3GLZ6wUL5iaJ6-->特性的成熟度与开启方式请以版本为准</strong><!--pnid:EocXoq5rtJ9yhsnlABQQs8-->）；</li>
+<li data-page-node-id="5Hen0qJo7wKH3WqgaQTFyu"><!--pnid:uLVuO0JkAWMDza5YjqnlqH-->即使不启用该特性，SRE 侧也应做 "<strong data-page-node-id="WVfZYRZOpT1TUlJVCLjtWS"><!--pnid:LBPyZIZ11wYwp9DDySQcYw-->容量余量告警</strong><!--pnid:J4U9tQEA7wLxnL3fAKEov0-->"（见 E 篇），避免出现"PVC Pending 且原因是没空间"的被动局面。</li>
+</ul>
+<h2 data-page-node-id="TvCfGMdrgvhytt3LsHvIxT" id="c10-io"><!--pnid:2hQd22WHTVzeRIBB71fgJn-->C10. 有状态服务的存储 IO 隔离怎么做？</h2>
+<table data-page-node-id="E2fOB5R76YDhYPlQ31DIDM">
+<thead data-page-node-id="R5SPSfn1mj2q1F1p58ejfs">
+<tr data-page-node-id="wGwoR2unK8qNhKRwex9Dvr">
+<th data-page-node-id="EGbQWQmYifaNPoEGjX9xom"><!--pnid:kRFWDBK0dX7fGiJttPvgLa-->手段</th>
+<th data-page-node-id="LcUqft7pAZDsqm4nEczRd4"><!--pnid:KPeWDitRbfxmbNARtz04fx-->说明</th>
+<th data-page-node-id="Hxd1IuxRgV8NpYnYVAlonJ"><!--pnid:YRxMUwoEk1jNZFv2THmohh-->代价</th>
+</tr>
+</thead>
+<tbody data-page-node-id="uTZpDSPiOlG05gS6UYr37u">
+<tr data-page-node-id="aJ84gO8gMwB3NcWG5NqgC7">
+<td data-page-node-id="k2DH8EitHwCVdPYardRYao"><strong data-page-node-id="g2K1CxGlPf2kScvBxGj4fk"><!--pnid:7FbFwwNFye8e5abG73FRES-->专用节点池</strong><!--pnid:9iH51vItDSOynre2WrxDnb-->（taint + toleration）</td>
+<td data-page-node-id="O5fbu2nw1lRFYaKTmf0Ypa"><!--pnid:df51UcTtFPLk3iBLC9DXsK-->最彻底，避免 IO 争抢</td>
+<td data-page-node-id="PnEVnlQk6ljndKzTxZsN3Z"><!--pnid:3QhmAHqEc7TEBT36ejM7cZ-->利用率下降</td>
+</tr>
+<tr data-page-node-id="zNxr0yzPEuropHDQCmbLgG">
+<td data-page-node-id="liPeOGbfibJyFhvJ3DIaaR"><!--pnid:511XaE8A7WX3XjYPovsLiP-->requests/limits + QoS Guaranteed</td>
+<td data-page-node-id="qspEO0PS5xMoXZJyWzyeYc"><!--pnid:qHkNsuieGd7ocE1hifQQq0-->保证资源不被挤</td>
+<td data-page-node-id="adpooYxiMaGKtZOHBL3euN"><!--pnid:5aHrw74gfkNQcSULwFYM2Z-->需要准确的画像</td>
+</tr>
+<tr data-page-node-id="JgNt0BHtIH8QGW1q0rWVWA">
+<td data-page-node-id="eErqDpCPa1IPWn7C6DBPE0"><code data-page-node-id="9B8EcXhLlPICpKv9LeHYTD" data-pnid-children="0we21HWG6tRN0Qn1YaQzDc">ephemeral-storage</code><!--pnid:DheO4nUPrhkt0EzARTsPLn--> limits</td>
+<td data-page-node-id="JQjyhQefzMCo1zZ2AYSfO5"><!--pnid:7JlPX1jnLQAXxPC7ojtOia-->限制容器可写层</td>
+<td data-page-node-id="m206rx92Euci1fVUHPWl5I"><!--pnid:RZkSmKDCLynMHffdkpfQ5a-->主要防写爆</td>
+</tr>
+<tr data-page-node-id="rYNLkeYLE124fb3oMcO63K">
+<td data-page-node-id="cW5f0v5cTZ71ThSDfMJ1j4"><!--pnid:Bm6H8XZVjb9oSLqdpF8Trj-->cgroup IO 限制（<code data-page-node-id="yoHEfMUwJUQkeF2h5cT8KK" data-pnid-children="5COPEIjciDeo1gdhiaZlsA">io.weight</code><!--pnid:K9HUPYgQCBJG3QTMU41me1-->/<code data-page-node-id="1UGejUsKzpOUEazzxl8ON8" data-pnid-children="rypSxnQr85H8uJwsIQKgm2">blkio</code><!--pnid:SYw2Qt8uNvm1DukwKfVf18-->）</td>
+<td data-page-node-id="qWPLQhxxoELQ972jjQztgv"><strong data-page-node-id="pjs7frQfG3vwapUKH6iHsB"><!--pnid:wDBbmgs3cIsa5Ltb58uZ0e-->需要 cgroup v2 且场景验证</strong></td>
+<td data-page-node-id="W0O8vVZkCQwETEVtX4wQWt"><!--pnid:mIy63OcdL1YXAL8ByFNjFR-->配置复杂需压测</td>
+</tr>
+<tr data-page-node-id="bNrKsyEeFIE6uvH2tfHYN2">
+<td data-page-node-id="KIt0Sm1RMVGCgsy90w0F1H"><!--pnid:W1dOkfTuAFUvVLqJ4oVld6-->存储的 QoS/限流（云盘 IOPS 配额）</td>
+<td data-page-node-id="gZnGNpcRfcU77YeJBQcaDB"><!--pnid:5lPERIo7NWotVIRzLnYREa-->直接在存储层限制</td>
+<td data-page-node-id="kRhBMHlXWiudxR0QhHWLdd"><!--pnid:KGKOlBiBzhQZ7OrAXBbuIZ-->受限于后端能力</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ls1l3mGVb0Yr9552EPMoPE"><strong data-page-node-id="T968DQUbomecFdbDtDDS3K"><!--pnid:d3r11w39QeouadgrbJ5z6Y-->必答</strong><!--pnid:40fbNl6PMYkkaegihpcZjo-->：<strong data-page-node-id="hFWzSoQG8ZynCOp6Ge3EQY"><!--pnid:SVQOVSY2mk4vPvnNa84xDY-->数据库这种抖动敏感负载一定要做 IO 隔离</strong><!--pnid:rjEqnMMFwxzXFyHfuY0nfJ-->，否则"邻居跑个批处理就把 IOPS 吃满"会直接体现为业务 P99 恶化，而且很难定位。</p>
+<h2 data-page-node-id="ADSfh3rQ608YGfNQmxmpiI" id="c11"><!--pnid:VsJ6s6WvUqGLx5Uzd20Cub-->C11. 有状态服务跨可用区/跨集群的容灾怎么做？</h2>
+<table data-page-node-id="7b6YIUm0VeONxbb2m5ZFJW">
+<thead data-page-node-id="WkNQUBphlZ8ck1pXViZdTX">
+<tr data-page-node-id="igp8H5T0vLun3KKxYThO8A">
+<th data-page-node-id="KZ6bEUKtyIW9ZyYyh0vOhu"><!--pnid:GhTrCJ3ZXuOJtg2fSAzBHJ-->方案</th>
+<th data-page-node-id="QoxFMyxH5crlex2uvzc09J"><!--pnid:7kyFqV3sGOxbZywySHP2Ty-->RPO/RTO</th>
+<th data-page-node-id="Wrl5z7SPll2ehqchlbvnR9"><!--pnid:zdaNRqu6ZLt1bD81gYoUc3-->复杂度</th>
+<th data-page-node-id="WAkzQSLhSWqbfMUAeSbEiz"><!--pnid:NupR6MDYK3z1biW9tbRRqv-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="KwsuTnpkcYdKUkPbLm0Hgc">
+<tr data-page-node-id="0xnUdMTz7Nngy01osJcmhk">
+<td data-page-node-id="enxCQWaYQy1PKhPJhjckcx"><!--pnid:nlV4LE5U4Eb8jEePF7XWgz-->应用层复制（主从/半同步/Raft）</td>
+<td data-page-node-id="wVOFSWud4lIw1mQ94tRTAd"><!--pnid:M9KtfHl2vwA2RMcxqsTu5g-->取决于复制延迟</td>
+<td data-page-node-id="dMbAPLsSi5RGMU4LCANjjz"><!--pnid:7dn0FrUEC8xumbxEpd7lnW-->中</td>
+<td data-page-node-id="2x9UivOuOcIzbH0ceiuVs8"><strong data-page-node-id="P3S9YA3aKFyXjbyHfJpYMu"><!--pnid:YAycABfW1KU7EngY1xGtRv-->最推荐</strong><!--pnid:7cQYG8g6K07ih9phL0jgWJ-->（数据语义正确）</td>
+</tr>
+<tr data-page-node-id="yDDku0NQn9Fb4jPWZCClxW">
+<td data-page-node-id="ZG3DYvV8v0BtQ8wfd4pnDW"><!--pnid:ArL1zht1PZGoUaE4DqGcYC-->存储层同步复制（跨 AZ 卷类型/存储集群多站点）</td>
+<td data-page-node-id="6WQLl7I4grS2rCbANmAhRN"><!--pnid:RGP8CsTyX285hOWAFQ2L7P-->接近 0</td>
+<td data-page-node-id="A5f2UAVzqOFlWiQfrRrLQ8"><!--pnid:BsaeSLPdQ57UuTSyVHjHZl-->高</td>
+<td data-page-node-id="JYWU7SUPgMIsC8lUtCHZa4"><!--pnid:eypWuhLUThXGEsxuu9VlKL-->依赖后端能力，成本高、写延迟上升</td>
+</tr>
+<tr data-page-node-id="Rk166M68BjImmjH6u8id3a">
+<td data-page-node-id="BJpO9wU0weEykfPmjOf4Tg"><!--pnid:yGHaBCVAEegEqahnobwFwS-->快照 + 异地 Snapshot copy</td>
+<td data-page-node-id="y43Ke4mj0OA6V247NOUQOd"><!--pnid:lz7Ph6SE96lJezY8BDR4nF-->分钟~小时级</td>
+<td data-page-node-id="u0vLgnl4toi4JJjsEUioTE"><!--pnid:MKiQYNg3uWlkbRfWxjwU7r-->低</td>
+<td data-page-node-id="iydFRlZ7Rurhh0LO6t3Maf"><!--pnid:HrtItXMhAcFNWAJdFQzWn1-->定期快照 + 跨区域复制，作为兜底</td>
+</tr>
+<tr data-page-node-id="8A4hnwmWKp3NaGxhvD9pl8">
+<td data-page-node-id="xIeiQhVeRMz85xGj6XPFf1"><!--pnid:HIO6fdpL3Aw3cR1vmKi1XI-->Velero 备份恢复</td>
+<td data-page-node-id="j3gH2MfuavQBDNZjs7NW2M"><!--pnid:fpvyUWwEERlNv3eyN88Z0S-->取决于备份频率</td>
+<td data-page-node-id="lOr0d7xYIX1ng4oUr2LeuJ"><!--pnid:LecFgxgiF05Kz94vpSwrrF-->中</td>
+<td data-page-node-id="ci0RgvuBY9bS41VvB3Ozvx"><!--pnid:w8jvNj0Jh4XogxvaoruWdu-->兜底 + 迁移</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="wfJHWMkc6ifqVLBFifTwCO"><strong data-page-node-id="iSfx0eqW85xj7T5JwhmYFY"><!--pnid:ZGCDZMq3fVmqcaw1crj8ep-->必答</strong><!--pnid:1ApFYEgE87ZKhfmlxezL9i-->：不要把"备份"当成"容灾"。<strong data-page-node-id="45eOrDmdn6JsJhXJafOzee"><!--pnid:uSbZslQXaVSIaYlmt1KBvl-->任何方案都必须写明 RPO/RTO 并演练过</strong><!--pnid:VcQXOm3HNqHCD7SkYcacJ7-->。</p>
+<h2 data-page-node-id="sJKH35z1fZ3iAGGzB5wiSa" id="c12"><!--pnid:kiufySibG3RRbpBQr1uGDF-->C12. 集群升级时，存储相关的变更顺序与风险</h2>
+<pre data-page-node-id="y4aQNwC7o1lvwGZsYyAAmq"><code data-page-node-id="RaxAQpcHPznHjtDfE0UVUq" data-pnid-children="j3RM2AtF8ADBFwAvEj9ncW">① 先升级/验证 CSI driver 与 sidecar 的版本兼容矩阵（这是最容易翻车的环节）
+② Controller 优先（滚动、观察新卷供给能力）
+③ Node 插件按节点池灰度（DaemonSet 滚动）
+④ 有状态服务的节点：优先使用&quot;不驱逐&quot;的方式（或确保 detach/attach 流程顺畅，分批进行）
+⑤ 升级前务必确认快照/备份可用
+</code></pre>
+<p data-page-node-id="ZTgN9ogxF6wuQQ6ZMyhz32"><strong data-page-node-id="JwmwumaMl89bFTgsY25hFz"><!--pnid:sBAXhMND0FT9pN7M9CkScL-->风险</strong><!--pnid:B1HRXfrAXi6yLilITSdmwg-->：
+- CSI Node 插件与 kubelet skews会导致全部挂载失败；
+- 节点 drain 时若有大量卷 detach，容易触发限流；
+- 注意 sidecar 的参数在跨大版本时会有改名/废弃（如超时、选举相关参数），升级前必须逐项比对新旧 manifests 差异。</p>
+<h2 data-page-node-id="haRRqaZ8HOX9cdVWDqDZzI" id="c13"><!--pnid:ysjpxjz2rV4GR3NW37wdE0-->C13. 存储成本治理（面试会加分）</h2>
+<ol data-page-node-id="LRAA5O6vz07cPPhsrPkkPO">
+<li data-page-node-id="1WDmcqjZzuLHIHNeoo2qyS"><strong data-page-node-id="0mKHMYRr7efQ76FVmaSGLk"><!--pnid:XagOksUWYQs04uvX2Kv6fX-->孤儿资源对账</strong><!--pnid:VuxX8Ut53qd8N8v4suWkfO-->：PV ↔ 后端磁盘 双向核对；</li>
+<li data-page-node-id="ZvgYAMot7FFEr282L4rnmv"><strong data-page-node-id="jbRIO2uuXHSDdBkxwxkGgS"><!--pnid:tOSIbPgKCxJaHihom6tRA1-->Retain 的 Dead PV 定期清理</strong><!--pnid:ia3lYOlXvOqI6k4F0Edn6Z-->（带审批）；</li>
+<li data-page-node-id="rMpZ4eQTSuKNosbtc3EDBy"><strong data-page-node-id="BvtoklpgEkBQFipZg3TJiU"><!--pnid:wNVUhrOsutTZbs8lIAbYhN-->快照保留策略</strong><!--pnid:BnIMEZrpzoz8BsM7rT7Et4-->（太多旧快照往往比数据盘更贵）；</li>
+<li data-page-node-id="mhKrOfqkNILMpVBrGc66mU"><strong data-page-node-id="far2GMX3ShoMcvsU3slE29"><!--pnid:qfJw6nHfNLnaXvL6bLgRaH-->性能档位治理</strong><!--pnid:4lkiZ93QNDCSS9usSzu4q7-->：把 burst 型盘升级/规划为 provisioned；不要把 gp2 之类的老一代默认盘常态化；</li>
+<li data-page-node-id="Zzy9n9aY5qetGZTmaIPMCf"><strong data-page-node-id="cPO4IkS7KS4x3XkLAcR2TV"><!--pnid:E5EXfvDx7wyxyHT4NtUyPh-->本地盘 vs 网络盘</strong><!--pnid:44i2uIt20wYzxkQntV2xkJ-->：按业务冗余能力选择，避免重复支付复制成本；</li>
+<li data-page-node-id="HxuB8zot3ltwtTwnhxLOea"><strong data-page-node-id="X3mRBzUAsN4LTipxxqvUgT"><!--pnid:7goPiWpqYClRqnnEYYBKAL-->标签与成本归因</strong><!--pnid:pIeVYyinfq2UwQ8RDtcvLP-->：给 PVC/PV 打 team/app 标签，做 showback/chargeback。</li>
+</ol>
+<h2 data-page-node-id="RXGvPXK18b9Dow9b2L65xm" id="c14-2000"><!--pnid:HVECh3y5x49vqlapROekdI-->C14. 给你一个 2000 节点集群，怎么设计存储基线？（综合题）</h2>
+<p data-page-node-id="mmyV77lSPBV2tWnG7Rnx7O"><!--pnid:QVnJsNMnbAkF0wcTW8WEnf-->按顺序答：</p>
+<ol data-page-node-id="cVt0UDuUYTd9pML98tc1NO">
+<li data-page-node-id="S0UCEkgwk4NdlFYSDNdJU3"><strong data-page-node-id="taRRaPHuegsTwEw30U88yd"><!--pnid:SplGlThdAEnb5y8mTkfxgB-->问 SLO</strong><!--pnid:NmE0RyVTYDNzIDKcuBfxhp-->：数据重要性？RPO/RTO？是否需要跨可用区/跨城容灾？单卷最大容量与快照频率？合规要求（加密、保留年限）？</li>
+<li data-page-node-id="03asqAYWS2i6IFnsXMevdS"><strong data-page-node-id="mmT4P1mtSBzXq874qmRLxW"><!--pnid:DN3uNrQTOZYEUYHRtY2bUI-->选型</strong><!--pnid:ZTwuSS64bUS89bjvGE3cCG-->：通用有状态 → 网络块（云盘/Ceph RBD）；共享读 → 文件存储；自带副本的系统 → 考虑本地盘降本；对象类数据 → 走 SDK。</li>
+<li data-page-node-id="EMM3gmFkGKseQ7DS8VFeR1"><strong data-page-node-id="0Ol7FQzJOubJA95KTIkuF3"><!--pnid:afHDbYyEyr1dIObannjH6g-->StorageClass 分层</strong><!--pnid:DKjFJJs5xpspLzCGdvqzbw-->：<code data-page-node-id="ktmAWEojLLFGVBRJ5xhsE9" data-pnid-children="2iY8TL4tsaOCZuSTT4Hbpa">fast-rwo</code><!--pnid:qEStSUJWnTrjFfNcdycaug-->（高 IOPS，生产库）、<code data-page-node-id="7W1k8mSYacSdJqDsXATeIo" data-pnid-children="8Iz4erhAbJgg2Ebqf6nNC8">standard-rwo</code><!--pnid:2YsWrhWezDOpwSEaJvrZCb-->（通用）、<code data-page-node-id="pIIyX9at20JHUACE48C3XS" data-pnid-children="OYr6Tr3JC8cRTpGGKIHk0s">rwx-shared</code><!--pnid:9BhSSZYrVgzj9qLend8BEt-->（文件）、<code data-page-node-id="QRKA5OIoKi1U1SWErv9qQ6" data-pnid-children="isfQ6iEP4WzFW7W6Kf6CW7">local-nvme</code><!--pnid:ZtPkMeV1Cql0hL9EL4Zy9w-->（自带副本的中间件），并统一 <code data-page-node-id="y5t7RbBiKkOQ4E91CtPmuI" data-pnid-children="Bu5LOa7YS54b0T0ld8Fg7C">WaitForFirstConsumer</code><!--pnid:EyGXu5pEWhcB3g3tnwzgKf--> + <code data-page-node-id="64IskIDD7dWGNev44P7IK1" data-pnid-children="WZ63P1QJzIDApR8S0Y1jWI">allowVolumeExpansion</code><!--pnid:ETowkSsHTMaqsNAUdExn9V-->。</li>
+<li data-page-node-id="nqdMuCINSvQLdcvfMmgDhX"><strong data-page-node-id="mFlXLRRzNKf4gJxeVOVj83"><!--pnid:gtJ5dDKoQl2mf5EqFGltTn-->拓扑</strong><!--pnid:xybE1FEGatBfCLNTirxYJY-->：AZ 感知 + TopologySpreadConstraints，明确 AZ 级套餐的支持范围。</li>
+<li data-page-node-id="JIwU3XVeR1LotuU0pbCR57"><strong data-page-node-id="Jbz256GUKEPM8ZGnXKxCs8"><!--pnid:aT6t21rZKTZMDfBJQEWJtE-->CSI 部署</strong><!--pnid:2REXRod0Z7sjBXghD9ROJZ-->：Controller ≥2 副本跨 AZ + PDB + leader election；Node 插件优雅发布。</li>
+<li data-page-node-id="f9jdaMEuyvaZ951rCai6Jn"><strong data-page-node-id="jWf6qnBZMuAxF3hFYv9BCz"><!--pnid:FFADuAwMYGBaV4B4tiKkBC-->容量与配额</strong><!--pnid:joaAdKc3yKOWc7ElLeo3Wl-->： ResourceQuota（<code data-page-node-id="JKYzYkrZ7JdI0Sf0JrhkUn" data-pnid-children="OI0XBiKKJ4KFbsXyqJGjyv">requests.storage</code><!--pnid:oz1OF4t1Yw0nQ3WRdhDEXK--> + per-SC PVC 数量）+ LimitRange + StorageCapacity 监控。</li>
+<li data-page-node-id="0dA7nVS3naSbYOTMPYioVR"><strong data-page-node-id="Hm3f5ZjGQ0JX4NDxHJaXkp"><!--pnid:4VEBfv3KZ4ja6ii9FjUyQ9-->备份</strong><!--pnid:SvLxgLWKQNCUXp8JtxfjNC-->：快照 + Velero + 定期恢复演练，明确 retention 与异地复制。</li>
+<li data-page-node-id="pHQixfNn6hCobSfACybxcu"><strong data-page-node-id="CtDJw9Vg9dwE6pSExT8TqN"><!--pnid:LHwnkAXdH1PLYVvy0sTQii-->可观测</strong><!--pnid:VZehpiFSo0cl8Mzu3d5JfG-->：卷容量/inode、attach/mount 耗时、CSI sidecar 健康、云配额 IOPS（见 E 篇）。</li>
+<li data-page-node-id="Sb6pyHA13C9YOlDHdEHR1a"><strong data-page-node-id="GZVloEEYKkRNv6Ka3lhbYF"><!--pnid:c2UPLXZhhD7g5MQg7yTjG9-->变更治理</strong><!--pnid:lQGcoETbU9ju3tlGE3NN7s-->：CSI 升级灰度 + 分批 + 回滚（含数据回滚）+ 成本巡检月度化。</li>
+<li data-page-node-id="pbeymJz1IcktaKRcLxoAw9"><strong data-page-node-id="dpC5jeLGr6Ku5znFhZhFjh"><!--pnid:ogRbmsXkHBYmZ9Kw2cQ9Yl-->演练</strong><!--pnid:IEVtnoEi6eSo6Qu9JlCxjX-->：GameDay（见 F 篇）。</li>
+</ol>
+<h1 data-page-node-id="n9g3bbmMtyCRYeLlaKE85v" id="part-d"><!--pnid:9wQIMInIKPKbe5veqFBgrV-->Part D · 反模式清单（可直接用于生产巡检）</h1>
+<table data-page-node-id="txivsEUy4FB27vqvtjkxKl">
+<thead data-page-node-id="rGSDb2mKWi5F8cUXINne0r">
+<tr data-page-node-id="GsIrhC8WszrgguPePoj4eW">
+<th data-page-node-id="SjLRDCKgotw1ZweKL4HffQ"><!--pnid:XUGXplZ4tOIV1gKbTluBC9-->#</th>
+<th data-page-node-id="FUe6S7bQklDV6nqOAVzTOJ"><!--pnid:0vksxUG6JslUaYixBfMbBc-->反模式</th>
+<th data-page-node-id="BTWLjGGA3oEHLTreOoSE9F"><!--pnid:6klR6Um5lvUIzbTNPkRPVw-->证据（怎么发现）</th>
+<th data-page-node-id="BPRtAlKPAmrFJokV8tatOX"><!--pnid:ARTZH99C8HHB6w6mrHwW4s-->等级</th>
+<th data-page-node-id="Kg1KO9rH2cgu8IXV9R2S5A"><!--pnid:2rjExRIh10Vegv81heIlnp-->修复动作</th>
+<th data-page-node-id="O6uiSkPNmWwUNeBnIifA0c"><!--pnid:m3qSKfAe0AY6JusPG1DCLJ-->验证方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="nEhk68gotq1UfssrUxKkZB">
+<tr data-page-node-id="V7rgRqvoEhKrOhIqpq75M6">
+<td data-page-node-id="MoJvoIaViruJEitdl6ePfN"><!--pnid:hdZSDBE9faxY9Uz2YZZuPl-->D1</td>
+<td data-page-node-id="mV1hEIUVi9MDSVINWHpewX"><!--pnid:Z6dyo56O4qKO6QSetmFj41-->云盘 StorageClass 用 <code data-page-node-id="l3wDgzYOzB9xwkpLPnd1pw" data-pnid-children="fKJEqob4NxXgw8F03SFKGr">Immediate</code><!--pnid:8kzfF5C4NJBhspIf8CzMh8--> 绑定</td>
+<td data-page-node-id="5BkaZym4LDhMbJtSFW3BMM"><!--pnid:7J8f3Pjvrc0cyI4IbzmiYR-->出现跨 AZ pending、<code data-page-node-id="HUgw120zOs9FR4K95TNRFQ" data-pnid-children="spx2EP9SPF0Wq6EdpFJz1j">volume node affinity conflict</code></td>
+<td data-page-node-id="MzvQac9uO7KWIIvs2oTesC"><!--pnid:yzxN7ZB6lK2g3m4tZOr2Jc-->🔴 高</td>
+<td data-page-node-id="EVFeQY70pX7mb69i0KbpiK"><!--pnid:HCz1Zx12Yix6Jsj4sJ3NYP-->改 <code data-page-node-id="4nBIi3Zny8S8aYHfc5mBw5" data-pnid-children="QJQeUZXsEm97B80FT4zXid">WaitForFirstConsumer</code><!--pnid:98kior60NM4HvJBysshhds-->（老 PV 需重建）</td>
+<td data-page-node-id="Dty4qNzqbsjYP4e2gWXLpp"><!--pnid:xf9pNiCPGAImYuFy4fpKls-->跨 AZ 场景下 Pod 能正常绑定挂载</td>
+</tr>
+<tr data-page-node-id="MO12R105tAuwsfgyf2sAyW">
+<td data-page-node-id="QuEpUS2uX1AM78iO3Ojjox"><!--pnid:mQDChA9CUc5fF1HoxglGNn-->D2</td>
+<td data-page-node-id="jkWdzu6zrQCvLNXIexIohU"><!--pnid:SzsCRCFd0PPcv0cbPXvabP-->数据库放到 RWX 共享文件系统</td>
+<td data-page-node-id="VnFBu5rA2Lv2LcruUEkZey"><!--pnid:QdTKxtPG3uzkSHS3GkzjbD-->多 Pod 并发写同一数据目录</td>
+<td data-page-node-id="L4ILe1vpTfolwsBqw9YFhO"><!--pnid:HKPeDt6mJ6V6Rerh6rOocO-->🔴 高</td>
+<td data-page-node-id="3YxbZNGAVCmcF31WMIvJbI"><!--pnid:Mp1OqzF4jW3RqRud57O7GH-->改 RWO/RWOP 块存储</td>
+<td data-page-node-id="GCXaiUxXWk9RxlcdtrsMbZ"><!--pnid:Y46D1dagwOIrdNXZylXO59-->单写约束验证通过</td>
+</tr>
+<tr data-page-node-id="EdUgQ9EXqZebVLoePamnQR">
+<td data-page-node-id="1dc6ZnAvhf4NuzgQOW22yc"><!--pnid:MWunPBEocEPLZcMtxwS4Dz-->D3</td>
+<td data-page-node-id="oCnRZupnGxnrL7YGV8nKjf"><!--pnid:aE4fiOaS35y2hghqyZWhzU-->无 storageclass 配额，谁都能建 10TiB 卷</td>
+<td data-page-node-id="qtyPaILRUv4CaoWtfHSo9n"><!--pnid:5jr1t2UKdhPsPCZWH8q2ri-->账单异常</td>
+<td data-page-node-id="zv0XyzuQ9v4XNEdcdr53ka"><!--pnid:Rf4Y2Sf1Yai1PdvwV8uZMN-->🟠 中</td>
+<td data-page-node-id="Q9E1fp0U6Pl3GvizXTAxS5"><!--pnid:oNLVJGMw32PWNRkErf0AzM-->ResourceQuota（<code data-page-node-id="DaDQU1bcOr2MUFZK4UQN2Z" data-pnid-children="xS8xI9QNzIPtEAmHSiixOQ">requests.storage</code><!--pnid:q47rUTm6QpVc5Hwq1iPKNj--> + per-SC pvc 数）+ LimitRange</td>
+<td data-page-node-id="8ISk9i7juLYHAFxXOEyVLT"><!--pnid:fdv2Ethpf7uJF25kwjSrGC-->超额申请被拒绝且报错清晰</td>
+</tr>
+<tr data-page-node-id="bYOLhlNSN1khjcr3mSzmWs">
+<td data-page-node-id="OjqVy6ih2HBjTF5gYbl47d"><!--pnid:O2LMvIeEzDxBmQaymlUlUu-->D4</td>
+<td data-page-node-id="UiPcQiWV3xABUdsZTegOF2"><code data-page-node-id="NcihaWK3YZbluXW0JZJfw2" data-pnid-children="6FtiyNM6POL0OQLh8U3m9s">reclaimPolicy: Retain</code><!--pnid:ah8dX0usE9O6f8MtkMXUFe--> 但无人巡检</td>
+<td data-page-node-id="5KUNHExd8f1D6zIRDqV6Ex"><!--pnid:BfD3ARYcGQs2lf5TPgzGW2-->Dead PV/Dead 磁盘堆积</td>
+<td data-page-node-id="x9AKMw9XyI1EIQ6g7CBAzv"><!--pnid:7twTzNLSFkZ1AuXnt6KHT3-->🟠 中</td>
+<td data-page-node-id="Oe1mfuDq5olSOKER49rjxh"><!--pnid:y64LKYGIKTAvV1aekPKlX0-->月度孤儿资源对账（PV↔后端）+ 清理工单</td>
+<td data-page-node-id="xTBiGvwFNfe5DL6q4I3Z7M"><!--pnid:cwsLwZoLh2heC4lKP8hMQE-->对账脚本输出为 0</td>
+</tr>
+<tr data-page-node-id="cxEnYgadZGPnO1CMmbB22N">
+<td data-page-node-id="vRNtpCBsUh1L0GMVpsC8sN"><!--pnid:DZW7M47Pvu9SuvFUiugg2j-->D5</td>
+<td data-page-node-id="yVedVSHEDT1hJ8N0o0RFY6"><!--pnid:mqS8aGxmJIS9OoZZcOZJZi-->手动删 finalizer 强删 PVC</td>
+<td data-page-node-id="rhASULThhCJuZVK7Z61814"><!--pnid:3OIu8Scsevhc3yw7EtJ8gK-->后端磁盘变孤儿</td>
+<td data-page-node-id="4Gb1aTHIGDMDb8Q5p7GSsq"><!--pnid:nejxc3yWpWgnsx8ZuodS0B-->🔴 高</td>
+<td data-page-node-id="fjA2EFE1898InDwzn7muzb"><!--pnid:g1lQeBLEkLXmtGKJlgjfUg-->先释放使用方再删；强删必须关联"磁盘回收"动作</td>
+<td data-page-node-id="wu4esgQfZ6T4qWWJBHBF7X"><!--pnid:Uor33MqrWaAnIc4kCS4kMC-->对账无残留</td>
+</tr>
+<tr data-page-node-id="fYJq5fHG52UkIlyQUA4Ox6">
+<td data-page-node-id="lRGve2IBoj6mO2qkfPDK87"><!--pnid:pr2PO336NzvryMqK8I1p0T-->D6</td>
+<td data-page-node-id="9Fa7U4EWz9fQBe4BXJDd5q"><!--pnid:bZBiiEPMddAiPkYZnCsaRs-->给容器配置 <code data-page-node-id="L6oNYYOcRYmi0mNLgLUZGj" data-pnid-children="t8fP5Ci5EUr5euilGmZQHL">fsGroup</code><!--pnid:ArLLMk9fdLMYhZeKPBXAM2--> 但不配 <code data-page-node-id="AV5GcDKssK6YRLLNW2yOiu" data-pnid-children="LEACwpNb5U4OLc6LZ5Bals">OnRootMismatch</code></td>
+<td data-page-node-id="uw3ajIq3DPvn79EVOmsO1a"><!--pnid:I2yj5YGZdJpw58ggWtSX0q-->大卷挂载耗时分钟级</td>
+<td data-page-node-id="56muYoIWaUXDZOldJj4XXc"><!--pnid:kZjduE9MWjMCDG0JdDirzB-->🔴 高</td>
+<td data-page-node-id="rlZkivrbRiAXXj6ouzvuRA"><!--pnid:kw0zoxnl5xaYqEFMW7sjaj-->加 <code data-page-node-id="KKuwliKh6TzqDsx8yQhbsY" data-pnid-children="bF6D60SKCgv4VLv5XScWPt">fsGroupChangePolicy: OnRootMismatch</code></td>
+<td data-page-node-id="xpLooAxtWzurY395MxvpJp"><!--pnid:Lsg9sMUESknGyiX8EfNpxI-->挂载耗时回到基线（实测）</td>
+</tr>
+<tr data-page-node-id="g7SmpzYfYhMaGEBXNMCSyX">
+<td data-page-node-id="95R64ffyVlIGIgN3UYNvne"><!--pnid:3QTXi6BW8I82P5RFHgd10p-->D7</td>
+<td data-page-node-id="LKqQ1CWUjiXCWSG4XCnIB5"><!--pnid:ZAixEaD0sY4sS3lwTva2BY-->生产用 hostPath 承载业务数据</td>
+<td data-page-node-id="sJ4J2BZZ9JPind9HB2aLQe"><!--pnid:35tkvl2moATvGiStmpGDLI-->Pod 漂移后数据丢失</td>
+<td data-page-node-id="8bZ1mWmjd6LYZHCjzeBght"><!--pnid:kaDtFLPUOTuvJeoV1uvLhj-->🔴 高</td>
+<td data-page-node-id="cb3ShNTiKay43NlVWTaJld"><!--pnid:wgVFRzmTFYMAFdvF8FYy4z-->换 local PV 或网络存储</td>
+<td data-page-node-id="xSR5aF79Gdqfl3P0bRIsp1"><!--pnid:nC4diyzqu6TXwfUfVJXgRK-->漂移演练数据不丢</td>
+</tr>
+<tr data-page-node-id="kA6tok76HcpcPnlvp6E6Vy">
+<td data-page-node-id="6rAgf8PymuFK16gTg7peiP"><!--pnid:BO82DzjlAa6GDZUH34WFLi-->D8</td>
+<td data-page-node-id="oz7MuNu0zC0yMXokejQzBL"><!--pnid:eHt58I3pjSmGr5oocPig0v-->hostPath 卷可被任意创建（无策略约束）</td>
+<td data-page-node-id="wkA4WGWFybyANCXyFT05mI"><!--pnid:6lOIsxoXzwFKgvfVGDCIAP-->存在逃逸/篡改节点风险</td>
+<td data-page-node-id="GOv3cbRf2ZRfd9jqZyVa1D"><!--pnid:8Yd6Znli2xdsE2BO4KBXly-->🔴 高</td>
+<td data-page-node-id="sbLxgU1e8A5LuWyYZMvuTI"><!--pnid:YMZR1ob5bkV3iWbIbNdTps-->PSA/PSS <code data-page-node-id="ZAXDRTHWiNQZaj8M8jZxEZ" data-pnid-children="G71Ly1gIptQw73bGNqbbNl">baseline</code><!--pnid:aTu9OSBf9KEn3aFdUafYJL--> 以上 + 策略引擎禁 hostPath</td>
+<td data-page-node-id="Iy2xCM6NmthOJ0dtvgG1QE"><!--pnid:4Fe6wRCbDxF3XszRlIx78G-->策略拦截生效</td>
+</tr>
+<tr data-page-node-id="Nq1vR6zRhVQYxN310UHU5e">
+<td data-page-node-id="AtNelWv5eQEGsqGUfLGJNJ"><!--pnid:uz5lwtCShKpca4M7IcsPvI-->D9</td>
+<td data-page-node-id="IIFYWzDjpZ4vsWlUoGWL47"><!--pnid:pUqyBgYoneZ5Fd6xS9546E-->CSI Controller 单副本、无 PDB</td>
+<td data-page-node-id="zrrCRY3eawnk18rgTZZfgf"><!--pnid:xZUq8OXXl6y1Y6h3LJJkE7-->Controller 挂 ⇒ 全集群供给/attach 停</td>
+<td data-page-node-id="n3aXXY1oWGw2Uf8e5dk7C7"><!--pnid:CNA2JumYXlvurseurYt3rP-->🔴 高</td>
+<td data-page-node-id="Hi1W5YN35AAuny5rm9663d"><!--pnid:BwLMdCEaFzvD2dqIONVU8M-->多副本 + leader election + PDB + 跨 AZ</td>
+<td data-page-node-id="Y4ELan7H6nugOuUkBMC5pG"><!--pnid:jkHXFFtL34WK132EQReIM3-->杀一个副本不影响供给</td>
+</tr>
+<tr data-page-node-id="OgP7nFKjvrddXPdzPu3AsC">
+<td data-page-node-id="kPlwh7ivTQyZmN0p597hZX"><!--pnid:MEF91hJTee1LMxHlKaZyTP-->D10</td>
+<td data-page-node-id="RQ6ilFGKS2mbD21rS6friW"><!--pnid:ZHd1e6hRKUynGsd0ebkoIZ-->大量 Pod 挂载同一 Secret 且非 immutable</td>
+<td data-page-node-id="Og3HryHgUDxrnuWNT8ztMO"><!--pnid:geA8bnO1JshhQbWcO4L214-->apiserver Secret watch 放大</td>
+<td data-page-node-id="gsyYk5M5fPAjQFfYCIDDll"><!--pnid:r6TNr9I8XyaNBeSygnxEuP-->🟠 中</td>
+<td data-page-node-id="R6LKsMHmozpHh7IZh98ddF"><code data-page-node-id="DGGpDROCnh0MSmX8qDYjxM" data-pnid-children="z1gk7p1xuVT6JTdGxXUIvi">immutable: true</code><!--pnid:6FNGodUNOVkuLgUhhtxp4h--> + 收敛用量</td>
+<td data-page-node-id="0uW3WFRFSLbME98z7F0aDr"><!--pnid:Y4eBJEzsbuComI8kVAIROM-->apiserver Secret 请求 QPS 下降</td>
+</tr>
+<tr data-page-node-id="kbVEANPmE99zHxz2tXCpDl">
+<td data-page-node-id="ZDvJOboP3BIYGqbl4HrVIU"><!--pnid:NCCg45IlrYojjDuXUSNufK-->D11</td>
+<td data-page-node-id="o4wL44muk2bKgZ4z63iCYk"><!--pnid:g7GL3CXGAZRpVRhb5jBHoM-->一次性批量重建成百有状态 Pod</td>
+<td data-page-node-id="Ofxhgkx7rjrlR8IVlAufnE"><!--pnid:S67l3gzKnohxB2DvhuKXn9-->云 API 限流、Attach 洪峰</td>
+<td data-page-node-id="V5b4hjalZ39RgaU6ALcZOB"><!--pnid:1sAlZPq2q48F6ulZat69o3-->🔴 高</td>
+<td data-page-node-id="MTYxp74JNVBbU70dHbcvoy"><!--pnid:G2eeKflVfJW6stqWRLY4F4-->分批 + PDB + 观察 VolumeAttachment</td>
+<td data-page-node-id="1Wo2BLfB1LMvkQ6UaLEfTG"><!--pnid:izLL5KwAwb7KZxBv7HbfNw-->批次窗口内无 FailedAttach</td>
+</tr>
+<tr data-page-node-id="g0bxqsWHRnB3VeGt2JGArv">
+<td data-page-node-id="MCwIfeWzluy3EnEriLTM7W"><!--pnid:dhVfA7xH8IPC4d1K3LfmHU-->D12</td>
+<td data-page-node-id="1H5NNtNtzgtHfNEb88Ussi"><!--pnid:iRvegAZAtqpqCTt7RCoJtd-->未监控 inode</td>
+<td data-page-node-id="BUJWLTKV3RKXJrOPLmWga6"><!--pnid:MjtaIr8GvDXHCrLfWnR80n-->inode 耗尽导致"有空间却写不进"</td>
+<td data-page-node-id="VC8qBdsgiwdkpgTOol1KMQ"><!--pnid:sfCbTgaZI9JPLzQYWfgttM-->🟠 中</td>
+<td data-page-node-id="ErNaHvpzjRSxpRO05gUo32"><!--pnid:2oIZyQOhCLghSmFiSNQt7t-->加 <code data-page-node-id="CxyErQqAbT0P6nN8wJoLaV" data-pnid-children="V6bFhKIvsxEqnlqvTeTONr">kubelet_volume_stats_inodes_used</code><!--pnid:mQXhpaoEVA0nc2NjQxWABl--> 告警</td>
+<td data-page-node-id="rIY02OpYA3YpS8dcq8oOvn"><!--pnid:z8ZLFwri2qP2ZhZb6ocZ8C-->告警能在耗尽前触发</td>
+</tr>
+<tr data-page-node-id="yAlt9E3i58G6uh44OMBQUj">
+<td data-page-node-id="bAhzMAGot1YK1ZDOQbUis2"><!--pnid:z48NIH3OCwLeEwcXTHsZAv-->D13</td>
+<td data-page-node-id="wLQ3exvbbelyljei5h5TJ9"><!--pnid:oIGo5plg4YiLivxUcoFmso-->只有快照没有恢复演练</td>
+<td data-page-node-id="aZY6SmMqrC4oZmJENzM8kA"><!--pnid:oC9m2R9fl7qqCo9FeNq0Ba-->出事才发现恢复不了</td>
+<td data-page-node-id="MCKO9JQVn7h2LBzFrIOMhP"><!--pnid:6SEtX7IbQ0Un1msztbQfQM-->🔴 高</td>
+<td data-page-node-id="DoI0Sy50Scql6lNSuh71aA"><!--pnid:YmvIyGIUbYZWhNoGs1ZPG9-->定期 restore 演练并记录 RTO</td>
+<td data-page-node-id="sHmF83uOtB9pRP7Rwg2Str"><!--pnid:Wf0mbWimWuWZXAjBOVh1hU-->演练记录达标</td>
+</tr>
+<tr data-page-node-id="qngdGAcIHTfBOIhwnbH0aj">
+<td data-page-node-id="SSqHYqvQt4gkmWJV7dEQkg"><!--pnid:kppJrSE6Enu6ZukNAi914o-->D14</td>
+<td data-page-node-id="DhZFYBfGhFhNzU7Gc9yq9g"><!--pnid:CC6Kmw08MpoQTmYkmd3oRd-->新集群还在用 GlusterFS / 已归档方案</td>
+<td data-page-node-id="HlUVLuR5ClwqGQtdxNkOJ7"><!--pnid:3cio0dXeQlbHHbAOMYEgw3-->依赖无人维护组件</td>
+<td data-page-node-id="vs611KCGaUvcPNiF6HBPty"><!--pnid:mxtGtnqeTzpjnRcaisGc5c-->🟠 中</td>
+<td data-page-node-id="iYJQgrurWKEElC5I9e3H5O"><!--pnid:M6aE4uGWi7Ec7LC2l9zoJP-->迁移到 CephFS/云文件/NFS CSI</td>
+<td data-page-node-id="Msch9WcgEtwLxJcDDMXQqn"><!--pnid:cwr7BfsxANt3sDcQiosOpN-->迁移收益（可维护性）书面化</td>
+</tr>
+<tr data-page-node-id="PIGwEk9lyu3Y93jHcxDjlA">
+<td data-page-node-id="cU1LZiZtHzT9jpq8x6Dfbw"><!--pnid:bjWGwdovVpFy6WeQbYuKUz-->D15</td>
+<td data-page-node-id="CHr1YwrbN2QgGinhqOR4Tt"><!--pnid:dcrCPuxi6qIp5mp7cpDgrl-->StorageClass 参数随意（无 IOPS 档位）</td>
+<td data-page-node-id="ktRX76k6Eu5lNIdbRu3uxT"><!--pnid:sAQcD5fSF3xRc1gBivQI8S-->burst 积分耗尽后性能暴跌</td>
+<td data-page-node-id="Sbx3NUqtLQZCJ1AV0tKatO"><!--pnid:duEQICNpqiV9VTcaH29lBi-->🟠 中</td>
+<td data-page-node-id="ACi13xw9rFyMPAQtty2nAb"><!--pnid:QHyKg7MekpJ704jM90tfmL-->在 SC 里固化性能档并监控配额使用率</td>
+<td data-page-node-id="LktZJMyy7jnkNnDnDCeFkV"><!--pnid:sKhWznJWlHFIuglGQFYFZc-->稳态压测达标</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="H8eoTtnTAj3RAd7l5zA4Kc">
+<h1 data-page-node-id="CWFLovsKcJsuDA4hhukttf" id="part-e-slo"><!--pnid:CXHCf2yLxXLfS6jwRg83n3-->Part E · 可观测性：SLO、指标与告警</h1>
+<h2 data-page-node-id="HfMg8nTncf8hEzUV4RLBc8" id="e1-slo"><!--pnid:WqnucJvAK1vD7KzqBf3EYp-->E1. 建议的存储侧 SLO（<strong data-page-node-id="LIv1OTE583wdAokR5EHP6j"><!--pnid:ZVfMczRba6cgzh8nMjcjXE-->初始建议值，必须实测校准</strong><!--pnid:WmAgFeDTklMzIdzBiOJtCT-->）</h2>
+<table data-page-node-id="cPeNcWPvglNKBHq3PG31FV">
+<thead data-page-node-id="ivPjkgLtt37slCfNpuTG3t">
+<tr data-page-node-id="i1D5gkRet1IJc5SOAe3JRz">
+<th data-page-node-id="QDymK9mT5x8eC2fbzrIYXg"><!--pnid:Jwe6KJBEggPNy0VU09mleo-->SLI</th>
+<th data-page-node-id="SHcGGeUY3A5uFq6HCI7BY0"><!--pnid:FwpHsTfxZcFvvJWQOHjvxX-->建议目标（起点）</th>
+<th data-page-node-id="Wb3G4YzvLvZBNzsBqAASkQ"><!--pnid:g05EE22V7pOTO2khIeiVTX-->度量</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ZNnMmO7l4HUaMEykpBIdjA">
+<tr data-page-node-id="5HzL7cMxYaRCkWO8gc44m6">
+<td data-page-node-id="HtIx2O5BfKKy00gK64Gkzu"><!--pnid:5yBHnVONfmpHT7SKqnWZW9-->卷供给成功率（PVC → Bound）</td>
+<td data-page-node-id="ai43RGaoSx6jbCiZCLKTI0"><!--pnid:r4hRoZOCobOyqHuQfuq95M-->≥ 99.9%</td>
+<td data-page-node-id="kImYVftE0jnsW7EKLYaTwb"><!--pnid:TWF4JTI7ieZl416GIQ4YZF-->PVC Phase 与 ProvisioningFailed 事件计数</td>
+</tr>
+<tr data-page-node-id="H9TE0yi2Ji0zUUeowIX5sB">
+<td data-page-node-id="LJ9iz53jiZoJr4fQYQfqqf"><!--pnid:dVNT1BiUauzgZGezWYolZQ-->新卷供给时长 P99（含后端创建）</td>
+<td data-page-node-id="AsGoA1cr1x0DtCWWBGkAzo"><!--pnid:NdyNdtQ3p5vkcKruLNOzqA-->≤ 30s</td>
+<td data-page-node-id="k5yZNnwT9oOKdDDRvTNx80"><!--pnid:8uu0s8s1fFDshevcfLMG19-->PV create 时间 − PVC create 时间（需自建观测或审计）</td>
+</tr>
+<tr data-page-node-id="8dUMjVyix1efzXwcmgz2gI">
+<td data-page-node-id="DfwBYm2LQDEGpIVIvsMlsl"><!--pnid:yrM9NokijfrKLGYElekCm2-->Attach + Mount 完成时长 P99</td>
+<td data-page-node-id="UUkQbZbRgfkcgdyWRbXe4I"><!--pnid:34CxHkj6tA6pFyfORqzKHo-->≤ 60s</td>
+<td data-page-node-id="14XfNIm5BgfuH9Dkt2PHEA"><!--pnid:4OxSjBmmLHjeuFJNWFKv93-->挂载相关指标 + <code data-page-node-id="9ZOjNJyXIF5utVCsN7h6Hu" data-pnid-children="TjGQRdkqTZ2MNvJlKcCmRR">FailedMount</code><!--pnid:iT1tV6x1dw22gPKil589t1--> 计数</td>
+</tr>
+<tr data-page-node-id="9CoTwEJwYmNZyllFanVgO8">
+<td data-page-node-id="k5pmUS8wwmnC2f6E3EOsEd"><!--pnid:Inqzyx0ZNONJLDc7KypFdO-->卷容量使用率（告警阈值）</td>
+<td data-page-node-id="uoa7mR64EjTODrAkFqLQQt"><!--pnid:K0ebo9WvU0P9Puu3DKLCe9-->≤ 85%</td>
+<td data-page-node-id="QEYFenONsf2vU7R7xJDgxh"><code data-page-node-id="0H18bYVh2EKBV5Z5HGSfQm" data-pnid-children="YwXfjQ1Mg6RaEr5Tg4mGlw">kubelet_volume_stats_used_bytes / capacity</code></td>
+</tr>
+<tr data-page-node-id="wvrMbwa8IWD3XmXGaGXWCx">
+<td data-page-node-id="xvMU2MKvYmYTng0QmUGGMH"><!--pnid:zwHhBHSj65fbMvjdgrVNEK-->inode 使用率</td>
+<td data-page-node-id="POdk3qyRoTHmvIVSh5fxiJ"><!--pnid:Iuzpx8vxKZT5pvFiHZdWmv-->≤ 90%</td>
+<td data-page-node-id="TrMusRVF3MxDEJodqfilXL"><code data-page-node-id="os0IXgQ6qgDo95EO8DvHkV" data-pnid-children="lnaIB2GiDNPsIxFFUQPHiS">kubelet_volume_stats_inodes_used / inodes</code></td>
+</tr>
+<tr data-page-node-id="z8jT2MqCG99DBAkWsUrQHd">
+<td data-page-node-id="EsevRMPMThX6cTrvEkGNq2"><!--pnid:NUOkUQgUFMLZBmtwnYBF2Q-->快照成功率</td>
+<td data-page-node-id="ypVHe8h1unpzSBh8ACr7YT"><!--pnid:ALo44kMRNnKcfi0DMr08TY-->≥ 99%</td>
+<td data-page-node-id="gwk8HlNcagcDIXjq8GbEvN"><!--pnid:ghj1uAiA3JjOCvpDTt0LCz-->VolumeSnapshot ready 状态</td>
+</tr>
+<tr data-page-node-id="OFML9TN2tzAjgYFexDkxYK">
+<td data-page-node-id="ffsTvmXiz2RLFmyTR3pjGg"><!--pnid:1WTWm4HCNe5izy2CfS1S5S-->备份 RTO / RPO</td>
+<td data-page-node-id="W9IOYqVYAJ3WBiiDfTG6qw"><!--pnid:YQYLfizIKYp1YWSkN48iBe-->按演练实测填写</td>
+<td data-page-node-id="VEsfp35l1IDVojPBoq2SLb"><!--pnid:3rWJzXuBAK3t9jZ02vvE92-->演练记录</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="8sXxKM3DmMOXzXVrPOoKo4" id="e2-curl-k-https12700110250metrics-grep-volume"><!--pnid:AK7H1DxssXik7SdPEMdQg2-->E2. 指标清单（<strong data-page-node-id="EzRF4aYcRIfViVbo1bMRnu"><!--pnid:IKPelPLvdjnNhqbAVl725E-->先 <code data-page-node-id="H3jPVQsP1KGKrgF3IXsZlV" data-pnid-children="qOaiAmNXwbFZS5CVyUhwqT">curl -k https://127.0.0.1:10250/metrics | grep volume</code><!--pnid:g1l9fubJBoqL1Z1rBMz24d--> 核对</strong><!--pnid:exjN5Wsh0oO2YsXhPRumml-->）</h2>
+<table data-page-node-id="VaAjrEyTf8X0EKb3aaAXkb">
+<thead data-page-node-id="SZdupdN28N4hcGkLjQ7bhW">
+<tr data-page-node-id="RlNnVutXWQfv7vvIzlirtr">
+<th data-page-node-id="ZrDK76EqaysOPripFGINKP"><!--pnid:HP8tutl1RRqwa9KxeqF009-->指标</th>
+<th data-page-node-id="Mb69OFtxOwtPW14Xmoilfp"><!--pnid:PCFXBbg7RguZss95qTGLP2-->含义</th>
+<th data-page-node-id="KV0fxgsB86DMXq6covKQRv"><!--pnid:UpunQei84L49A1BpJkemLu-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="j9F070oUFSDuHBCFQUdaMq">
+<tr data-page-node-id="inAycBZviQEZbnbZse5Ndi">
+<td data-page-node-id="di2cdcttCcyVqd17EiLmWU"><code data-page-node-id="ogOHNYbfyfuQE0qd9BYVFJ" data-pnid-children="awIBmkiIOiFpSdlSL5iNNM">kubelet_volume_stats_capacity_bytes</code><!--pnid:eaYnyFyVDkR3bSQ1Vhx24a--> / <code data-page-node-id="zpmZfWKLsBBvmkUJzCAHb6" data-pnid-children="yjpydKF6amikO86SsGlYv0">_used_bytes</code></td>
+<td data-page-node-id="HdfKvSeu5QZrCCb4gLHnC4"><!--pnid:zcuuU8J3TpBos9bDm838eH-->卷容量</td>
+<td data-page-node-id="MjGHgGAJHAb2C1gmvAqAXl"><!--pnid:C8ygkK54NIqquE1p93ZSRA-->容量告警</td>
+</tr>
+<tr data-page-node-id="rguVDL96APmA9nYqqqoSXh">
+<td data-page-node-id="ZihzcsrBKwUXLqBAO47Mm8"><code data-page-node-id="sZ4ONi7XRjsg1i0xP8mwOs" data-pnid-children="hk49eA9jpqiOZJmuiUYorw">kubelet_volume_stats_inodes</code><!--pnid:9fAchgknfIbxKuW5Npesjd--> / <code data-page-node-id="M8JBiLmvCMgN4lHemCPNUe" data-pnid-children="WyoePGYJ4gTkOpSg7AR4oQ">_inodes_used</code><!--pnid:4yZxhOFktlt1Yg9Qy4478j--> / <code data-page-node-id="ctc52uRQivtHJETicOpBHh" data-pnid-children="l0o2TEKbLSeMwyMWgxlwwz">_inodes_free</code></td>
+<td data-page-node-id="1UQwqbaoYf2kQijGDRc4nm"><!--pnid:P6zMptbtPgYyoH9KqqlNHS-->inode 用量</td>
+<td data-page-node-id="MgliTzxkdEk7OsU5afXoCL"><!--pnid:WTyGwbnUDTT7Q5VXrmS0Pr-->inode 告警</td>
+</tr>
+<tr data-page-node-id="xuWT7a7rVAPzL7IFIN0Rs6">
+<td data-page-node-id="BDxX54K5dcz3KlOOpB7GS3"><code data-page-node-id="Da7Vc3tnqVFijs0d9O2kuo" data-pnid-children="mp2BJeYgAMDhiOGPvA6jjk">storage_operation_duration_seconds{operation_name=...}</code></td>
+<td data-page-node-id="iHGxKHMrNbe8ejcxow3Lg5"><!--pnid:lnvQDubXcsDePlWLvrAcj9-->kubelet 卷操作耗时（<code data-page-node-id="HnZGIaUcDT7Aajuce3osjg" data-pnid-children="2HJaNDGNDx171ULb0oxpIo">volume_mount</code><!--pnid:bgRbXs39LoY1Is1TaVc3e5-->、<code data-page-node-id="9gBBy20Xnb3qDDLRz59aY1" data-pnid-children="CpRwk8dJh2NnoJOXeP2Nho">volume_attach</code><!--pnid:dgHQClR6lcLx7WiiLguzKZ-->、<code data-page-node-id="A7TktiuTol0Ie4jmOmhGJW" data-pnid-children="sKS71LMqoMDhMy6xTC1Zg7">verify_volumes_are_attached</code><!--pnid:5JyTzWhrISWFCNdgESyEly--> 等）</td>
+<td data-page-node-id="OegOwkWUh2fTTp2pb22qkh"><strong data-page-node-id="4u7o2VjlNuwYtr9DLI5gM8"><!--pnid:xoqB0kZ6G1c1qDOeK5b2t2-->挂载慢定位首选</strong></td>
+</tr>
+<tr data-page-node-id="R9igQccbUKxVsslDBUKI1P">
+<td data-page-node-id="g7kkUPn9Oh9I8MlUaN5fXR"><code data-page-node-id="lH1GMbT4LEuM7niA9q7Ze1" data-pnid-children="IdwLHamqRZ5exgIYJULray">volume_manager_total_volumes</code><!--pnid:msvJeO5RQnIPseQrnorYQl-->（可用性与状态明细依版本）</td>
+<td data-page-node-id="RhOIQPS5ZXdrlsMy9ZIGKZ"><!--pnid:IYeNEZUG6lmzL1iFChuoCY-->节点上卷数量</td>
+<td data-page-node-id="ICE5Co9c9AeeWanNO8bq6l"><!--pnid:HnAzaler9FQMvHrBGttEvc-->密度治理</td>
+</tr>
+<tr data-page-node-id="vcakQZELmeMDxlcR68WNqx">
+<td data-page-node-id="WAO1GqppHmsTakbjzFA9Ms"><!--pnid:h6Jm3IAw2XaNC2nlxd0OFq-->kube-state-metrics：<code data-page-node-id="7Ni0m78pNqg2JXDiU3LZ5z" data-pnid-children="HO3aNJY67UsN6HS0Lb98iN">kube_persistentvolumeclaim_status_phase</code><!--pnid:wVfUCsYlectrnGP97iMWLE--> / <code data-page-node-id="CH5K93CW1eyDMfuqOIEGYh" data-pnid-children="aOZbh7j9zn5vB7RqTMcYYa">_resource_requests_storage_bytes</code><!--pnid:wUu3KisLtVBdjHr3AO9buu--> / <code data-page-node-id="tCNfqknHvEh3LtLBxiPMnj" data-pnid-children="qJnJ9jCdIU5piyVG0x2iIE">kube_persistentvolume_status_phase</code><!--pnid:cfQ33hXy6jebTyOKE7PWcv--> / <code data-page-node-id="ragcWzEv58sY2FGQAFKQyp" data-pnid-children="lDqg4y6B8ZCbFSMBFwHxWY">kube_volumeattachment_*</code></td>
+<td data-page-node-id="na2DbNpFnNRag1jIAbRm89"><!--pnid:weBuqtvKKLm4ibghLrXD7A-->对象状态</td>
+<td data-page-node-id="HJrxWZWKAZsZCPN4gudTp1"><!--pnid:UwMyVGvA2q6i3qNtoxkopq-->规模与异常检测</td>
+</tr>
+<tr data-page-node-id="e45TtncHzRGFnItouSmG13">
+<td data-page-node-id="UrHGVzxnXSew88ErYD6RwR"><!--pnid:885KE2VoaxG8m6FtOlTHHB-->CSI sidecar 自身 metrics（各 sidecar 端口/路径不同）</td>
+<td data-page-node-id="Bs7EbnfqHhGwPlKJqlmGXF"><!--pnid:xc67MJFNHbrCWmRuw9fNEj-->调用量与错误</td>
+<td data-page-node-id="yBe8SFC5Aygz9LV6tRg64G"><!--pnid:PhQfDwf7J7TBogSCWov8Xz-->CSI 健康</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="MjMnn6qGeNW0GJvVXkk3Df" id="e3-prometheus"><!--pnid:E6EEsVvIeim0nfquLFvqxv-->E3. Prometheus 告警规则（可直接粘贴，阈值需实测校准）</h2>
+<pre data-page-node-id="YFqnwIkBgVIOOzyK6FH6m5"><code data-page-node-id="O2JNefFrbFrLm24T2argkD" data-pnid-children="zYUNBjFoUTLK8JgGByOzQ7" class="language-yaml">groups:
+  - name: k8s-storage
+    rules:
+      - alert: PvcPendingTooLong
+        expr: |
+          kube_persistentvolumeclaim_status_phase{phase=&quot;Pending&quot;} == 1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} 长时间未绑定&quot;
+
+      - alert: PvcLost
+        expr: kube_persistentvolumeclaim_status_phase{phase=&quot;Lost&quot;} == 1
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} 状态为 Lost&quot;
+
+      - alert: VolumeNearlyFull
+        expr: |
+          kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes &gt; 0.85
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;卷 {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} 使用率 {{ $value | humanizePercentage }}&quot;
+
+      - alert: VolumeInodeNearlyFull
+        expr: kubelet_volume_stats_inodes_used / kubelet_volume_stats_inodes &gt; 0.9
+        for: 30m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;卷 inode 使用率过高：{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}&quot;
+
+      - alert: VolumeOperationSlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (operation_name, le) (rate(storage_operation_duration_seconds_bucket[5m]))) &gt; 30
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;卷操作 {{ $labels.operation_name }} P99 达 {{ $value }}s&quot;
+
+      - alert: VolumeAttachmentStuck
+        expr: kube_volumeattachment_created &gt; 0
+        for: 60m
+        labels: {severity: info}
+        annotations:
+          summary: &quot;存在长期残留的 VolumeAttachment，检查是否有异常卷&quot;
+
+      - alert: CsiControllerDown
+        expr: up{job=~&quot;csi-.*-controller&quot;} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;CSI Controller 不可用，新卷供给/attach/扩容都会停摆&quot;
+
+      - alert: VolumeProvisionFailed
+        expr: |
+          sum by (namespace, reason) (
+            increase(kubernetes_events_total{involved_object_kind=&quot;PersistentVolumeClaim&quot;,
+                     reason=~&quot;ProvisioningFailed|ExternalProvisioningFailure.*&quot;}[15m])) &gt; 0
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;出现 {{ $labels.reason }}：命名空间 {{ $labels.namespace }} 的卷供给失败&quot;
+          description: &quot;本规则依赖 event exporter 将事件转成指标，请先确认其在你的集群可用&quot;
+</code></pre>
+<blockquote data-page-node-id="bncaDnvhLET2Kw6g77O5rY">
+<p data-page-node-id="Qx7UoK3fFHmLnlZxEXPDic"><strong data-page-node-id="TzxaK6PPRQHEcSQVpuv1tZ"><!--pnid:NcsKma01Un7kqpV9tlUWIi-->事件监控补充</strong><!--pnid:VynniGfgvxhSpesChIJhXF-->：强烈建议部署 <strong data-page-node-id="SH5kB5LDlGczlqXmJYSikF"><!--pnid:3JFPpDzWViBATHL6ZAl9cu-->kube-event-exporter / kubernetes-event-exporter</strong><!--pnid:033xUj24vh0DN6cYScBL7E-->，把 <code data-page-node-id="f1VHNxPD0oXL56r3KCsYQ9" data-pnid-children="8Rbn0NFRbx4aThPsgTuaSt">ProvisioningFailed</code><!--pnid:kkdvwynrgo4RudPVrXCgZD-->、<code data-page-node-id="ygiUuIRQfF3DsIK2X8gojr" data-pnid-children="Ud76eGgF7FpXI7d97JG9X2">FailedAttachVolume</code><!--pnid:DjvdphNeGSACK7BczvJU3t-->、<code data-page-node-id="Sjn8PxE8IB4T89pgwcmrlW" data-pnid-children="uwBmu6ygF8eQBnxlTrrz4d">FailedMount</code><!--pnid:dkm01sGFbWTRQjLzg7stC9--> 这些<strong data-page-node-id="04taCyMYACDlIXt1YZ5bVX"><!--pnid:PGIRWQeIEaxU57wtXSDfgC-->带明确失败原因的事件</strong><!--pnid:xPR0uKwHNLIrHJKm20r3yC-->转成指标与日志，这是存储排障里性价比最高的一步。</p>
+</blockquote>
+<pre data-page-node-id="0fMGSUTjVQiuUy3M7Mjfa2"><code data-page-node-id="PkpbgpxS6z4QAK4UuuuRHu" data-pnid-children="Hv4sef3TxVHtsVRV5haXty" class="language-promql"># 思路：把事件转为计数器后按 reason 聚合
+sum by (reason, namespace) (increase(kubernetes_events_total{involved_object_kind=&quot;Pod&quot;,
+       reason=~&quot;FailedMount|FailedAttachVolume|FailedScheduling&quot;}[15m]))
+</code></pre>
+<hr data-page-node-id="xLT4GleY9wxnkCsZ3IJsUo">
+<h1 data-page-node-id="0wtNmkWD3Uj27wIElAJ6il" id="part-f-gameday"><!--pnid:qtQiOO6Uma3psMrmx4QNkR-->Part F · 演练（GameDay）计划表</h1>
+<table data-page-node-id="fbAS1HWvchDjLHReN076Pb">
+<thead data-page-node-id="gcS7MW7ZFnOyFXg1w0bN7W">
+<tr data-page-node-id="RRiHMvEsiYy3CsiYfZVruQ">
+<th data-page-node-id="UTpRiOUItOLzJFtyF7EA2S"><!--pnid:0FXJGVCC3TNkw4ePXHgI40-->场景</th>
+<th data-page-node-id="qyg2H7w8oBj4bp35QfXOyk"><!--pnid:WroVBUID2gFb9mUfLJfSsr-->注入方式</th>
+<th data-page-node-id="K7P1FkEI0a7OBBQU7474Zu"><!--pnid:Z6uH4Krp4EyRHUviKVAdUt-->期望表现</th>
+<th data-page-node-id="aylbW9trqmFKmH1gGMtp8F"><!--pnid:0dXqYfw5YeY8SllD1GgopH-->验证的 SLO</th>
+</tr>
+</thead>
+<tbody data-page-node-id="47O9fqI2K4ZMGey2u7do93">
+<tr data-page-node-id="WMSxnSDiH3TX69Me3jLtu0">
+<td data-page-node-id="koGagGMzXxKCD2wUPxMmup"><!--pnid:GU0QSh9m3nC7Mfl2N11pgR-->CSI Controller 全部挂掉</td>
+<td data-page-node-id="qclS7YdtPcXngqEbDiJNfK"><!--pnid:SIgtR2XOAJqKkK29YBABTf-->停 Controller 副本</td>
+<td data-page-node-id="LpipsBqKazj8i4Ix0Mekdj"><!--pnid:01q3VhxiN9kIIumjy8qvuc-->存量读写不受影响；新卷 Pending 且告警及时</td>
+<td data-page-node-id="VA7sqoGFjwgOZfsqjw8rCG"><!--pnid:V2jHf5qDCeUgPVVDEYiKjD-->供给可用性 + MTTR</td>
+</tr>
+<tr data-page-node-id="JZC1rtRh7MRPYokCZkrSbw">
+<td data-page-node-id="mxu8jWO0xCcJXQpgc7fiAp"><!--pnid:Q5ej6EbArZqD3RJTDCtZLf-->Node 插件崩（单节点）</td>
+<td data-page-node-id="9uW4mfYjsq6UBurmZ0MKTR"><!--pnid:mTwqdorfK0TWzYqXMKaBL4-->停 DaemonSet Pod</td>
+<td data-page-node-id="9TV58sTKF4a6szgvXgS3qo"><!--pnid:3vzQ8cWXtGDKrLvoeq4ruS-->单节点新挂载失败，已有卷可用；节点被隔离</td>
+<td data-page-node-id="7MHQ2sQNnaJK1ExZTLuxtL"><!--pnid:MxC796VqFj48yr4Mux5mhj-->爆炸半径可控</td>
+</tr>
+<tr data-page-node-id="fPMEn3JNRe1CVxzGTvlRoU">
+<td data-page-node-id="nuoZ4S8M2gE8cP0wcn1eLZ"><!--pnid:NaM7lMSL4PevkkeOPzGYXh-->卷已满</td>
+<td data-page-node-id="JgaYmF5xvgj9YheBhCBkEv"><!--pnid:k0iuJ3LnTIS6Fn0IaYSJVX-->写满一个卷</td>
+<td data-page-node-id="8i6kziC2Et5VZ4tyvBOiqq"><!--pnid:14wliakAxjwgmKrKFyHHBl-->容量告警先触发；业务能优雅降级</td>
+<td data-page-node-id="GfmYsxLI91WhIWyHbcRWW7"><!--pnid:x1SyQjRQ1rK7fJILTQWaUB-->容量治理</td>
+</tr>
+<tr data-page-node-id="21CrxRw5LCKm6d2JYz4ntH">
+<td data-page-node-id="KzRbSTQ0ClXw9fkAibuC1O"><!--pnid:Rmu34REpLN30HeqMbKLCfE-->inode 耗尽</td>
+<td data-page-node-id="CRLVvbxRurMGAwIR1H6oPW"><!--pnid:BtgUgh5Fy6MVcvBpCyVPJd-->狂写小文件</td>
+<td data-page-node-id="gGc3qgpTQoEi1JsOYiEtWp"><!--pnid:oab8JKPuH5nI38xB1PnxJ3-->inode 告警触发</td>
+<td data-page-node-id="85fQC0XhQo30TafDDB71yi"><!--pnid:a2QduuhXRPEAN2oI7Hyovv-->inode 监控有效</td>
+</tr>
+<tr data-page-node-id="uJjZKj3eVzGR1ZKcRjj8g6">
+<td data-page-node-id="r8U34qpH4jHhgZ0TfSZ2Fj"><!--pnid:IGGb5G9hwmFpCxGJ6ZqOiX-->detach 未完成</td>
+<td data-page-node-id="NSXPlaceLd9iQx9W2SQEC8"><!--pnid:HFdwhxtS9sfqAc8RTcU4pt-->强制删节点</td>
+<td data-page-node-id="y6wvd18rIZtyVyCc2L59m1"><!--pnid:7LykqR9iRsGHf1FDtvC2eX-->卷能在可接受时间内被强制回收（工单流程）</td>
+<td data-page-node-id="kak7az8V88dwxMQfppw0e6"><!--pnid:h9uUzaKYJA6jGKMu3TQbEO-->卷回收流程</td>
+</tr>
+<tr data-page-node-id="f7KBDeTqOOEWO3ufn4jlp2">
+<td data-page-node-id="wpvKPbTHrKzqfadKffjCRN"><!--pnid:Zoa05RCrpRXa7sPPezew5L-->快照失败</td>
+<td data-page-node-id="XSJFd9xXLH1uBxb2M6l2RP"><!--pnid:dyoNd9YjoOqWR2JnWA5IKP-->让后端快照 API 失败</td>
+<td data-page-node-id="hfAMb8wIxchTUj1Lrojtmu"><!--pnid:7tMPK8a3hUnfudYxtN2nS5-->备份失败告警触发，且有重试/告警闭环</td>
+<td data-page-node-id="UdXAcIpHbYJsRHGDyOCWoW"><!--pnid:2VehJ5xR71p8CVO9YpDXL6-->快照成功率</td>
+</tr>
+<tr data-page-node-id="h8LATXOXKZBjKqQNlGPCNE">
+<td data-page-node-id="Mec7IRMx6olGViKh7FNLvX"><!--pnid:FBj86neYpWbyaQyMBMcifU-->恢复演练</td>
+<td data-page-node-id="kwn4F0Wq4FeyA6y86HWiLm"><!--pnid:tfODVw0UV2IWJdX7dZGAdZ-->用快照/Velero 恢复服务到隔离环境</td>
+<td data-page-node-id="gDBisGwgTbACEqdi6EcLYk"><!--pnid:lvsE0LFxkHFkaLs3XMuqDS-->数据一致、服务可起来、耗时达标</td>
+<td data-page-node-id="Z6QtD5wNIIHetKlZbeKaI3"><!--pnid:p1icJUT83SQqIjkQy2FbCi-->RTO/RPO</td>
+</tr>
+<tr data-page-node-id="idZS9W1C152arreCB3hqXY">
+<td data-page-node-id="Rna1jok4x5ikJ4X8lVcWXg"><!--pnid:eucE99jaq9SUWbtfdwCrBn-->跨可用区重建</td>
+<td data-page-node-id="fjAndMyHDEJbXtP6fQc09Z"><!--pnid:Efd7rxAYAcP10GNT33hO4P-->模拟 AZ 故障</td>
+<td data-page-node-id="SqiyIdgvQw0vwBLJ4eLkyR"><!--pnid:gzB04UOprra1pfdGuxGq9h-->有状态服务能在其它 AZ 恢复（应用层复制有效）</td>
+<td data-page-node-id="sZUdinwiCPv0QzttgCg922"><!--pnid:14OHhuvtFrFGLAvnotAGG7-->容灾目标</td>
+</tr>
+<tr data-page-node-id="7LEF2W7NzTsiA2y0OENlnQ">
+<td data-page-node-id="fWG8D6IQViMAh1qknpmTpq"><!--pnid:4Awy7bJiG8Qa4DEIJmeaLE-->大规模重建</td>
+<td data-page-node-id="QZQ6mzFGj6TkG4ZtyDs0VG"><!--pnid:IKMfRfNNqJvqekigPxhruF-->一次性重建 200 有状态 Pod</td>
+<td data-page-node-id="tKUQrMf4Ggd7N8K9EirfDU"><!--pnid:olHuJ4i1pB45TDhIWtLSRW-->分批次 + 无限流（考察治理是否生效）</td>
+<td data-page-node-id="9tORet6TEBkCIlGSBgPpvY"><!--pnid:HcH9JIirSlvGEKdkxYNlhq-->变更稳定性</td>
+</tr>
+<tr data-page-node-id="mEqVXtOuijTNXhojSsRuEe">
+<td data-page-node-id="NHzwq2luu2eB53jW3Ra9xD"><!--pnid:WO6kCsgFMWZU5ICvC7LyWe-->孤儿资源巡检</td>
+<td data-page-node-id="rUIE1dqW921KxOiuzSg0cw"><!--pnid:qzTkZxQrNh8uWjyGp5XqCS-->对账 PV vs 后端磁盘</td>
+<td data-page-node-id="LetUVukhV9CwE5W7PysWDg"><!--pnid:OA0MoxtgPkU2ZKHAoT0SQL-->能发现并清理孤儿资产</td>
+<td data-page-node-id="KFdTrJkCcMq0fiySgpxQHM"><!--pnid:I6cTAaXcH4G8ywKuirNxk7-->成本治理</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="CmD7ZkP4yfIhZx5pYs74Q9">
+<h1 data-page-node-id="P0JMmzWAlUMqpk6BprsrJO" id="part-g-10"><!--pnid:DRsXrLbbKShj0zHcdAHfq7-->Part G · 10 张面试速记卡（临阵磨枪）</h1>
+<ol data-page-node-id="2eIzSjV0Pk66Zmjse8BRnO">
+<li data-page-node-id="jMR9XVytSkVu50BxcWvLJM"><strong data-page-node-id="OJnRGLOyxjjBon1Mq7EcUQ"><!--pnid:JwzFS4cNRSSPHmd3l6oRTO-->四层抽象</strong><!--pnid:obgVRerReYO8FaGJyFNVMp-->：Pod 内 volume（跟 Pod）→ PVC（独立）→ PV（集群级）→ StorageClass（模板）；PV 与 PVC <strong data-page-node-id="inkyPmKJ5GcjsRdQgt3bxk"><!--pnid:fhFOgts2jb4jysifSHGkkU-->1:1 独占绑定</strong><!--pnid:LJXUEs6Je71R1ZALFdgUBJ-->。</li>
+<li data-page-node-id="MfgfqCLnvM9dfElgPirWau"><strong data-page-node-id="DuZzFJUuqNoUIwvdSzFVaX"><!--pnid:3lcJzjiSMWSp1x25uugwoq-->三种策略</strong><!--pnid:THZ2iHT307tOroIObPkNQG-->：<code data-page-node-id="OfJ4bsuEfnhObLdlF9jh9h" data-pnid-children="TvDYEPzm9suJSLU3iNyuqA">reclaimPolicy</code><!--pnid:p1xWYRjpYUBU817UcedQsJ-->（Delete/Retain）、<code data-page-node-id="VwkP20LbV4U6NQ5crhZr8q" data-pnid-children="cvel18QhfHX4u8qHAgTepU">volumeBindingMode</code><!--pnid:shNCZ0GzFw3kKKJq1olIuo-->（<strong data-page-node-id="c4IObbh31yOpj4cPnuckeq"><!--pnid:5sJtMv4eAbc4QWgTfnoQAm-->强烈建议 WaitForFirstConsumer</strong><!--pnid:jiTfSX8JINMzaJgXRq25JQ-->）、<code data-page-node-id="sPBQ2vovDEMiaTyuN5NasS" data-pnid-children="FtKmh0EDk4sMkjojJAvDYy">allowVolumeExpansion</code><!--pnid:SbKye3QqN6dM0CzMK4gQag-->（只能扩不能缩）。</li>
+<li data-page-node-id="YsrOotweWYfMFXISmyrMq0"><strong data-page-node-id="cT2FMLD8pR9mCBZuRxJ76M"><!--pnid:QFZbgtOTiDzWq81YlyiD8U-->访问模式是"声明不强制"</strong><!--pnid:H03LTlSLpr1UqrCyVjeoRP-->：RWO ≠ 只能一个 Pod（同节点多 Pod 也能挂）；要严格单写用 <strong data-page-node-id="Z6sQOo6AMznkVn5T3GX7Hz"><!--pnid:6aaq2PfPfLJkJHRUYbIVGO-->RWOP</strong><!--pnid:1bDu9nfTiVLqqIaL5LoQAc-->；数据库别放 RWX。</li>
+<li data-page-node-id="jb15OsDpluwqlD73iylrH5"><strong data-page-node-id="uHgJoLyJDXAeoym34rLnzK"><!--pnid:RNrwSZC0MyW0p4LNpcl4r3-->attach vs stage vs publish</strong><!--pnid:h2liCbI2Oq0K15VvxAZyoX-->：<code data-page-node-id="4IBCLrBzy3Csl1kB0WMgw1" data-pnid-children="I73eUbkhnfSedtTRNPL0tB">ControllerPublishVolume</code><!--pnid:mhUfaqwYhs9ocy574FIFWQ-->（云盘挂给虚拟机）→ <code data-page-node-id="4heUPNuQXDQDMYowfHV9Ad" data-pnid-children="pIwb19wBs3q25nJEa2pZZR">NodeStageVolume</code><!--pnid:T1FTA18XyI5LXSTQlKYKGi-->（格式化挂载到 staging，可被多 Pod 复用）→ <code data-page-node-id="QNvG9aJ7cnQkwWsVWa3vkh" data-pnid-children="nGsFVX7Ja7sG0P0YoVZrwq">NodePublishVolume</code><!--pnid:DZ86h7vt1q64cfEWhH1Nco-->（bind mount 到 Pod 目录）。对应事件：<code data-page-node-id="g60ozFyEM77Z9bNK6lO15g" data-pnid-children="GCQSSm4oFKfUTWwTXHE6mK">FailedAttachVolume</code><!--pnid:lCaA7q04LGajUmx2efz1Lq--> / <code data-page-node-id="gLZFNZOiCCj6I7nn65HHwq" data-pnid-children="N8TK7St2CaF0pVQHEMI8sN">FailedMount</code><!--pnid:B4D2VWQEZbA7BBZZWTvFYU-->。</li>
+<li data-page-node-id="uHjwSEEjWiQZzzNqJybaP5"><strong data-page-node-id="mkRvsFf1nx2YmiTziS43X1"><!--pnid:lnWpxOF3eLybYWd3nUwaSW-->sidecar 四件套</strong><!--pnid:tlznSyWvcoEOmcGdIuE8xZ-->：provisioner（增删改卷）、attacher（发布/解绑）、resizer（扩容）、snapshotter（快照）+ node-driver-registrar（注册）与 livenessprobe（探活）。</li>
+<li data-page-node-id="1W0LB8BN8xoQUJCmusYc3Y"><strong data-page-node-id="vorI1zZSKaCJ4TXQ1I40zu"><!--pnid:RT50fpFRViEc3FNlo4cb7o-->拓扑决定生死</strong><!--pnid:qgz6bScbT9MKbqhqUfceZE-->：云盘是 AZ 级资源 ⇒ <code data-page-node-id="KwgoKBkCM1cxhbWqydpsCk" data-pnid-children="CR8k1LLL8x95Isk5eMw2Gd">WaitForFirstConsumer</code><!--pnid:Gy8dvNFHaSNmqs8OrN7iHP--> + <code data-page-node-id="Hr8g45aWhGNIIYCb9gANJD" data-pnid-children="AC3KaYd286alZFy6CNIEH8">allowedTopologies</code><!--pnid:d2ZiOi9M1BYU5rSymZyRIS-->；报错关键字 <code data-page-node-id="HUJJ90AlBBexUUz0BBRPCK" data-pnid-children="gekPI7MgIcz9qLxQhQsQJf">volume node affinity conflict</code><!--pnid:sV1WP9MLxDkY7vH0B3bJIo-->。</li>
+<li data-page-node-id="Kyzjjb5QxUanKQ89zNFU4T"><strong data-page-node-id="zl6T8WwBChGACmdbYhaMiv"><!--pnid:9NDPUuLdPrXFCGo7IAUeNQ-->卡 Terminating 看 finalizer</strong><!--pnid:KcsZsbeCzaPez4vvT3QZxP-->：<code data-page-node-id="5Q5zNij2PkQmCjuMfzEveP" data-pnid-children="y770D7XsN4KtyPhrwuazW3">kubernetes.io/pvc-protection</code><!--pnid:C3sYw2B2VcoftUOcVYWwzP--> / <code data-page-node-id="HQnbPpTlxu2z6D9uG2r1UR" data-pnid-children="RrnOZf0U4dTSLCplfGkCPG">pv-protection</code><!--pnid:xLJYim01o23F6TiGjRDAX1-->；强删 finalizer 会留下<strong data-page-node-id="qm7PSyX3eRc4e2zzAdmQu6"><!--pnid:F8zBmg3T4TseuUuLonh1Ev-->孤儿磁盘</strong><!--pnid:sCxzhxpksaEuoLsxHKH2L4-->（最贵的坑）。</li>
+<li data-page-node-id="0siqVD6UA6vt3evEXhnl2L"><strong data-page-node-id="kyAmT6juMg81GJOjlqKVKk"><!--pnid:oIaDHc3C7KrH04xpCSVzuR-->挂载慢的四大元凶</strong><!--pnid:Pt242Zzb2tYzbwfBS5KCY3-->：fsGroup 递归 chown、上一次 detach 没完成、云 API 限流、Node plugin 崩。先看 <code data-page-node-id="Lqp4lFFT1Ml2LH02Wo6kBZ" data-pnid-children="5ISzBByT8XkvjGPJOqzNuY">storage_operation_duration_seconds</code><!--pnid:B0qSS20rzPhPuCwklZVTG2--> 再细化。</li>
+<li data-page-node-id="pfupAM58l4Bihg0rk8cNiv"><strong data-page-node-id="H8v0OVQYyazU0wA8S1PGKM"><!--pnid:sVlFQFm2PHT0lmONSSqhHk-->Controller 挂 vs Node 挂</strong><!--pnid:xX7kuL22XC6J59UyvuxKRF-->：Controller 挂 ⇒ <strong data-page-node-id="xzc3eVqkZqComydzpfP8gT"><!--pnid:OaUUimVa6BN709Xo41hEKd-->全集群</strong><!--pnid:9NtrD5vy8rH2FMPSnN561T-->新卷操作停（存量读写通常没事）；Node 挂 ⇒ <strong data-page-node-id="kuSRCrgQ9fKLrnBXOWhw5s"><!--pnid:4kbH4gLaTRh2ECcIOyC8A4-->单节点</strong><!--pnid:eNtglmf7LGkO15jnKiiDgX-->新挂载失败。</li>
+<li data-page-node-id="nl88xNk7xk4LPytWHDeXtq"><strong data-page-node-id="DO3WF23EgUz3x76Ue25ne7"><!--pnid:NzVsw9qL5DLaO7H6nJ3iQK-->StatefulSet 的 PVC 不会自动删</strong><!--pnid:3rpYnqxQ7Gsz9BvMkXhsjJ-->：删除/缩容都保留 ⇒ 磁盘泄漏的经典来源；必须做 monthly 对账 + 标签归因。</li>
+</ol>
+<hr data-page-node-id="zRAZDWaiRECzUvJoz0zWt2">
+<h2 data-page-node-id="BJ3sy1NPIS47fhhokwYiPr" id="_1"><!--pnid:YAHViRZ1xuuo0bAHeKXRDL-->附：文档自查清单</h2>
+<ul data-page-node-id="CB1eX62QAtdDBFZp48EqPF">
+<li data-page-node-id="tySKpCKKLTrgRk3QjrYDfw"><!--pnid:uJJEb7INCKzD5T6Ke43CHB-->[x] 每条建议配了可直接套用的 YAML / 部署骨架 / PromQL / 排障命令</li>
+<li data-page-node-id="XTxKx2mCgmJb2JECwRxUKj"><!--pnid:96rEfcEjkDZ8r8nyjqKfQJ-->[x] 所有默认值与 feature gate（Attach 相关 flag、RWOP、CSIStorageCapacity、VolumeGroupSnapshot 等）标注"以版本为准"</li>
+<li data-page-node-id="dJ4tIclapDY8nf663jUdPi"><!--pnid:nPujyhcxonxUQU7dsleM1M-->[x] 未提供任何未经实测的性能数字，均给出<strong data-page-node-id="2o5UbTsZwCSJzYCi1SPaFr"><!--pnid:jtVJyw9DU4hFSuTxutw0lz-->对比测量方法</strong></li>
+<li data-page-node-id="J4iV1bEHt84HNHFRDL12dg"><!--pnid:GwLot0DubzR7LMGMVOcLBA-->[x] 反模式清单含：证据 / 等级 / 修复 / 验证</li>
+<li data-page-node-id="td9p6nqRlGYH2c4EvUdbKU"><!--pnid:LnVIAwsQNU6kPIXvpfxmTc-->[x] SLO 标为建议初值，并含 RPO/RTO 与演练要求</li>
+<li data-page-node-id="e3HKmDd01OAfHyyfuVCyNT"><!--pnid:FwJzeJqrCahILghM4Nt3Nx-->[x] 变更（CSI 升级、有状态服务重建）给出分批、灰度与回滚（含数据回滚）路径</li>
+</ul></div></body></html>

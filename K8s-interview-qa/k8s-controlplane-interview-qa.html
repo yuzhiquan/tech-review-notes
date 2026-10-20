@@ -1,0 +1,1945 @@
+<!DOCTYPE html><html data-page-node-id="awGPBzwppcZpvmwSzLF91R" lang="zh-CN"><head data-page-node-id="uGogNASbyAPqftTtJAEtQH">
+<script data-page-node-id="XJACkwSWnsMOkng1f1zfiP" src="/page/page_comm/inject.js"></script><meta data-page-node-id="VepDgi3XsuppvuyWlB2nYo" charset="utf-8"><meta data-page-node-id="WOXgLqkUoadTfi9NIOnYFS" content="width=device-width, initial-scale=1" name="viewport"><title data-page-node-id="BH8SHBT8GltOo2ZgM3qAgA" data-pnid-children="qs31RXWCSAbWYzNGqRN8V5">Kubernetes 控制面面试题全解析</title><style data-page-node-id="VYvPTPjER8zONeE5BGpcFf" data-pnid-children="T4mAbzoCFRy56sV6OzcL7l">
+:root{--bg:#0f1115;--fg:#d7dae0;--muted:#8b93a1;--accent:#4aa3ff;--card:#161a21;--line:#242b36;--code:#1c222c;}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f7f8fa;--fg:#1f2329;--muted:#5b6470;--card:#ffffff;--line:#e3e7ec;--code:#f2f4f7;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px;}
+h1{font-size:30px;line-height:1.4;border-bottom:2px solid var(--accent);padding-bottom:14px;margin:0 0 8px;}
+h2{font-size:23px;margin:52px 0 16px;padding-left:12px;border-left:4px solid var(--accent);}
+h3{font-size:18px;margin:32px 0 12px;color:var(--accent);}
+p,li{margin:8px 0;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;}
+blockquote p{margin:4px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+th{background:var(--code);font-weight:600;white-space:nowrap;}
+tr:nth-child(even) td{background:rgba(127,127,127,.05);}
+code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--code);padding:16px 18px;border-radius:10px;overflow-x:auto;border:1px solid var(--line);}
+pre code{background:none;padding:0;font-size:13.5px;line-height:1.6;}
+hr{border:0;border-top:1px solid var(--line);margin:44px 0;}
+a{color:var(--accent);}
+strong{color:#ffffff;font-weight:600;}
+@media (prefers-color-scheme: light){strong{color:#0b2c52;}}
+</style></head><body data-page-node-id="fUpmk5EUBSNXxgvwbwa7E1"><div data-page-node-id="9aVtms6dP9lKldIIoEiqVQ" class="wrap"><h1 data-page-node-id="yb9lKGXYYPGocNGzjDHJc4" id="kubernetes-apiserver-etcd-controller-manager-kube-proxy"><!--pnid:AxtG0Lpfu3rY9qGh2TzFzh-->Kubernetes 控制面面试题全解析：apiserver × etcd × controller-manager × kube-proxy</h1>
+<blockquote data-page-node-id="TxM623xDN3zCnfh7dVTzD5">
+<p data-page-node-id="qhruIlwR4jzu5iA8xWMxym"><!--pnid:TSqNLSQKgMUnsjsNHRvxlU-->适用角色：SRE / 云原生运维 / 平台工程师面试（社招 3 年起 + 偏高阶）
+姊妹篇：《Scheduler 篇》《Kubelet 篇》《网络 / CNI 篇》
+版本约定：以 <strong data-page-node-id="e4qyrH21FCleRDVfA2ojkt"><!--pnid:MdGEH4PzIarwmQz3J2Farw-->1.28 ~ 1.31 主线</strong><!--pnid:pJZDnTeeR6xlJAxXSI1kRk-->为准；凡涉及默认值、feature gate、GA/Beta 状态、flag 名称的地方，一律标注"以所用版本 <code data-page-node-id="6y4ENm07lqGnWVxChgAq7L" data-pnid-children="fmfbG7zlSRmCf40HuogxR2">--help</code><!--pnid:hGKzl4hKFBWQvTdrk9oX9p--> 与官方 Release Notes 为准"。</p>
+</blockquote>
+<hr data-page-node-id="ZpgKEuTkA0Wgm979fxrWZU">
+<h2 data-page-node-id="AW6xDasczUvwuXWkI0k11X" id="0"><!--pnid:HViFJNXSrr3pDoRsU2Y7OV-->0. 使用说明</h2>
+<h3 data-page-node-id="4FV3gwfm3ibFJpX9GBM9Nm" id="01"><!--pnid:iYQqV5AQjWPONyBiYPgfOl-->0.1 控制面四件套的职责速览</h3>
+<table data-page-node-id="tQKgQTOGcsXqUf2LNLsts8">
+<thead data-page-node-id="wddpu59hCmQeVlWCpTEJJQ">
+<tr data-page-node-id="vUDHTXCq0xYslionMc2TyS">
+<th data-page-node-id="e5OHr2SDbnAGOin4xoyOhZ"><!--pnid:afDsQVzFDEv0zEkzmLwSha-->组件</th>
+<th data-page-node-id="o8gQvKo8kYi6GbtnUAQkMn"><!--pnid:qma4jj0ZCVMUuTdaETAupg-->一句话职责</th>
+<th data-page-node-id="FVGwskZyKfzCnSLxVGsJ6H"><!--pnid:KgX015gHQIfiaJryBVjy5I-->是否有状态</th>
+<th data-page-node-id="8XLfNLZTuDoUVozVPNCnCm"><!--pnid:lpyR6UVfraLT75b2xX2Lqy-->是否选主</th>
+</tr>
+</thead>
+<tbody data-page-node-id="fZ5al9choKXt46nmIOPr4j">
+<tr data-page-node-id="HY2gfNXStQ0EFdNm43oob7">
+<td data-page-node-id="vzm4Cp2iLNGq2diqZH5R3E"><strong data-page-node-id="G2Lp7sjr8jHpqAuOAKddvq"><!--pnid:oG2aQ3RJjjuDqUUGl7eg36-->kube-apiserver</strong></td>
+<td data-page-node-id="NRP0dokNEvsmVkVhr7TZ0E"><!--pnid:MmCP7v0JT8Ue0ucKqqJPKU-->集群唯一的 API 入口：认证/授权/准入/校验/审计 + 读写 etcd</td>
+<td data-page-node-id="Yaal4szyHV9ulDXnhaSaHv"><strong data-page-node-id="tB9GkU3u0dNqtWNmcRSKUo"><!--pnid:U74aQKkvy3DwqUyATy5q4w-->无状态</strong><!--pnid:gbZHuWvrZStzUQHFZkx9j9-->（可水平扩容）</td>
+<td data-page-node-id="UScs33Pma7mHH9i3IHYqAq"><!--pnid:NuSOzfdVS0MSljBDwmq3Oj-->否</td>
+</tr>
+<tr data-page-node-id="4dy8QorKs8TkRBAabMaG8E">
+<td data-page-node-id="vOkHdJUZciWZPwslkFUpGP"><strong data-page-node-id="08p8quMK8Bc0nsPGp3haOD"><!--pnid:DvOSgt6PKEXB3jyyamipJO-->etcd</strong></td>
+<td data-page-node-id="tUM0JOrpONWzNzPGZVnvSb"><!--pnid:gNBXHLiIZIFyZba5NvBBNL-->唯一的持久化存储（所有对象的唯一真相源）</td>
+<td data-page-node-id="s7OzRASeruep6KiVk41iyR"><strong data-page-node-id="n0kHEG2ayLh5yalDZUnl3b"><!--pnid:mEDfKg9qPq11VAHrIioHGe-->有状态</strong></td>
+<td data-page-node-id="sExh5aXcWbcnkCi4RGvnex"><!--pnid:dtpK4RLVfZFJZmqZFRSZd9-->是（Raft leader）</td>
+</tr>
+<tr data-page-node-id="FOpuQVnGgqeXWx7RZddOHy">
+<td data-page-node-id="MKiBT0MwZQgcjILDsAuPLo"><strong data-page-node-id="DAGN9GWWAnlVP0Af1FWYFZ"><!--pnid:MI04bqEaGxRyB5voTsiOUZ-->kube-controller-manager</strong></td>
+<td data-page-node-id="1shVJ3GeHooUFwtU3M5Rgl"><!--pnid:zrcNFtyu9eLFZwUVi0tYdL-->跑各种控制器，让"实际状态"收敛到"期望状态"</td>
+<td data-page-node-id="6i9gNffB7qi4xuuwXKa7dk"><!--pnid:O77qDNjsygxZnPQMipFRLA-->基本无状态（依赖 apiserver）</td>
+<td data-page-node-id="bL2MLKpQXxRXB3ktXISiPV"><strong data-page-node-id="Y4djg76nHdU5nCeAdvx7mI"><!--pnid:EWzUzAJJ0Spn2RwhAapbFD-->是</strong><!--pnid:Tr8RZ1KIVT0wgn5cbOtKwD-->（Lease）</td>
+</tr>
+<tr data-page-node-id="YI1b4s75NOCO0SZ8kKziKD">
+<td data-page-node-id="zMWYGo7QhmIY6drJuDSRR4"><strong data-page-node-id="6sHPThPRDFqueTkw3ExVBr"><!--pnid:EaE6M9yjL1rvgA0ZPZgz9A-->kube-scheduler</strong></td>
+<td data-page-node-id="Zjl0lSmAfdGJOJLAcIrxu1"><!--pnid:CT39hBMXXvWullvghG8bvM-->给未绑定 Pod 选节点</td>
+<td data-page-node-id="Yfv9WBsYvqbMV7ZbHgVOgg"><!--pnid:jTvgrNAcOFqNNKwIuutpu8-->无状态</td>
+<td data-page-node-id="eY5bjcUSYxBmMGlLiDpjQs"><!--pnid:Qn7Zi3DBbSAapp2M7ZGz27-->是（Lease）</td>
+</tr>
+<tr data-page-node-id="sHg5J4MZyj3mnktueGDL0U">
+<td data-page-node-id="g5UHrC627kSa4nsANDKa4y"><strong data-page-node-id="6zJA193Bq5QHami8JBE2I9"><!--pnid:GGLBk6ShFjFruPUPJ1hqjL-->kube-proxy</strong></td>
+<td data-page-node-id="l30b3h2sxFeM9Ew9xM1T1x"><!--pnid:VDlVlaYizCvMdDf0oJp6SU-->节点数据面：把 Service/EndpointSlice 翻译成转发规则</td>
+<td data-page-node-id="HDtC1eTkaDC03zYiZ10Ok8"><!--pnid:MppQ6CHT7JxhjCDxHynSCI-->无状态</td>
+<td data-page-node-id="LALkI3gc6mCpKV6jhnz2AI"><!--pnid:Vx4H5SQPUzbSyIPIqr8ggd-->否</td>
+</tr>
+<tr data-page-node-id="GRhKNZN2a0l23FGdkk42P8">
+<td data-page-node-id="Bh7WICoHuoUGdpJiYAcw8m"><strong data-page-node-id="OS5uADTKG5nxV1VUQJeiTL"><!--pnid:uyrPIg87isV8JouwAgJLFZ-->cloud-controller-manager</strong></td>
+<td data-page-node-id="gADyetCBy8wsJHuA8OCUgR"><!--pnid:BeKZuGpdNwUFU4UgIgrkKf-->云厂商相关逻辑（节点生命周期/LB/路由）</td>
+<td data-page-node-id="0rWsZkhZUuLmehcaESuKSL"><!--pnid:trCWwUAaYygxeef05l5KST-->无状态</td>
+<td data-page-node-id="x6L2d6imMgwwmIEs7qtzZd"><!--pnid:WBjGKRJpBUFUukbpucwiRY-->是（通常）</td>
+</tr>
+</tbody>
+</table>
+<h3 data-page-node-id="Fxd7GCbtf3ocgIb9uSEJjO" id="02"><!--pnid:kzwwIrP4FD5q2o1Q3FED1B-->0.2 常用端口清单（面试高频，容易混）</h3>
+<table data-page-node-id="d9fDIIz4t7K4nbno4rlA6A">
+<thead data-page-node-id="dGBCItlEby7OE11xlpzUrW">
+<tr data-page-node-id="aDfGHLA8hP48jjBH4stG0U">
+<th data-page-node-id="0VvVNmVtj5fhKMvgFCZ5qT"><!--pnid:iammOj2ejiBTLRCaeCtdfT-->组件</th>
+<th data-page-node-id="gKVddYtjL7yY8OEqDIO32j"><!--pnid:jeUGxCZbibHpSX9I0PamPE-->端口</th>
+<th data-page-node-id="Wm5wqEKLyoliHFikWRbUKJ"><!--pnid:Y6EOMx9bbsOY0tCPSDUWm0-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="sBzg1NcqMwZyYoTzol6QqR">
+<tr data-page-node-id="8Jn5VJyrz5Q8p5Fhh71Pvb">
+<td data-page-node-id="F1TBiyQ38H79ndr0EHIHXd"><!--pnid:OqAPyFquAmcpU9HflxG0zi-->kube-apiserver</td>
+<td data-page-node-id="uRoNHhh0NNsv9Q2iohxRGG"><strong data-page-node-id="cAGwvgXTfPDn6Hj4NSHUFb"><!--pnid:QxdX8sUVPYc3AHmjxmLiDu-->6443</strong><!--pnid:RPpXm9H0V27n7IPyo42bdW-->（默认 secure port）</td>
+<td data-page-node-id="5U8OG7TYF5LJ2YgGAxzhWy"><!--pnid:QSkjRALxKGdYItRoJ8lMAu-->API + <code data-page-node-id="7RrkUmvmn9amCgVD2QoDiA" data-pnid-children="L0kQDOFrENeUQeyWfp8ux5">/healthz</code> <code data-page-node-id="xIQctrBoNjzB7XxYnTuEMz" data-pnid-children="kVa54J0tPVOUbabbIxewH3">/readyz</code> <code data-page-node-id="ka0TtapTKoqWMiH1ejYky8" data-pnid-children="3imGM0JQCu9c6D8UdvhjgN">/livez</code> <code data-page-node-id="cnhJrrwmT4zsYvHiR4WgVh" data-pnid-children="O4AZcMiMWMynb9zBXXpf8S">/metrics</code></td>
+</tr>
+<tr data-page-node-id="NiXrS5XcXVXLaHpDp80RRB">
+<td data-page-node-id="M5ASdMy7piESKqUihihTUx"><!--pnid:MXZPZl42N4s6ygOu7J4o1p-->kubelet</td>
+<td data-page-node-id="iHCScsDLXrdAMyjpwUdF2H"><strong data-page-node-id="dCHQdS5NG8vTFWqSF3OOVD"><!--pnid:YSLYsbzrJgCVubZBF1LnNp-->10250</strong><!--pnid:asD63FCYrFOcsC3UATQHxJ--> API、<strong data-page-node-id="mmo3hQ6kb8L7iK4KNgS6nw"><!--pnid:WJ24xZdt6umyQg6LZ8gyAg-->10248</strong><!--pnid:jAVfTOxdPbz8LFEOV0Hdn8--> healthz、10255 read-only（应关闭）</td>
+<td data-page-node-id="JD2KeJNYwTjlGuGaNvsZ3T"><!--pnid:hs5wrLQRmJyZ6vtzQiKZCX-->见 Kubelet 篇</td>
+</tr>
+<tr data-page-node-id="8GSqv2nvxXpzJez7O2Boic">
+<td data-page-node-id="0bQB6jwMMCJj4jS5s28pKl"><!--pnid:TY6X8k6m086ruHvzGJt5fc-->kube-scheduler</td>
+<td data-page-node-id="ykbpml6XBKCm5W6fCPyn5y"><!--pnid:30RZZpu9wIDojQfwddUdfP-->10259</td>
+<td data-page-node-id="Vl77bcsB4N50qmuVakL9i1"><!--pnid:QTTBA7ArJ2z765H4Qf1xYT-->healthz + metrics（HTTPS）</td>
+</tr>
+<tr data-page-node-id="DjdzZ0CV4RKPPq0BzaHsg0">
+<td data-page-node-id="wGN1EhsB60wn9sZ9JBvKcp"><!--pnid:8q4qqnrEfywnBq4JmC82JV-->kube-controller-manager</td>
+<td data-page-node-id="vN4mbgER7RC6m0uIcN94zx"><!--pnid:QqoGV48bAFkEVpLYmyvvwU-->10257</td>
+<td data-page-node-id="l0k0q3xYqLQ5AFRXOctge7"><!--pnid:OeUEL4dEjh6Jyn3rv8KfdN-->healthz + metrics（HTTPS）</td>
+</tr>
+<tr data-page-node-id="j2o7ETtPjhUopZ3HZCt3aM">
+<td data-page-node-id="R1bZrJlOG0HLF4NSJHG30q"><!--pnid:vePXIfE1OHxPBx8fcuSbFW-->kube-proxy</td>
+<td data-page-node-id="rgG6r2sHJY7bfsyCOrbDAJ"><strong data-page-node-id="OVzmSJEaeuUtKD2z94XTmS"><!--pnid:yg3iWCvXEN3SFbHbXUg7Vi-->10249</strong><!--pnid:eppJqxC6WtMnU3VyagCjwZ--> metrics、<strong data-page-node-id="YGIcLws24fZCRu2j2DgagD"><!--pnid:5uJh000diSV0wQPlg1XbFM-->10256</strong><!--pnid:y7SkqSQIINjyAg32dAUppO--> healthz</td>
+<td data-page-node-id="ytL8imQaJXwWGn7r2uNi2F"><!--pnid:71JellPEFQPnc5jslCvNuc-->端口可能因版本/参数而变，请核对</td>
+</tr>
+<tr data-page-node-id="rz3j0GyK7GAb6cxJnGPXtl">
+<td data-page-node-id="SZD4j5QFpRqnGy2Z9dDod2"><!--pnid:nSTfGeBkvY9uEotNpdN1Zq-->etcd</td>
+<td data-page-node-id="blmdS4gGCZLDuhp8uX5D4u"><!--pnid:yT04S3hQB6huoc9ZYghOVG-->2379 client、<strong data-page-node-id="WszHg8ovI9qhUDo4U1clv5"><!--pnid:K8Y02I1UfuEaI3A0dsVljt-->2380 peer</strong></td>
+<td data-page-node-id="IH1w4ztyaopMrF3vTwaMzJ"><!--pnid:7VIDKt5SojgTsn6mxDBkZE-->客户端 / 集群内部通信</td>
+</tr>
+<tr data-page-node-id="uP089rThait1lxspEGOiLE">
+<td data-page-node-id="2I2t0MylT80RyR9ZfPeBUi"><!--pnid:xtXx5Yriei61doNTgN6ffV-->kube-controller-manager</td>
+<td data-page-node-id="6AdPsfMNL6hbW6lRgVfaNf"><!--pnid:A6vT58VZ7m5rYZhAU3Ctr2-->10252 / kube-scheduler 10251</td>
+<td data-page-node-id="uGT6b9KQdOOsSwCo8L1UDe"><!--pnid:w70yXf8Hbh7j6UwSHMB5rZ-->已废弃的 insecure 端口</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="82x5LjIIjfAaBb7iurdvWG">
+<p data-page-node-id="Q5rrlQdWOKOLx43u5Jk9tw"><strong data-page-node-id="XjIMgSS7hLeWs997DABZST"><!--pnid:FzcJtyXG7s0c5RrIbtL3GG-->提示</strong><!--pnid:D9Dpf5FTegfFtMAv5LtDMy-->：端口表最适合在面试开始时主动交代，能立刻体现"干过"。</p>
+</blockquote>
+<h3 data-page-node-id="5QJI92KP8WPeQglHc6JOeq" id="03"><!--pnid:eRsbT7tG0zZpt1dFxz06m7-->0.3 数值约定</h3>
+<ul data-page-node-id="jOaKxjEjzVyEoAgAZ2RHTX">
+<li data-page-node-id="mRxqmNYpwB1VxHYDjHmWeh"><strong data-page-node-id="KHedeXlKT5p0F6FjQ5kxMV"><!--pnid:zqDl0Zp2JCexUPjer1KTgs-->源码/官方默认值</strong><!--pnid:nzJfHQDdUfBgvi1vcZWVD8-->：标注字段，提示现场核对；</li>
+<li data-page-node-id="UDUim2wl0xyfoLQiiJa2vj"><strong data-page-node-id="6T91lEryMitalywgDhupUM"><!--pnid:8pJqQtCGKQ0o2vNgqKpzz8-->建议值</strong><!--pnid:GQ2W0I62sxnd8TchSgKuNW-->：标为 <em data-page-node-id="wITmprXUaVqCVGVuxaznE3"><!--pnid:KAGmHZBJkQlYHJVW0nibwN-->建议</em><!--pnid:EviYiZFDt4ImUI3G78iZUE-->，必须压测校准；</li>
+<li data-page-node-id="Rk8z5BtjgWtAL78L6pgSiq"><strong data-page-node-id="V3Kx3adqI71rVEwKbQ4cFg"><!--pnid:zK2renRw09L8Ky9NDjdscc-->实测值</strong><!--pnid:DUNeySDiTTty1UGO3bK4Sy-->：本文档不提供任何未经实测的性能数字，一律给出<strong data-page-node-id="uJPkGXbax4dcNKktKMNNuL"><!--pnid:OaNOIMGqedHrRz1AGps4hu-->测量方法</strong><!--pnid:MmMtQ3YNifNVfxLgUa8k39-->。</li>
+</ul>
+<hr data-page-node-id="uDTWYljMrrxFe5uZl2TDrU">
+<h1 data-page-node-id="W7Ju3tKfggDOVANkNgcCNQ" id="part-a-kube-apiserver-15"><!--pnid:5J05HFUlPZ4Vcpq0D7N8UE-->Part A · kube-apiserver 原理篇（15 题）</h1>
+<h2 data-page-node-id="53SAoAsoCYed0TzFHr0j68" id="a1-kubectl-apiserver"><!--pnid:TF3qaxwegXDP9UE4bwAfwS-->A1. 一次 kubectl 请求，在 apiserver 里到底走过哪些关卡？</h2>
+<blockquote data-page-node-id="dx5moQeGAgvtI0IdNbAvCl">
+<p data-page-node-id="sFMXQ0X5zBybZLOFOih0x5"><!--pnid:pyYRxpRD5vAcAcYK7nBhda-->kubectl apply → 走的是：<strong data-page-node-id="NmgukqbxVh22ZrI28l7tAC"><!--pnid:NWSaxZ78NVhMIWyovi5n6C-->认证 → 审计 → 模拟 → 授权 → 准入 → 校验 → 存储(etcd)</strong><!--pnid:WCvuMxpyUTi8ygTrZMielc-->。</p>
+</blockquote>
+<pre data-page-node-id="XiQZO9iBN82Uyhe56BMIyR"><code data-page-node-id="Kqkvv7XRrsfFOFnVeqfsTV" data-pnid-children="PJNTrbJTGbMo1u9zMOCj3p">kubectl apply pod.yaml
+  │
+  ▼ ① HTTP/TLS 建立，APF（优先级与公平性）先决定是否接纳/排队
+  ▼ ② RequestInfo 解析（verb/resource/subresource/namespace/group/version）
+  ▼ ③ MaxInFlight 限流 + 非长连接请求超时
+  ▼ ④ CORS
+  ▼ ⑤ Authentication（认证：你是谁）
+        X509 客户端证书 / ServiceAccount Token / OIDC / Webhook / TokenRequest / RequestHeader(aggregation)
+  ▼ ⑥ Audit（记录审计日志；未通过认证也会记录失败）
+  ▼ ⑦ Impersonation（模拟：有 impersonate 权限时可伪装成别人）
+  ▼ ⑧ Authorization（授权：你能不能做）
+        RBAC / Node / Webhook / AlwaysAllow(默认禁止用于生产开放)
+  ▼ ⑨ Admission（准入：改内容 + 放不放行）
+        MutatingAdmissionWebhook → 校验 → ValidatingAdmissionWebhook
+        内置：NamespaceLifecycle, LimitRanger, ServiceAccount, ResourceQuota,
+              NodeRestriction, PodSecurity, Priority, DefaultStorageClass,
+              DefaultTolerationSeconds, TaintNodesByCondition, StorageObjectInUseProtection,
+              CertificateApproval/Signing/SubjectRestriction, EventRateLimit, OwnerReferencesPermissionEnforcement...
+  ▼ ⑩ Validation（字段级校验 + OpenAPI schema；CRD 走 structural schema + pruning）
+  ▼ ⑪ REST Storage → etcd（write 走 MVCC + resourceVersion 乐观锁）
+  ▼ ⑫ 返回响应；审计记录结束
+</code></pre>
+<blockquote data-page-node-id="TYJHswqi0t81P7TDlP0Q4U">
+<p data-page-node-id="sXmQcFODGUassAFpIbIxFx"><strong data-page-node-id="BRkES0MkeY6kGLooKJi3R3"><!--pnid:aFSSue7dI7G7vUcGPva89z-->必答</strong><!--pnid:7n41YDQMjkuZx3hyarcmjt-->：这条 handler chain 的构造在 apiserver 源码的 <code data-page-node-id="Kwbin5LQry0THGLDSBC03J" data-pnid-children="TdiPPdLGVGJAxIhs1fxvzj">DefaultBuildHandlerChain</code><!--pnid:zhllKfTwm8CU1xGGOAPB0h--> 里，<strong data-page-node-id="hHwDVtMALJVzPnYKPgmE6T"><!--pnid:7JP6uI1bz2IzL5uMmzx6tt-->具体包裹顺序请对照所用版本源码</strong><!--pnid:LtqTXsLWuA6nuf6pot44oY-->（这块每年都微调）。面试时说出"认证→审计→授权→准入→存储"的主线 + 提到"审计在授权之前，所以被拒绝的请求也会被记录"就很专业。</p>
+</blockquote>
+<h2 data-page-node-id="8SakUKVfv69BmuvkdSqGjO" id="a2"><!--pnid:QagruG5ltYQHMHvny2MpK8-->A2. 认证有哪些方式？生产上怎么配？</h2>
+<table data-page-node-id="bYr2wpj8Me9RPcX9Y9W0F0">
+<thead data-page-node-id="QB4I9pFapPtCevAwdRw241">
+<tr data-page-node-id="vDsluGCpddz6RJPYLgn08B">
+<th data-page-node-id="hFjaCVlBznnjh4ekcDT3Rr"><!--pnid:0JLroMEFo8Qcn3YCJ90n26-->方式</th>
+<th data-page-node-id="WOmLlqv5Buz673IXbncI47"><!--pnid:9GRBffzvd1n5uo77Jy1Soz-->适用</th>
+<th data-page-node-id="Ux9MOFa6BOyk2cqZJwonWq"><!--pnid:gsDq4nz3xaE8Jgk5WDjmHs-->备注</th>
+</tr>
+</thead>
+<tbody data-page-node-id="PultSXjPEkDZGQAmB5kpUx">
+<tr data-page-node-id="xiMXFntQQjWgsJidBqKeB4">
+<td data-page-node-id="mVlJp7Ey4i3RCCwUKGOPVH"><strong data-page-node-id="D3z3siT8jbDjxhrrN4dUna"><!--pnid:BPhQSIsBuO0cmSztGQqBvd-->X509 客户端证书</strong></td>
+<td data-page-node-id="XO64FtArym9Jr3SLzeuF0L"><!--pnid:3tc84CBy8L4EYFqyC2MNm9-->管控组件（scheduler/controller-manager/kubelet）、管理员</td>
+<td data-page-node-id="1UpuwTp5xQWxx87rRtmN2P"><!--pnid:dmElrlBcTy1M4REwVVtbAH-->CN=用户名，O=组</td>
+</tr>
+<tr data-page-node-id="Gsp727oS6x6WS2iQCWagAW">
+<td data-page-node-id="yM3j6YIP3tk5LB9hvsg78n"><strong data-page-node-id="VYcFExUBRfdZu1eotUmAjG"><!--pnid:lbUUxYqgZTyV2BPC0Z8PW1-->ServiceAccount Token</strong><!--pnid:pUHs0hoDvOFbvcnotRniBR-->（推荐 <strong data-page-node-id="vgakmKKIGHFkZt55bxHWRw"><!--pnid:KwGZZZwIjSAbGzbVE41kCH-->Bound/Projected Token</strong><!--pnid:Ai7Ca9rTMjQdiv5UAloKKS-->）</td>
+<td data-page-node-id="TBYphZfzwjF0CgANW2eXOD"><!--pnid:cT2joV0Ey0w9fY5GzZy697-->Pod 内访问 API</td>
+<td data-page-node-id="mNHgF0DVz6v3XMCaL8Z9U2"><!--pnid:0CFzpq58S8TNDaPAYcSr4G-->老版 Secret token <strong data-page-node-id="jE02lHzrukWyJp3FDzVgUW"><!--pnid:ajwnjfCrUAA6BNOgvCof46-->永不过期且有泄露风险</strong><!--pnid:y7B1yyWtl9odsOipKAkyNO-->，优先用 TokenRequest 短期 token</td>
+</tr>
+<tr data-page-node-id="K16FtRBz6XbAj8stBb6ioh">
+<td data-page-node-id="QxJpnUObVtW5iaRcsesRhX"><strong data-page-node-id="vIi7t3dlc8fWwXA2FDZIdw"><!--pnid:SUprlHPvB2P6ndmIQsfFuh-->OIDC</strong></td>
+<td data-page-node-id="whZd8cWOhUYhfLp7jthOB6"><!--pnid:oq0W6d3oQS2s4Gmg9hWuOk-->企业身份打通</td>
+<td data-page-node-id="BLfNfyxJ77N4q5wYxsdu5h"><!--pnid:5DxPXmd7sJQkDBNBkwzvOZ-->配合 <code data-page-node-id="dfEahzWN1Sw2qwCsWsybJ1" data-pnid-children="jD1f6MSTuGfsE4KEERoB8X">--oidc-*</code><!--pnid:Vbm8WABbAVcMe4qHfH4skl--> 参数</td>
+</tr>
+<tr data-page-node-id="Psb22QPAtDyMTlAiukPCY2">
+<td data-page-node-id="CN4H7aZfqlDBNQ2YG1UE1q"><strong data-page-node-id="J5xyOn5PRNxzZy6x6DRep4"><!--pnid:TPQN140oymckR8NnSZqTMb-->Webhook Token</strong></td>
+<td data-page-node-id="sXGvDCLcdD1aWHem5mXAcE"><!--pnid:8yhxwTdkShjyibQXPMlKVv-->外部认证系统</td>
+<td data-page-node-id="zQRPmp06FYjJWAJiBJTkkM"><!--pnid:9qDxDAidkQAhvMFCAoQFjn-->注意超时与失败即拒绝</td>
+</tr>
+<tr data-page-node-id="VxHt7iIsxHrFzdmyh1QxKS">
+<td data-page-node-id="DcoQQkelfsITEcqyzEeSzp"><strong data-page-node-id="tZ3c8N9m5OReES8tjaRlra"><!--pnid:X0L0NpjoqKHvPC1PY16CFT-->Bootstrap Token</strong></td>
+<td data-page-node-id="Ahr1MlfqjYe4zVgytVtb5G"><!--pnid:vmWJrMRe7gDSHB7j2DI0PI-->节点加入集群</td>
+<td data-page-node-id="MPq886T18ujHwRujMGqcUh"><!--pnid:lSYTNqqdivhtn3BMBglCIk-->仅用于 bootstrap 阶段</td>
+</tr>
+<tr data-page-node-id="6r2roGRVnQVojR5mIeOVCv">
+<td data-page-node-id="YtW6zUeCiEJ8c8w4buLBEX"><strong data-page-node-id="zfNSbFfGzSy9a0LNDlPYN4"><!--pnid:zTjrau1NK9QEaFY17NZlIv-->RequestHeader（认证代理）</strong></td>
+<td data-page-node-id="kSuS1RIdPQBiLp0t2WcSN5"><!--pnid:P50WVvePkrhVHIKhnJYYSq-->聚合层/统一网关</td>
+<td data-page-node-id="hkYuqYhMCdHxh5IrvfFpua"><!--pnid:nLD0w0yTx8U4lx7fLz5RHb-->需要正确配置 <code data-page-node-id="KB52cT7f2sbcuBk5FqLWdt" data-pnid-children="0hy4uphUBWuGTMH7li1AF9">--requestheader-*</code><!--pnid:pGyQGWVXy5JAUB1yfb0LHU-->，否则有身份伪造风险</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="53BTJ4X62ULDixdUOKRuIC"><strong data-page-node-id="qwataR0cBsPTHWJC6RdrIG"><!--pnid:s4831xIj92FR3WybbWJOIJ-->必答要点</strong><!--pnid:LLJKNt3pgkQMsuDfWibPPi-->：
+- 多种 authenticator 是"<strong data-page-node-id="5ILNLRtHSA5ezN7byRarcy"><!--pnid:bR1zMVGbn1PZKfAGfuloCa-->或</strong><!--pnid:x0WdiNlTix1ZhC9v04vi1u-->"关系，任一通过即成功，<strong data-page-node-id="DOYi39mEXxQSwr53gH3Z1d"><!--pnid:hIcjQa9juCrpcs3EjJgWNb-->都不通过则看是否允许匿名</strong><!--pnid:58L3kWqRnGmp2mn8w6hGUK-->（生产应关闭 anonymous 对敏感资源的访问）；
+- SA token 的 audience 绑定与短期化，能显著降低凭据泄露的危害半径。</p>
+<h2 data-page-node-id="1YcFLRM6FeppZHO3tfflXi" id="a3-rbac"><!--pnid:xYJSQoomWDIQEHu4Ehohui-->A3. RBAC 的四件套和常见坑？</h2>
+<p data-page-node-id="BiG3wRDJsuT4VowaMm9T2K"><!--pnid:J8MXNyqaH5GesJ5B8sg1OA-->Role / ClusterRole / RoleBinding / ClusterRoleBinding。</p>
+<pre data-page-node-id="Bn8eWfpkbRFTgGOrVE13mp"><code data-page-node-id="LAximgcd94vroEgEyFjvat" data-pnid-children="BibiYXZMFCwPGWXAc4fQtx" class="language-yaml"># 最小权限的只读举例（不要动不动 cluster-admin）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pod-reader
+rules:
+  - apiGroups: [&quot;&quot;]
+    resources: [&quot;pods&quot;, &quot;pods/log&quot;]
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: prod
+subjects:
+  - kind: ServiceAccount
+    name: app
+    namespace: prod
+roleRef:
+  kind: ClusterRole
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+</code></pre>
+<p data-page-node-id="yuMiaubpsWjURmIWc3pJbk"><strong data-page-node-id="hM9s3K3h5V0rqEIhxKb7Dk"><!--pnid:ls5dc1N5kaSl0jTiVI3jOk-->坑清单（必答）</strong><!--pnid:5ruUyUm1cuwazTZyF8imDx-->：
+1. <strong data-page-node-id="4UAk7ksKQDpZDyRpVw0xP5"><code data-page-node-id="08FLbXDjq2IfvwUDGniwbH" data-pnid-children="MbKdvr7MknS5GXLfMH0nvW">system:masters</code><!--pnid:x6jKdvI56mLg7HR0i0QnL9--> 组等于超级用户</strong><!--pnid:haTC3M8fXzbQq45ri2vySI-->，不要给普通账号塞进这个组；
+2. <code data-page-node-id="bNUZDD9yHmtwevEQn8iOnd" data-pnid-children="P53fy5fQlygr7VW8brwP4k">verbs: ["*"]</code><!--pnid:MWA4j2ZVBEvReGOQRRIg6q--> / <code data-page-node-id="IfBoJI83YWsCFKnfgl7Utp" data-pnid-children="jF0Kd9z12pRAfNF4xPKHGw">resources: ["*"]</code><!--pnid:7bY9ygytujmY1FxvCOcLNi--> 用多了等于没做 RBAC；
+3. <strong data-page-node-id="IFp4ah5uUQP1s5NF2J6baL"><!--pnid:T2sWmDeWXybRXjAPMBqMOL-->secrets 的 get/list</strong><!--pnid:wjjdLQuJBi8S4nI6gW1Tgg--> 要格外小心（list secrets ≈ 拿到该 ns 全部凭据）；
+4. RoleBinding 可以引用 ClusterRole 但<strong data-page-node-id="EUHfrbEUzbNHpPLjTXXAa4"><!--pnid:YHaSHgwduJBB1m86biJxSR-->权限被限制在本 namespace</strong><!--pnid:kHuBJ6aXFsJLqnp5AmP8vu-->（这是常见误解）；
+5. 内置 <code data-page-node-id="EH789Ccj5k2JrxccmUwOJX" data-pnid-children="qB5XrqvfuojZdC4LZPZkX4">admin/edit/view</code><!--pnid:nkKLPKeg0BUX6IKihWMnx3--> ClusterRole 用 <code data-page-node-id="FIJEdt35ag3rriOxfDoVL9" data-pnid-children="aJwrjlnKlLzRhlj5StfH30">aggregationRule</code><!--pnid:HjmkAPRY347EPqIpRovnC0--> 自动聚合 CRD 权限。</p>
+<h2 data-page-node-id="hvV9QErWXixCgsAU086X46" id="a4-admission"><!--pnid:Eblwtbevaexzq9Bo5K98Wl-->A4. 准入控制（Admission）和普通校验的区别？</h2>
+<table data-page-node-id="hlohpFh57EkulFFAVb1zyW">
+<thead data-page-node-id="jHZzM0NfhEUYa77wuUyCcu">
+<tr data-page-node-id="o0ncbP0GmQvDxugCeIvDed">
+<th data-page-node-id="xqA0Ng0gwQneqf1uvOucS7"><!--pnid:85Eih5IcTlr52TtZdVN1I2-->维度</th>
+<th data-page-node-id="zYMVcKbC7YRi277Ux7GkDV"><!--pnid:ZP5PBwFs4yzCasHSwFCZxp-->Admission</th>
+<th data-page-node-id="JnOxcogAkhbARpLEFl5EaV"><!--pnid:YKqj6EpN2f39MHemsFrNrw-->Validation（字段校验）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="tBHAXovaHHlChLDQyTc0ql">
+<tr data-page-node-id="Ovkhgxc8arChhNbZEd23l7">
+<td data-page-node-id="QrCbQAkiT6WMDw4OM74WUL"><!--pnid:tqV3PNwGn0DSJruAS121Gl-->时机</td>
+<td data-page-node-id="ySrbOg4xHgyzL0s6X5QJxy"><!--pnid:1Bv6Ilhy59XEkoStDu73rt-->校验<strong data-page-node-id="xCPaGOx7vQAiJyCukHHVTV"><!--pnid:pBIdlosFgGFodVZ3PUCDW8-->之前</strong><!--pnid:ldUa24lohrqaOReHrE1Dih-->（mutating 会改对象）</td>
+<td data-page-node-id="EjVfqyQXoHlr07kSIuTZrm"><!--pnid:pciZ4dkesmtEFgdgHymP3H-->准入之后、写库之前</td>
+</tr>
+<tr data-page-node-id="aXujt7SQQhGuJFP3mgumZH">
+<td data-page-node-id="LibDfb4Mr5s8isami03zd8"><!--pnid:XpOHCcW9NL7h0N2qPnQDgG-->能否修改对象</td>
+<td data-page-node-id="SWfVLNWs7lSrBxs1Tcv00P"><!--pnid:pMKzaJ5L2W3lxbJKqBrh8z-->Mutating 可以（如注入 sidecar、给默认值）</td>
+<td data-page-node-id="pDUuaeByfkRzsYS6cuuWOb"><!--pnid:l8PhCZPQy35GV3JOD3LQlu-->不可以</td>
+</tr>
+<tr data-page-node-id="R6vdmdCZNQG9pAkfxbkk6c">
+<td data-page-node-id="wTvg8kCs6lu1GZPDuC28rN"><!--pnid:5Am7YKnnlaVCtoB2eATlCP-->扩展性</td>
+<td data-page-node-id="BmDcDkdW4Hbxkz2NLEpr5R"><!--pnid:JW0rorFWDRNbIUFtYM4MCO-->Admission Webhook / 内置插件</td>
+<td data-page-node-id="bnLI0wQBCSVQ1po3hgstaf"><!--pnid:w1G1nmHw3J98pnI0F6lK0g-->OpenAPI schema / CEL 校验（CRD）</td>
+</tr>
+<tr data-page-node-id="aFPu5DCEhOREbG8ovfTQQO">
+<td data-page-node-id="MMjRG7Y08SKCWFZexe6APC"><!--pnid:TKqO3BLhmWbWhOnIkIR8uR-->典型用途</td>
+<td data-page-node-id="TGpdMF8VFJPKGC6svq9Zpn"><!--pnid:LCtIe2gMzinWFEq0YbQiuT-->PodSecurity、ResourceQuota、LimitRanger、默认 StorageClass、自动 sidecar</td>
+<td data-page-node-id="zSHlK7n18KdrP28zAH2BvO"><!--pnid:k8126JZrlfA7bRsLkOSbNX-->字段合法性、枚举、结构裁剪</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="3pIqOeuLKAVzJZ0YaHjmDh"><strong data-page-node-id="ZRGMZGWtDiS4JvZA5Lc7ew"><!--pnid:EW5fQqMZ4DnwEz1a9Y8xtT-->Webhook 的生产风险（必答）</strong><!--pnid:eNaJqffBsGDOvTupnLPSB6-->：
+- <code data-page-node-id="peUdiCcNlvqK18ZmwVDnx9" data-pnid-children="E0xXyw8I4gLzL9JG9YwR3S">failurePolicy: Fail</code><!--pnid:V1bMa46lIaWeAl9wKFewWo--> ⇒ webhook 挂了会<strong data-page-node-id="yOO9WiFKtDeZdQ2XyecEwv"><!--pnid:YDCFel2ypC0BILJidJoDRk-->阻断全集群变更操作</strong><!--pnid:nAoo7jTL9G6gv6HphJmA71-->（严重时连 Pod 都创建不了）。缓解手段：给 webhook 加 <code data-page-node-id="8G8EXMQ1o5t2XntQDQZZFk" data-pnid-children="r1NE7jQG8TSRyUm8Mm29Mb">namespaceSelector</code><!--pnid:T6a7qQtuqIbAkBS95AZJzI--> 缩小作用域 + 排除 kube-system + 多副本跨故障域 + 设置短超时。
+- <code data-page-node-id="g4ZMpsD1YkEpcPSz2trwFn" data-pnid-children="Ovc5oq0wx6K0kgc2U806IT">sideEffects</code><!--pnid:A1lKjDgjqDYL6EmUEgS4Fd--> / <code data-page-node-id="tJ8V0pz3riHgyOGZ5e8yp6" data-pnid-children="m9vhCP9ct8QQLDus87Czzc">reinvocationPolicy</code><!--pnid:jo4ZqewSqO8EruRgQD4ex0--> / <code data-page-node-id="MMWFL5uCVnlqaWGug5Kj6r" data-pnid-children="SQFBspevGLkJpH5woLDM6v">matchPolicy</code><!--pnid:k7vcT2hdoPwvttPLFIvLey--> 都要理解清楚。</p>
+<pre data-page-node-id="n2UBmqK5D0YVBjYDjumN9q"><code data-page-node-id="umbiE8Gg6NlaLtYOoV0Rcw" data-pnid-children="uckAKLsrMbsmvWtSTqIIlG" class="language-yaml">apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: my-policy
+webhooks:
+  - name: policy.example.com
+    admissionReviewVersions: [&quot;v1&quot;]
+    sideEffects: None
+    failurePolicy: Fail            # 想清楚：Fail 有全局风险
+    timeoutSeconds: 3              # 建议：短超时，别拖垮 apiserver
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [&quot;kube-system&quot;]  # 关键：给系统命名空间留后门
+    rules:
+      - operations: [&quot;CREATE&quot;, &quot;UPDATE&quot;]
+        apiGroups: [&quot;apps&quot;]
+        apiVersions: [&quot;v1&quot;]
+        resources: [&quot;deployments&quot;]
+    clientConfig:
+      service:
+        name: policy-webhook
+        namespace: policy-system
+        path: /validate
+</code></pre>
+<h2 data-page-node-id="EggWNLtyiIuuVJN0IgDBrg" id="a5"><!--pnid:fJ38xsV0RIjDeDkujQZ4C3-->A5. 审计日志怎么配置？有什么副作用？</h2>
+<p data-page-node-id="yASUHPCkjxDsDaleuIjBz9"><!--pnid:srPeg6SFcDSskDb7noNVEI-->四个 level：</p>
+<table data-page-node-id="NjcfqBwLaWg1pPK1rX7wKI">
+<thead data-page-node-id="H2CjST8fOuADGdSDVitiNF">
+<tr data-page-node-id="urmKi2BOyPQlFXEhqLiSb1">
+<th data-page-node-id="upM9VaekM6eYr7hPBimjJN"><!--pnid:3B3OwNNKhQQQ2jbG6QtuA8-->Level</th>
+<th data-page-node-id="x9yWhIfwrwGqeuvIAGRD6n"><!--pnid:gjr8VcGloTa1KCsgEWlA0T-->记录内容</th>
+<th data-page-node-id="ddvbdVjmE7HyX5vIOhcNXj"><!--pnid:lhT8wUpe4zMCscj2hza23I-->成本</th>
+</tr>
+</thead>
+<tbody data-page-node-id="UQl9nKlOjCihD8PJqzMrVb">
+<tr data-page-node-id="75xrkRrnj9DFvCDWxSzHMo">
+<td data-page-node-id="179YXJMYPt9lZTiYqfMOnU"><code data-page-node-id="2omNwt1mvSWlaGJBow8Jcq" data-pnid-children="sYF4XNp9gXvJc33ajyoOnT">None</code></td>
+<td data-page-node-id="WtmzvGtX3if1S2nUjeVQg0"><!--pnid:rNaN7wqiVCAQ9K7Zd1D3c0-->不记录</td>
+<td data-page-node-id="roeBkTxkAVYEvPKBkwW0uP"><!--pnid:jQQqNN3PmQZHhEc8Gsrh2g-->无</td>
+</tr>
+<tr data-page-node-id="LxbfEsWurBWjAVmqBLZ2xo">
+<td data-page-node-id="LIynpIC1Ia1HaSJKMDRK8m"><code data-page-node-id="ISvgBrbltwlZJE3KLecGb6" data-pnid-children="eCbrZ6mEUreIW6lUaYCFKr">Metadata</code></td>
+<td data-page-node-id="JtD4Z12JZwLa5IkathnHVB"><!--pnid:dUDDfFbQTtl5IsQmljGt0o-->请求元数据（谁、何时、什么资源、什么动作）</td>
+<td data-page-node-id="S7xMhdd8do34vHEnuwVu6i"><!--pnid:CK4ke5GZ1anSDhCxty8w4o-->低</td>
+</tr>
+<tr data-page-node-id="iC4Ytxz8Ym4IpOdtLE7GJV">
+<td data-page-node-id="TiZKveeClb2ESgYqCHfQzG"><code data-page-node-id="1WXArHMRfmx4Qu163WWGYD" data-pnid-children="PQgZ4wp2JkfA6WFwk4LBhB">Request</code></td>
+<td data-page-node-id="xI67fer42WEj5iimWWVYT2"><!--pnid:Zd41xVHg0rCu2E6KVxEbyv-->元数据 + 请求体</td>
+<td data-page-node-id="y60yksEZZz5czhu9Z0IcxU"><!--pnid:LNGPcWpm2vV0btG2TAti69-->中</td>
+</tr>
+<tr data-page-node-id="1aYAZWU8d709V9XaczFJ3T">
+<td data-page-node-id="cIdpNok15PfuWqZHHrcv9O"><code data-page-node-id="dAAezpqZA1STMufsOuT0pJ" data-pnid-children="i2FEZUFXgYCQ5bcCNhftbk">RequestResponse</code></td>
+<td data-page-node-id="EYVIWifODI6jlLKjNfiHSF"><!--pnid:aQnjmhKdt8kozR78BHPncL-->元数据 + 请求体 + 响应体</td>
+<td data-page-node-id="befOmaNvslQErZnJv1C3Dr"><strong data-page-node-id="SfH1eUGVQwYCkk1sWytpFc"><!--pnid:5XzOgp9EbXEwjT1zLhOn2t-->高</strong><!--pnid:gxherhFHXNiE61wFzn4bhL-->（切勿对 Secrets 全面开启）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="sWklrlvz0kMPj99lxkKhPt"><!--pnid:EdBzecaNGilJdELNakLKOi-->Stage：<code data-page-node-id="5eYxZ5K5R6rcQMlycuy4e2" data-pnid-children="tlzNBubGFGSXPdSVrg8xM3">RequestReceived</code><!--pnid:M3EFfGg6IjZWTI1gsHimtH--> / <code data-page-node-id="INmxcuU9jteUAHQGyasdJ8" data-pnid-children="cxCOuKPvWoPkAGGk1MJpsG">ResponseStarted</code><!--pnid:P4hzKSSQblxMaxLplfRsiz-->（长连接 watch 才有）/ <code data-page-node-id="oC0QXjM67JxvSiIPeNrwr7" data-pnid-children="vNes6WZDQnXeTrk4fUPx5R">ResponseComplete</code><!--pnid:xAiJAxXWE2Sr13S7ABEjHi--> / <code data-page-node-id="YnMvVLdAdqzvp2Ijmtezen" data-pnid-children="ZNj3zKw5PlqhVVKLhnAoal">Panic</code><!--pnid:YDQLwUicODqZzSVjVsoMm3-->。</p>
+<pre data-page-node-id="h78uSLiCJimpCuMpAPCam4"><code data-page-node-id="EcYNOkcUpfPToa98dQeqMp" data-pnid-children="KXapmUW3xmjWZKZyM6956F" class="language-yaml"># audit-policy.yaml（示意）
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  - level: Metadata
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+    resources:
+      - group: &quot;&quot;
+        resources: [&quot;*&quot;]
+  - level: RequestResponse
+    verbs: [&quot;create&quot;, &quot;update&quot;, &quot;patch&quot;, &quot;delete&quot;]
+    resources:
+      - group: &quot;&quot;
+        resources: [&quot;pods&quot;, &quot;services&quot;]
+  - level: Request
+    verbs: [&quot;create&quot;, &quot;update&quot;, &quot;delete&quot;, &quot;patch&quot;]
+    resources:
+      - group: &quot;rbac.authorization.k8s.io&quot;
+  - level: None
+    resources:
+      - group: &quot;&quot;
+        resources: [&quot;events&quot;]        # Event 量极大，通常直接关
+  - level: Request
+    verbs: [&quot;get&quot;, &quot;list&quot;, &quot;watch&quot;]
+    resources:
+      - group: &quot;&quot;
+        resources: [&quot;secrets&quot;]       # 特别注意合规与体量
+omitStages:
+  - RequestReceived
+</code></pre>
+<p data-page-node-id="ouIsKnD1oSLvTYrsJLurKn"><strong data-page-node-id="T2j0Pbg7tdLCVcsrL5vX8v"><!--pnid:Xwso1VwP2YUleX9XZ9zkyd-->结论（必答）</strong><!--pnid:vPLcyUlJUwa97pWe4M8LXe-->：审计是"合规刚需 + 性能杀手"，必须<strong data-page-node-id="5PPfn6Bw8hWNzj656r5Pmy"><!--pnid:cCFws1fm1Hf45kgIul6QtA-->按需裁剪 + 落盘/离线投递</strong><!--pnid:sQ4bZuVN8qEfp8kZT8O1Ep-->，并监控审计后端的写入失败（后端打满时会阻塞请求）。</p>
+<h2 data-page-node-id="Zii4TJGKsRDY6TOFlZ8Gqc" id="a6-resourceversionwatch"><!--pnid:HCMOYlWukmu6faBrwBdshM-->A6. resourceVersion、watch 与乐观锁是怎么回事？（控制器基础）</h2>
+<ul data-page-node-id="E1FnURGLyy5H9yk8DSRvMT">
+<li data-page-node-id="TskiOT9M3Bt1Z0Ftee6cgl"><strong data-page-node-id="jsHcegACouOYN2yVObM74X"><!--pnid:ed3lSGFsq1aLVqiMnwEIu4-->etcd 是 MVCC 存储</strong><!--pnid:6hjueO3PSNn8EPR4BRRLEA-->，每次写都会推进全局 revision；对象的 <code data-page-node-id="mVmCMjsH2d3FQhizmlgZBX" data-pnid-children="4MQUre3DSCUFWbcqW9TT21">metadata.resourceVersion</code><!--pnid:ATaSLoOkVY8MX20xlA9em1--> 就是当时的 revision。</li>
+<li data-page-node-id="ait3nWaE91hA4Ib2T0CMVw"><strong data-page-node-id="JZiQdRN2fRImrEGAO6mLO6"><!--pnid:2y7bCOrTePRmc4pMlcbtlH-->乐观并发</strong><!--pnid:rA9fHR72QkSlSypAVDcsov-->：更新对象时必须带上 resourceVersion，若期间被别人改过 ⇒ <strong data-page-node-id="3g1FYJNoZbLRYQsmrfFVRQ"><!--pnid:1J0fLEBqx9Pc25rh0nJ9wi-->409 Conflict</strong><!--pnid:AxvM6VIbNOqESQprDFmKVw-->，客户端要<strong data-page-node-id="HuMMkoUf3ftYGJX23qvQZi"><!--pnid:sEmjuhJSglROlfMp0ALsei-->重新 Get 再重试</strong><!--pnid:r6Dp50Kmt1TwDFhWXnJWMF-->（这就是 client-go/控制器里的重试逻辑源泉）。</li>
+<li data-page-node-id="6Xt4aluA6gJMh0QqRESIRl"><strong data-page-node-id="g98kh3Y4JHoSEtMFxF24Mi"><!--pnid:xNlaTpyfJZWWtZxmQ4o0na-->watch 语义</strong><!--pnid:4mvQXGwL0iMvevnVBXSDHm-->：从某个 resourceVersion 开始接收增量事件；如果请求的版本已被压缩 ⇒ 返回 <strong data-page-node-id="2G90plqLrjRohYzlYAtC01"><!--pnid:Hr30vGw3RG6iXbsbtpNpMZ-->410 Gone / "too old resource version"</strong><!--pnid:ALi1t4dFIr1uJrB13l1DHY--> ⇒ 客户端必须 <strong data-page-node-id="rtPbtME7SFiRoOB7phctkn"><!--pnid:N6WcmPXKF38yRYSOZTsf9B-->relist</strong><!--pnid:zTpuPFoJW5Ld8DcwZIcFfJ-->。</li>
+</ul>
+<p data-page-node-id="MzE1VNYp3k8P9TTfc2Ypny"><strong data-page-node-id="PcIz7KUhT14CPmdHPyOKSj"><!--pnid:dETPGiZx57oahph5KwWLC0-->list 的一致性差异（高频坑）</strong><!--pnid:gqnd7iZMVjVY0yU0SIntCX-->：</p>
+<table data-page-node-id="gMdJTejxt8OvqiB0iE5WGM">
+<thead data-page-node-id="O5OmTPBguDJXJ3YTKhWkx9">
+<tr data-page-node-id="l3j8w0t4dhyK4zSDYOEGn0">
+<th data-page-node-id="Ory7vV7QPzC8Adv8K5pNGL"><!--pnid:wyaMTo4Kh83kPas3RylP5O-->请求</th>
+<th data-page-node-id="ttMXTB8iDVaZ7vTTTLxFRM"><!--pnid:8SVX5yBmqbYR0BtV6pqVxd-->行为</th>
+</tr>
+</thead>
+<tbody data-page-node-id="oQhzAhu6VT7sxBWmGAumMk">
+<tr data-page-node-id="Fa4jD0M0jvnXhHZ5zsKL35">
+<td data-page-node-id="gMC2z7JHZb8z41YRvKq1DE"><!--pnid:FnLmGJ5fD4F1O7ApcSxICl-->不指定 resourceVersion</td>
+<td data-page-node-id="qxZpNSM5K3KKHz7O8rqaqq"><strong data-page-node-id="lhfM8DrrQjj4PqcojqwSMB"><!--pnid:ByChVjKHoodxpcHoxu9YoK-->quorum read</strong><!--pnid:qBNdgKCWO6DKORdArwre6r-->：直读 etcd，一致性最强，<strong data-page-node-id="9FJKhSZjXLufq67ncT9hSf"><!--pnid:ZVuHYZVeB8SaZTpSPcuIOq-->代价最高</strong></td>
+</tr>
+<tr data-page-node-id="CTpODZTYLNlRB07azHyINg">
+<td data-page-node-id="43RaC9Low6kyfuXjmct9VU"><code data-page-node-id="P10HzSfUsDOJPFhHktPLbT" data-pnid-children="ux4m4v0CUBkbDRP7VckIGn">resourceVersion=0</code></td>
+<td data-page-node-id="N4WZWGKTu62i2pxtccCgvj"><!--pnid:rVUAEUKcc1XYepldlX6gjv-->从 apiserver 的 <strong data-page-node-id="BTQxF5QbZJN8QYlYw4B4Pq"><!--pnid:B4k0jdVYJ1BogzoD0ekeAe-->watch cache</strong><!--pnid:eLnlgVbfcal13BCTJN7xg4--> 读，<strong data-page-node-id="wmMfEze4OlKNBJO00fj9vh"><!--pnid:45c6zoWBQRk7QVbfLDLjj5-->可能略微过期</strong><!--pnid:jIaRZgOP8i0rkMEO7lxae9-->，但非常快、对 etcd 压力小</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="JAD9LQ2DMu3kinBkS9K7vc"><code data-page-node-id="xIqOmdAfwIl7GNoJ8qDa6C" data-pnid-children="45BzBX7fTn87hRxs2GC1QX" class="language-promql"># watch cache 是否命中 / 是否频繁从头同步（按各自集群核对指标名）
+histogram_quantile(0.99, sum by (resource, le) (rate(apiserver_cache_list_duration_seconds_bucket[5m])))
+histogram_quantile(0.99, sum by (resource, le) (rate(apiserver_cache_watch_duration_seconds_bucket[5m])))
+</code></pre>
+<h2 data-page-node-id="WtApOQEXnCe71lz79A353N" id="a7-apfapi-priority-and-fairness"><!--pnid:DBLe7gcLAj7GaJoJNlzqOM-->A7. APF（API Priority and Fairness）解决什么问题？</h2>
+<p data-page-node-id="z73FZZk17aKMJk5BM83OwX"><strong data-page-node-id="7gvY7jGyyhf7UOXbBPOvl9"><!--pnid:XYBWNtez7ODjMoIG6DCCPQ-->背景</strong><!--pnid:7K9RwabtrrJ4VbpViNykRC-->：早期只有 <code data-page-node-id="oLHniMZonnJM0m2Dtkf5wc" data-pnid-children="vFf6ayuX8KBkjlnnVhBqs4">--max-requests-inflight</code><!--pnid:6PV58TSdKYxXO9154IyQKM--> 这种"总量/变重量"限流，一旦某个客户端（比如写一个死循环 list 的 controller）把限额占满，<strong data-page-node-id="6VsnkW5RVLagdM6rvHqlsm"><!--pnid:2zarILwn16tB4MAAma7g7o-->其它所有组件（含 scheduler/kubelet）全部被饿死</strong><!--pnid:MAe5bpxu78dFY7t3uCWmHV-->。</p>
+<p data-page-node-id="kLVnWBdR9qsvSPiLa5Rhmd"><strong data-page-node-id="n9xaNwCNvtiXtL5Q22GPRn"><!--pnid:6VlwNs6gOLUwK3TA5jbNVJ-->APF 的做法</strong><!--pnid:Y15tWUvZOD8vyEMnttERmP-->：把请求按 <strong data-page-node-id="cjlehW758AFOVktU3d1AMf"><!--pnid:2qMO3lfNWOGbqkAVEwzP7i-->FlowSchema</strong><!--pnid:2EElWQZyRuBTLNXkI0FKDc-->（谁/什么请求）分到 <strong data-page-node-id="0bHB3R4nKAJtuxb3PdRAZL"><!--pnid:aJeTJjFlGS0zMTOB5pR0Kh-->PriorityLevel</strong><!--pnid:LsNJCYpLXa3Cq2yXcWBYYz-->（优先级），每个优先级有自己的<strong data-page-node-id="l0gybdOJ42D3lBR3Ur0ZCz"><!--pnid:zbIcdozbbQjRr6PlcNXSkO-->并发份额（seats）与队列</strong><!--pnid:59k43UYvGgcfdbP9ZKKyXk-->，用类似公平排队的算法分配资源 ⇒ <strong data-page-node-id="eKJYAB5h7mk9k772xX32py"><!--pnid:7rIgz2aUKGFBoVW8ZhODQh-->关键组件不会被吵闹邻居饿死</strong><!--pnid:EIOX9aTb2fffOjqB1U4QcO-->。</p>
+<pre data-page-node-id="4eI0lDgS8dGWKyKYj6b3uB"><code data-page-node-id="B3ZobGCU3tGE0T6Pzr5xbk" data-pnid-children="qInSGXA5y3ZvlJ57LrDkWI" class="language-yaml"># 给&quot;控制面关键组件&quot;单独保障（示意，字段请按版本核对）
+apiVersion: flowcontrol.apiserver.k8s.io/v1
+kind: PriorityLevelConfiguration
+metadata:
+  name: leader-election
+spec:
+  type: Limited
+  limited:
+    assuredConcurrencyShares: 10
+    limitResponse:
+      type: Queue
+      queuing:
+        queueLengthLimit: 50
+        handSize: 5
+        queues: 16
+---
+apiVersion: flowcontrol.apiserver.k8s.io/v1
+kind: FlowSchema
+metadata:
+  name: system-leader-election
+spec:
+  priorityLevelConfiguration:
+    name: leader-election
+  matchingPrecedence: 100
+  distinguisherMethod:
+    type: ByUser
+  rules:
+    - resourceRules:
+        - apiGroups: [&quot;coordination.k8s.io&quot;]
+          resources: [&quot;leases&quot;]
+          verbs: [&quot;get&quot;, &quot;update&quot;]
+      subjects:
+        - kind: Group
+          group:
+            name: system:masters
+</code></pre>
+<p data-page-node-id="DiXNlu712e4K1351SNvHoU"><strong data-page-node-id="iRV7GLL2BupJ8OnmMU6jny"><!--pnid:bjB3bdOlNnOsrh2ylo3Rsd-->生产实践</strong><!--pnid:D0OiXdxJ1spMuE17k2WUhB-->：至少给 <strong data-page-node-id="eNi5OEk5wnK4HfHclMzPxQ"><!--pnid:MfAiIb46ukdld1ahdaLvmr-->kubelet / scheduler / controller-manager / leader election / 系统探针</strong><!--pnid:Yy98jtPPQ91Q2w7L8gLPNe--> 保留专用优先级；并对"全集群 list 类请求"单独降优先级限流。</p>
+<pre data-page-node-id="i3Ui2TUXVsPTYnlL2qaIUp"><code data-page-node-id="PZNd3PERPscd82rw3G3p0S" data-pnid-children="DGzpnuExs3sJgnplUoRTpv" class="language-promql"># APF 排队与拒绝情况
+sum by (priority_level) (apiserver_flowcontrol_current_inqueue_requests)
+sum by (priority_level) (rate(apiserver_flowcontrol_rejected_requests_total[5m]))
+sum(rate(apiserver_flowcontrol_dispatched_requests_total[5m]))
+</code></pre>
+<h2 data-page-node-id="fL8YmVLEZEA574aV9UNhkX" id="a8-apiserver"><!--pnid:nbBJGEwoa9ex3pFwdM14hR-->A8. apiserver 是无状态的吗？那它怎么扩容和高可用？</h2>
+<p data-page-node-id="JpVO8VRHnLp1WIVXBurMOY"><strong data-page-node-id="KXQ5y43H3Z1hXXYlpyUbAn"><!--pnid:abBlorqZJ5AyUZo3pZNHyn-->是的，apiserver 无状态</strong><!--pnid:ukWfChv4i57ZIbHmHO3FXk-->（状态全在 etcd）：
+- 可以跑 N 个副本，前面挂负载均衡；
+- 不需要 leader election；
+- <strong data-page-node-id="I9gYN0qy8vyd6hN8Qz84q9"><!--pnid:QrRzKNPC9lAmnlbjqr3ftU-->滚动升级/重启一个副本</strong><!--pnid:ZnvWF8xVB2C7VD00m7knSU-->不会影响其它副本（但要保证 LB 健康检查把它摘出去）。</p>
+<p data-page-node-id="XVHroWS9Upn1h7oLyTzZoE"><strong data-page-node-id="M4hbKwLoIf5kugLwJymDIw"><!--pnid:q7wEUEoXTMOByhLNYhf6BL-->高可用要点</strong><!--pnid:GgeZizUOsq3UalBHnuDAQe-->：
+| 要点 | 说明 |
+|---|---|
+| LB 健康检查 | 用 <code data-page-node-id="pMZi6CWoElA62P3ku03hah" data-pnid-children="FAgaEPIycvRNF4lUuvjuKK">/readyz</code><!--pnid:3CmEcOO7LU0sZbn2DUM0Vq-->（而不是 <code data-page-node-id="Ubqg8oSvGYY5w5H1ukkImX" data-pnid-children="GZYqV3LxGZ0jxBQ1oLgjdv">/healthz</code><!--pnid:PXn7G4sLcnZ3Vdrvx7exZh-->），并且要理解 <code data-page-node-id="dVKrieSgjBkVrSRnunTWbV" data-pnid-children="sKKdhRqRoTmX1pop3gzzTJ">--shutdown-delay-duration</code><!--pnid:FvJgMTnOwlf9rqvqPYh5Vb--> 之类的优雅退出机制 |
+| 副本跨故障域 | 至少跨 3 个可用区/机架 |
+| <strong data-page-node-id="Aaau4OLvQhGPcVAHkpYRur"><!--pnid:s5vajtpvYY1q5yWLWfulnv-->watch fan-out</strong><!--pnid:evKZlKCIMKHdj2uNNvSwfD--> | 副本越多，watch 连接分散越均匀；但 etcd 侧 watch 数是 "副本数 × watch 数" |
+| etcd 是真正的瓶颈 | apiserver 扩容解决不了 etcd 慢 |</p>
+<h2 data-page-node-id="Wfk7QmPEvCXJYRcFXHG1Rn" id="a9-watch-cache"><!--pnid:4ThvHYehQJZ8hPIkNcQENv-->A9. watch cache 是什么？为什么要按资源调？</h2>
+<p data-page-node-id="D7UEGpHyfwnqVWt5EA8if1"><!--pnid:eOW8n1ut48NSzjR1Zw3keE-->apiserver 在每个实例内维护了 etcd 的 <strong data-page-node-id="TmI8w0RTXjmj7LFA49aB79"><!--pnid:vgyolnkgAUZ6MWOYjxZJmK-->watch cache</strong><!--pnid:s6EOtkrdR6P8RoN0QMBqNH-->（资源的内存视图），服务 List/Watch 请求，从而<strong data-page-node-id="TeVZKk7KQLcvBwupKD8EBt"><!--pnid:5B0lli6t1VcsCfEsi4xNo6-->避免每个 list 都打到 etcd</strong><!--pnid:DNw1ooE4LbE0bZNf1VOaFv-->。</p>
+<p data-page-node-id="qn62URCPEwmtkphhRpHPYc"><strong data-page-node-id="CPywUzhOYaV8pvXq0HYxwo"><!--pnid:3xD9mLlTMNaGxwStS0e12c-->调优点</strong><!--pnid:FkTllSDqbkqlDqYfXDWnPf-->：不同类型资源的热点差别很大：</p>
+<pre data-page-node-id="6J9UWZOvoHQm7m2uswcvdA"><code data-page-node-id="66AVfJJCIhicmuqTfxwXlI" data-pnid-children="rizVYxQTls8GY6DGjkFV4l" class="language-bash"># 给热点资源更大的缓存（示意；默认值与 hot wallet 以版本为准）
+--watch-cache-sizes=pods#1000,endpointslices#1000,configmaps#500,secrets#500,nodes#500
+--default-watch-cache-size=100
+</code></pre>
+<p data-page-node-id="IFEMEyqJU6U0MgqE5tGmPH"><strong data-page-node-id="x4VdenQdECwLaIhQVYQDVm"><!--pnid:lcxK1IQlqUFgXAuokN8kwY-->风险</strong><!--pnid:DqZuV6ZLb6LZzmuLq3yhmP-->：watch cache 太大会吃内存；太小会频繁回退到 etcd 造成延迟抖动。<strong data-page-node-id="E0YcuF4Sokyk7rUzhhsvK8"><!--pnid:94AOZqo6UlVl6f82QcvCBv-->一定要结合 <code data-page-node-id="P0HpBUiNbaFQyA7EZ0n7qc" data-pnid-children="sC6edB3hjM7ZRn4eGGozBX">apiserver_cache_*</code><!--pnid:bR654TivcV3ICWG7OnwCNq--> 指标与内存实测来调</strong><!--pnid:IKrTelXZgcaCQP386DjVFJ-->（各资源的默认值请按版本核对）。</p>
+<h2 data-page-node-id="KhK7DxiFh0vWtxEssHR2KU" id="a10-event"><!--pnid:ESwgZyQvGP1IT1x9svDeGG-->A10. Event 洪水怎么办？</h2>
+<p data-page-node-id="fonL0oFNDjiSq8ZTahoXct"><!--pnid:AZOHONCFozt8cfxyiiqI0S-->Event 是"高频创建 + 高频覆盖"的对象，历史上常把 etcd 打爆。</p>
+<p data-page-node-id="DvhBqbstxsSwcVedOVYLLi"><strong data-page-node-id="7XlkjA2yiQZod3Fk7a9eWd"><!--pnid:6LD90v04pOCoNUNWTXhhGm-->治理</strong><!--pnid:g09WbtQggNXUEtKfeilFqC-->：
+1. <strong data-page-node-id="5LNNEbDXTNeJ7jl0QEbM9o"><!--pnid:d407fCd8SNEDVM5GkrMfSJ-->缩短 Event 保留</strong><!--pnid:0Q5AXhw6i7lEiMOWhfvI1u-->：<code data-page-node-id="N2kpn5zNYGHuoAtRHZnOi1" data-pnid-children="lPA8BBzSh1O390gzhiYPey">--event-ttl</code><!--pnid:SiI89tiUY9bZw8zeWErPhf-->（默认通常 1h，<strong data-page-node-id="3dZenna18OUZv72ASAjbFN"><!--pnid:eEIRFG7XoQazWSHkB6Oydk-->请核对你的版本</strong><!--pnid:v1gym4rPPG20RJZD2TgtAd-->）；
+2. <strong data-page-node-id="wBDCE8N7Y2nw7IHlLv4iAs"><!--pnid:xKVfNwi5B1XNOhPSvqKqXZ-->EventRateLimit 准入插件</strong><!--pnid:KNjfgh5f9fDLLvESF0LEJO-->限速（按 namespace/user/server 维度）；
+3. 把 events 拆到<strong data-page-node-id="N213BqK6we2EoMXB9fqyfx"><!--pnid:KPPUt6o57Jm02tEEkoIIX8-->独立 etcd 集群</strong><!--pnid:RwYI6PviEBP48cUjCmBrLD-->：<code data-page-node-id="P0rIP8VxmggMqZjDK78Y3m" data-pnid-children="avGHqbB0vyxxv3dxijKujd">--etcd-servers-overrides=/events#https://etcd-events:2379</code><!--pnid:Fa8zyGoscvFjVgxRYQOVlD-->（大集群常用手段）；
+4. 治理根因：别让控制器疯狂写 Event（如 Pending Pod 洪水）。</p>
+<pre data-page-node-id="tJbAYPO0zVxr48rMjOdkgn"><code data-page-node-id="RglykCS0puSCzYBdgjthgX" data-pnid-children="SMtR5uatjRLKFvmLwPzvox" class="language-promql">sum(rate(apiserver_request_total{resource=&quot;events&quot;,verb=~&quot;create|patch|update&quot;}[5m]))
+</code></pre>
+<h2 data-page-node-id="xS2bk8u7KTrMNxcP34sJKb" id="a11-secret"><!--pnid:Qt8beMqAweLKKEU8E8LTeE-->A11. Secret 静态加密怎么做？</h2>
+<pre data-page-node-id="vxlcJjLfxuofcorqY3Ijhp"><code data-page-node-id="gVRgK3qAqjFQWERX93lqWO" data-pnid-children="rzBvwqymUyW5DEMFHZ8vFP" class="language-yaml"># encryption-config.yaml（示意，请按版本核对 apiVersion 与 provider 语法）
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources: [&quot;secrets&quot;]
+    providers:
+      - kms:
+          name: my-kms-plugin
+          endpoint: unix:///var/run/kmsplugin/socket.sock
+          cachesize: 1000
+          timeout: 3s
+      - aescbc:
+          keys:
+            - name: key1
+              secret: &lt;base64-32bytes&gt;
+      - identity: {}      # 兜底：没有 key 时明文
+</code></pre>
+<pre data-page-node-id="PF2BJYM7WdXHea4u0UYMy7"><code data-page-node-id="qDdGc5dvcONu8V13kfYc6c" data-pnid-children="BAuLTaHRvtREytQvEW654d" class="language-bash">kube-apiserver --encryption-provider-config=/etc/kubernetes/encryption-config.yaml
+</code></pre>
+<p data-page-node-id="C0GeNZSUM5vBjiKvtCS6iH"><strong data-page-node-id="FmBLl7hCVW3kQwfEd6FrYI"><!--pnid:wXcbBDCGEd9PcMlkMxetCs-->必答</strong><!--pnid:inqvshttOajAVJDdKS1TT3-->：
+- Secret 落盘加密不等于运行时安全，<strong data-page-node-id="DWAMgl1oAo2fXO17alvDPZ"><!--pnid:h6boityKGZAG3sOD3FpnHi-->RBAC 才是第一道防线</strong><!--pnid:0CF8FUlX1UT7lbGSVDvsQ4-->；
+- 密钥轮换要走"双 key 并存 → 重新写一遍（rewrite）—— <code data-page-node-id="X8SkCYOtCuJRNawaMaeZ5f" data-pnid-children="3wtzy9GHJhNz7hhzDY6nVE">kubectl get secrets --all-namespaces -o json | kubectl replace -f -</code><!--pnid:Ij1cvs5vpK2K2jNQu2zVvM--> → 移除旧 key"的流程，且必须在维护窗口执行并先备份；
+- KMS provider 挂了会直接导致 apiserver 无法读取 secrets（<strong data-page-node-id="TCTzECBdOmmI45cHOBr4sw"><!--pnid:jkWbylhDNo4PjwqbBrdLA1-->强依赖风险</strong><!--pnid:IbbLgDU3FR9e6CajFCE4Ir-->）。</p>
+<h2 data-page-node-id="PW42BpaAAZ5660wJBIkQcl" id="a12-aggregated-api-apiservice"><!--pnid:t13RDyBmaMEfe1lLesFSBE-->A12. 聚合层（Aggregated API / APIService）是干什么的？</h2>
+<p data-page-node-id="3WDwiyhHUa6yOmYP8EHcOq"><!--pnid:pnyKpnAu3Ii9O3XVOlQgmC-->让第三方提供的 API（如 metrics-server 的 <code data-page-node-id="PNJ5vkCJr98B7dSc5anvFE" data-pnid-children="2REqshVAj41BHcKe8xoRU0">metrics.k8s.io</code><!--pnid:t0dkMY5l593Ixa9VnAKZne-->、自定义 AA）<strong data-page-node-id="ZfV8D7Uujg9fuy00wYU675"><!--pnid:JEMHjSFoFNgVYCgTmDYqVc--> kubectl 起来像原生资源</strong><!--pnid:NQsnBSvHr1FWDACvm8xIRA-->。</p>
+<pre data-page-node-id="Azx8fkRUAeXc8ToDkIX2ao"><code data-page-node-id="j2gXyQpbkXJFt3fKIx5FhG" data-pnid-children="SmMwlhpE3KXtY70tlrcqAl">kubectl get --raw /apis/metrics.k8s.io/v1beta1/nodes
+   → apiserver 的 kube-aggregator 依据 APIService 对象代理到后端 Service
+</code></pre>
+<p data-page-node-id="mBEau9ldkobGEEWnSPyygb"><strong data-page-node-id="QLNJruVcjZXqQO8JNF8Eze"><!--pnid:ujDqdTx7CsG2WDDQupUmiY-->必答</strong><!--pnid:UyzeVcn4PMVvC0xbPs35pm-->：
+- 聚合层依赖 <strong data-page-node-id="S1VlI0t49zDBDRsjtEduvq"><!--pnid:O1R7SILi3flYmUf2jZk91D-->RequestHeader 认证</strong><!--pnid:sgdcMTz1GPhzPic9gHlg4h-->，配置不当会有<strong data-page-node-id="HtSLpgxwgFNyph7gNKMEsf"><!--pnid:eELmxuajVVgvSEfFFO5ZtG-->身份伪造风险</strong><!--pnid:t3orEZu5XL1VSGqP1VMKBO-->；
+- AA 后端挂了会导致该 API 不可用甚至影响 discovery/聚合 OpenAPI，要配 <code data-page-node-id="s8tDeO2z3Sxrr0QDKkylNB" data-pnid-children="qf32a5JeqH5hC9eajQ2WR1">--enable-aggregator-routing</code><!--pnid:iENBRmvwK3zNJTSz9k4u6L--> 与后端高可用。</p>
+<h2 data-page-node-id="RD4e5WvG8hvie8ef5zxQiR" id="a13-crd-vs-aggregated-api-server"><!--pnid:h7HvihyDdHATrAbqAtu2Bj-->A13. CRD vs Aggregated API server 怎么选？</h2>
+<table data-page-node-id="CQRuNMPLbswxurpfhwG4A7">
+<thead data-page-node-id="nzfbJeMkKjM7jp4FkKO7gk">
+<tr data-page-node-id="6NXESL9SK1KDV1RT2AdvzN">
+<th data-page-node-id="kfWlbknc2kcthhv5ggyvFt"><!--pnid:Cvum7c1VPhxklrDrCesU9W-->维度</th>
+<th data-page-node-id="YVwgBSYyKeKkiOqCtr2lio"><!--pnid:OjNNfrdZ502XyamsgUPGBi-->CRD</th>
+<th data-page-node-id="2zt3sYUO5Kzb0kXdJebeqU"><!--pnid:O0nqgbnzrKc6WM2XR0qiP8-->Aggregated API（AA）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="9ncnszBJJW1bLkBcxVqhNu">
+<tr data-page-node-id="K39cYjcJxmw7Q4RRfELWBT">
+<td data-page-node-id="U5UWfe7xtKeDQuTLhFWK7o"><!--pnid:KjcTig2Bd1yLkz9PwnzGfM-->实现成本</td>
+<td data-page-node-id="ODgOt9zBGuFwBoG0R8O1f7"><!--pnid:2wHisfxADE3JiTYhMn8Zg4-->低（YAML 即可）</td>
+<td data-page-node-id="4HEAM3aYWfIsH5sRdLDy2n"><!--pnid:z7soaWGE4XNsmGmKsc4QmI-->高（要写 Go server）</td>
+</tr>
+<tr data-page-node-id="zCqsILm8dIJWXeq3v8zIEl">
+<td data-page-node-id="z8G35uKEwFKFH4xHEmBacg"><!--pnid:BaMSBBJFYMKfTUcrSbX4iy-->存储</td>
+<td data-page-node-id="DkdwsWnobA8w69x2KxXsqs"><!--pnid:Cxn0SdYRKFUB3d4lkEHlHg-->走主 etcd</td>
+<td data-page-node-id="n5L6H9v0lyTipHgzLTV8v4"><!--pnid:K4jLelTglg4CVHAzcHisUr-->可自定义存储（甚至外部系统）</td>
+</tr>
+<tr data-page-node-id="L5UTsHNpjYbPK2bOtcFD6D">
+<td data-page-node-id="IsjJXyLZtYKytbRtOQvQJ1"><!--pnid:U6hPiOikMAjMxJQvc8lWFG-->校验表达力</td>
+<td data-page-node-id="x7GY6kwLF0PvPBO5VnuAXU"><!--pnid:zdNzR5bcGUTCqcLwtxrdhX-->OpenAPI + <strong data-page-node-id="YBTxhAiGUIhiAk6kvLR8oD"><!--pnid:RVWscsm24z4pGqKUFKfEsI-->CEL</strong><!--pnid:ZGKbhZSi13YtvcruS8ovh3-->（新版本）</td>
+<td data-page-node-id="nQnSNhx4ldVfFemUxS3gLg"><!--pnid:wZaAfd2OoUUbIDQQUs0bmQ-->任意复杂逻辑</td>
+</tr>
+<tr data-page-node-id="wra7VxtpUrqXN02CZsyWxx">
+<td data-page-node-id="WVzlkcNyt3blieF6d40zZb"><!--pnid:gjjCgZw5Nbd8sdq7jJNTE5-->支持 subresource/协议</td>
+<td data-page-node-id="Ebx1UXnGZajPPJGpgJ6gJq"><!--pnid:1Z80iM1bsJB2o3Op8gyBpP-->有限（status/scale 等有支持）</td>
+<td data-page-node-id="UWm08zACpxHZngB0Olcc5Q"><!--pnid:WtTTKeeAEflDr7yMlTcKQ3-->完整</td>
+</tr>
+<tr data-page-node-id="T7qnGjJWZuCBgfdUqMVzRQ">
+<td data-page-node-id="jMdRkndIIokcFNKad6Xh6p"><!--pnid:5hiod4AOgfJfDisJdRJziO-->适合</td>
+<td data-page-node-id="q8AScq6DhOlVjWKyrrND46"><!--pnid:xGiJCFPAJXXObe61wKOlzC-->大多数场景</td>
+<td data-page-node-id="PBpQvn5DV406cCN5EK7u29"><!--pnid:8dLpuPt7z8fbmPNugvR8vU-->metrics-server 这类、需外部存储的场合</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="8yY3wlFbNTEucgVNBZzBPB" id="a14-apiserver"><!--pnid:onTpknNq04wHKdEh8OSdsY-->A14. apiserver 的常见慢请求根因？</h2>
+<table data-page-node-id="88tfksFNQ2MNe5sjFzqrkR">
+<thead data-page-node-id="9XVEgNDOJzQLT551WOPive">
+<tr data-page-node-id="YjmIjesj9CNjpfp6fIqy0I">
+<th data-page-node-id="fyjNE759PMg5klgOL97Fzi"><!--pnid:FFwXpljupQpXX0KZNxkVhs-->现象</th>
+<th data-page-node-id="aLRLXsO63PhXzO05yCrwDO"><!--pnid:Px9oPSPdWqIi4BYs1BHjAv-->常见根因</th>
+<th data-page-node-id="L3cpEYcYLG0t2G1kY4R5ac"><!--pnid:8wr3BcIIz9noYZZeqVMoCc-->证据</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ExcWArUdKWWgzYm1wQs6tM">
+<tr data-page-node-id="Kidmc2L0x2TKBbrjXnR3DZ">
+<td data-page-node-id="lkVLDMX3sAHwuPOPtkbcTR"><!--pnid:wZm0D39eeIFTLbVOc554nj-->write 慢</td>
+<td data-page-node-id="hoDGppG8VeZa6EXbv4iKVV"><!--pnid:WDeAnBVEPBkqHwu10I8ONR-->etcd 提交延迟（WAL fsync）</td>
+<td data-page-node-id="T2d5pRXvuS44cuEjDyN9Om"><code data-page-node-id="b950kID6dj5UN5w8GUpktL" data-pnid-children="s8xWH5Rjnb4hp13x30hB17">etcd_disk_wal_fsync_duration_seconds</code></td>
+</tr>
+<tr data-page-node-id="VfZlF5WygPiZhy0PHinW2y">
+<td data-page-node-id="B0C8w7LO7a5FHTsDk8AnqL"><!--pnid:tRS4tNyqaTkRLbJZ3L3xzF-->list 慢</td>
+<td data-page-node-id="QdIdU8CPfMcp1axofZzC3Z"><!--pnid:XqJFI5rHGOi1ybp3yCzEm9-->没用 watch cache / 全量 list / 无 selector</td>
+<td data-page-node-id="ms3mygE4RmFpsW3hqYo0hV"><code data-page-node-id="hgw9W8UCtoarX3Z8tjLE6s" data-pnid-children="Ld65Kebanui5g7FJ9c5zHg">apiserver_cache_*</code><!--pnid:8BmUUYJlBUZNr2f5VMSFDC-->、request size、对象数量</td>
+</tr>
+<tr data-page-node-id="lTynvFSy4HbzkcBawTKHJO">
+<td data-page-node-id="PjoB9wfGeJVpwY5Z9py4tE"><!--pnid:LPYtIhm3qQGacVz9HcH7hY-->watch 断/重试</td>
+<td data-page-node-id="1VDsXxWhA9qaOHmqiYq8hn"><!--pnid:bH6JhskNClnOU91TtP9Muu-->RV 被压缩 ⇒ 410</td>
+<td data-page-node-id="TsmHfqSeFm70ClajEuHcU7"><!--pnid:X6GZANLNfYl8pr1cln2WqB-->客户端日志 "too old resource version"</td>
+</tr>
+<tr data-page-node-id="cBC3uf4tDxRq14VYj4AVMa">
+<td data-page-node-id="22t8wE50qj1NCxuGNFC51k"><!--pnid:SN6W0WM2QF27mFdPaufvPQ-->偶发 429/排队</td>
+<td data-page-node-id="lk9Vejuz6ygv7XIu0u822t"><!--pnid:BZ0M16IxVfsthukw4bOYo9-->APF 队列满</td>
+<td data-page-node-id="KWNFi2YuXPLaTSnZkNggvq"><code data-page-node-id="UMQ2GeRub2zAcaruugtGLU" data-pnid-children="9Ervf8uXZvuwPdJK20ri2a">apiserver_flowcontrol_*</code></td>
+</tr>
+<tr data-page-node-id="9DzxlVXrenNcetiorLMkn0">
+<td data-page-node-id="7nxaM8dnR5p51GYY2S9nwi"><!--pnid:5gqyu3tKrpULy5iYF2fill-->特定资源慢</td>
+<td data-page-node-id="6XYFhg6A6gEmnKnrPb5Qdc"><!--pnid:5cKuSrq4gGzL2emDu6haJv-->Webhook 慢或 Fail</td>
+<td data-page-node-id="lVxepraBYrkGrkpppDnBhe"><code data-page-node-id="Q49aVJTfKbbFZpSZ1VoIDI" data-pnid-children="tfMBnNtgfhrseqvaxabuCi">apiserver_admission_webhook_admission_duration_seconds</code></td>
+</tr>
+<tr data-page-node-id="4yuD7hzhe4cwQ5R94tICnh">
+<td data-page-node-id="3oWUaQGpwHIyxoFnXwP1Lz"><!--pnid:s0RVFd51868DAkxnPc32pV-->全部变慢</td>
+<td data-page-node-id="lcfCTQhO3dph9JaBExjDz5"><!--pnid:jYkl1PhLRU2KzRqy3nLvAi-->某个 controller 疯狂 list/watch</td>
+<td data-page-node-id="0flThNqmo5v9I9hAtsgZP3"><code data-page-node-id="UpS5svqTxdbfiPFl9Xueai" data-pnid-children="cszeDCjHzSlT2Wo9U2amBq">apiserver_request_duration_seconds</code><!--pnid:Fn2p4GCIJzzN5csvRiSeDh--> 按 client/user 分解</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="V29f7ty1LunZ1G0XBp9Lhg"><code data-page-node-id="6Y9WXzG8vvQQd0XgFFunrL" data-pnid-children="pIrJ4VxwpOHXe69VFK03Vf" class="language-promql"># 按资源、verb 看 P99
+histogram_quantile(0.99, sum by (resource, verb, le) (rate(apiserver_request_duration_seconds_bucket[5m])))
+# 按客户端身份找&quot;吵闹邻居&quot;
+sum by (user, resource, verb) (rate(apiserver_request_total[5m]))
+# 当前在途请求
+sum(apiserver_current_inflight_requests)
+</code></pre>
+<h2 data-page-node-id="jOXZ0Kn9OTi98M5VPz5AXN" id="a15-apiserver"><!--pnid:KW1tuc12d4St0cDBZWT60T-->A15. apiserver 的关键启动参数有哪些？（能报出来很加分）</h2>
+<pre data-page-node-id="Ajhpz7EsRD8ZgjsFjiRE3l"><code data-page-node-id="TIHhQyl1YGzTB0drNYNxFY" data-pnid-children="VWXRUHenhdzSTFEd3uq2iS" class="language-bash">--max-requests-inflight=800             # 只读类并发上限（建议值，需实测校准）
+--max-mutating-requests-inflight=200    # 变更类并发上限
+--enable-priority-and-fairness=true     # APF
+--request-timeout=60s                   # 非长连接请求超时
+--watch-cache-sizes=pods#1000
+--default-watch-cache-size=100
+--event-ttl=1h
+--audit-policy-file=/etc/kubernetes/audit.yaml
+--encryption-provider-config=/etc/kubernetes/encryption.yaml
+--profiling=false                       # 生产建议关闭
+--tls-cipher-suites=...                 # 关闭弱套件
+--feature-gates=...
+</code></pre>
+<h1 data-page-node-id="Pa7BK6mCuwZZVK6u3ehSyh" id="part-b-etcd-12"><!--pnid:C5U4uYFr8CF7uj9Xp46FoV-->Part B · etcd 篇（12 题）</h1>
+<blockquote data-page-node-id="2eqOJ1pXufC9uHP9sZanrC">
+<p data-page-node-id="K3IDzBRAjGnQzSJfsYpX82"><!--pnid:J7fpGg86pE8BwD16YOto4f-->etcd 是 K8s 唯一的持久化真相源，<strong data-page-node-id="c2ekm44E2e5pjaQNrj5sQM"><!--pnid:OhDJmdqctviETyxCNmkgc6-->它的健康状况直接等于集群的健康状况</strong><!--pnid:ev6aVX1aoo6f8pZD1SC1p2-->。</p>
+</blockquote>
+<h2 data-page-node-id="uOZZ58jKGjWGrR2rRSR1tc" id="b1-etcd"><!--pnid:uqduNf04CDVthVZTSB2aTr-->B1. etcd 的数据模型长什么样？</h2>
+<ul data-page-node-id="4erT7N89V45cil8MJkjEMR">
+<li data-page-node-id="gikEjmQZd3wL4qKWnImjKW"><strong data-page-node-id="6uvaczrUckA6dCabqj8dJw"><!--pnid:4gFkhYolqva8F9TKuLC0nJ-->MVCC + bbolt</strong><!--pnid:xDQsScnYrRO99wgfNKw1E0-->：每次写生成一个新 revision（单调递增），读可以在某个 revision 上做快照；</li>
+<li data-page-node-id="gGwYLFHNqyVVCI069rNv3I"><!--pnid:OEI2cFx3Mxq70rB7r28VCd-->key 的组织形式大致是 <code data-page-node-id="SHOSOMBdcrAbBdRhHgmuhY" data-pnid-children="SiSRwtV39xQYMfp8UrTfBU">/registry/&lt;resource&gt;/&lt;namespace&gt;/&lt;name&gt;</code><!--pnid:ikzz6lesQV1mZhoDExL79h-->（v3）；</li>
+<li data-page-node-id="O6w4awSkSZOb8FCqCsUmKz"><strong data-page-node-id="WNZAAzpuljZdf14aXRo5Wh"><code data-page-node-id="u77fTJBl9B3vYws4rP4mXm" data-pnid-children="dYVinR6aqldiIGdUUVBfxM">resourceVersion</code><!--pnid:Qm2lDmToHTYNdMUtlqvXWJ--> 本质上就是 etcd 的 revision</strong><!--pnid:439BeWslP6f4dFiH3Uxd61-->；</li>
+<li data-page-node-id="m3t7fSjuN2xFMxnlvWQwDY"><strong data-page-node-id="MPvbxTuyZz6wdPVR390wRD"><!--pnid:Cvhv2rdf8Jq1yjhBlHPP7R-->compaction（压缩）</strong><!--pnid:geD5GuOUExZjcsUrrpYKHR--> 负责删掉历史 revision；<strong data-page-node-id="7s1pUqGml7NP4bW8hWAHQ6"><!--pnid:TIg8Z5dBerooYSXkIRT8yK-->defrag（碎片整理）</strong><!--pnid:dYWAGzJaAePNsj3eV0X36M--> 负责把磁盘空间真正归还。</li>
+</ul>
+<p data-page-node-id="WCV01WF5DWSqtNamh4yy5j"><strong data-page-node-id="Y2haEcaH1LbknIs4Na7hif"><!--pnid:PlaDKs3t0uEdb5DAknDu42-->必答</strong><!--pnid:9DrvZsHDtc2MdDIpKJ9tlh-->：etcd <strong data-page-node-id="WxTOhdayv3sw7KLd36rTAm"><!--pnid:GVy5cLd4MZgfzoxyB9ckFw-->不是</strong><!--pnid:9YeYnzfAgHKixfQ7KNyJaS-->"对象数据库"，它既不理解 Kubernetes 语义，也不提供二级索引——所有过滤都在 apiserver 侧完成，这解释了为什么"不加 selector 的 list 全量请求"那么贵。</p>
+<h2 data-page-node-id="aLII2nf7Gx56I7IdDEPG1h" id="b2-raft-quorum"><!--pnid:RVSrMEljwq3lom2MbKWxo7-->B2. Raft 与 quorum：为什么必须是奇数节点？</h2>
+<table data-page-node-id="Gcmqym5ObdcVhljMVHZooJ">
+<thead data-page-node-id="bWIGgUQ3H4BHRfwCBOjEbj">
+<tr data-page-node-id="h37NAZrpg5iKy3gQIbaRKC">
+<th data-page-node-id="J7Ky88KkJtK3aOLvHh8JkI"><!--pnid:mVixbchuUMvmk3lSxKlzTv-->成员数</th>
+<th data-page-node-id="dIjek1MuSlQgdSIIoFSPfQ"><!--pnid:UuPuHMwmLrmkXYjixqBxkX-->quorum（可写所需多数）</th>
+<th data-page-node-id="XmrT53leYoafpV4GTrREFT"><!--pnid:7zaXvIBEg6z0USQYozwnU9-->可容忍故障节点数</th>
+</tr>
+</thead>
+<tbody data-page-node-id="LIdpaedwFhIMryn6CIxgLF">
+<tr data-page-node-id="1l555z1TIHc8c4kO42Rujq">
+<td data-page-node-id="1q0FKkcuwVcbltNJ2XshUn"><!--pnid:srEn3dPpQDyaOHe14K339o-->3</td>
+<td data-page-node-id="bEsVIwMGFTLG5c3QYX6FHf"><!--pnid:STHmZ4ADlZpSUPJBo5xCPq-->2</td>
+<td data-page-node-id="CzvrlQaZUAFnrUOQweFlZL"><!--pnid:KpQAVU9E1WVmhjonlF0OrV-->1</td>
+</tr>
+<tr data-page-node-id="qsVJM5hKTMNarkizTKwsy3">
+<td data-page-node-id="FfzAW9LFsbqV8WfIbkuSqq"><!--pnid:hnFSvleDGOXPwurgOVXsF1-->5</td>
+<td data-page-node-id="cBJuAanzDUlycuxogqG7e7"><!--pnid:YWHfHjTYZvLi2rk6CKJ0SK-->3</td>
+<td data-page-node-id="CBQk6GEQTtF1ub3f8h2uy3"><!--pnid:JACCNRpa5WhwCOhLuOf4k9-->2</td>
+</tr>
+<tr data-page-node-id="xswhx9u2LmMTVz8pJWZDfP">
+<td data-page-node-id="xOxYvoESMZ73YoJefgarCt"><!--pnid:M2VDlGztK4qTCqoxg0INlP-->4</td>
+<td data-page-node-id="yyg6NZDNSxCfT5R7IfX5nQ"><!--pnid:VMJ5m4qr8k8hMnzHFWDVwJ-->3</td>
+<td data-page-node-id="W2ILjZExY7ukbm65XE4DR6"><!--pnid:iCJwEwEU728V8kfTphQamF-->1（<strong data-page-node-id="kQwnDR4cUSOKpUdPu3u09k"><!--pnid:RkfNEz7cCm5Vqo1Q4kdmw9-->不划算</strong><!--pnid:imfmWyhVTJiyLbQ3NwUqgT-->）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="Mk9PV1FGoezd1pxz6WykPi"><strong data-page-node-id="CTlZmbiNriGjSrOOYaEtXc"><!--pnid:uC7XVEG0vSfLLBdzO5jX4S-->结论</strong><!--pnid:4opa46kHttiS3FY5fojWYv-->：偶数成员除了多花钱没有任何容错收益 ⇒ 用 <strong data-page-node-id="BdhH9RsWW5FDpT8eBL2Wzb"><!--pnid:mcSykubEv13koY9OFjD4el-->3（常规）/ 5（大集群或跨 AZ 要求更高）</strong><!--pnid:pSWhM7rFcoLhbSH4Fm4Vlm-->。</p>
+<p data-page-node-id="DaVpceXYWaEgHAdzSzDQpU"><strong data-page-node-id="TogddrgDTUkoUYTgfX8siZ"><!--pnid:nNdCBZrKI8di9Ra5AO7nT0-->部署要点</strong><!--pnid:ko1Y5LGrX5P93dum8X6IXc-->：
+- <strong data-page-node-id="yw9lcl4wPRK1s8PqqulBBo"><!--pnid:iTgk7hDNBQE4utPe88twx7-->leader 选举与写都要经过 leader</strong><!--pnid:VyfH8jeNcRDhuVNPf5dtLV-->，写延迟 ≈ 到 leader 的 RTT + WAL fsync；
+- <strong data-page-node-id="7hb3oDXqUJlbHq5CqYqmef"><!--pnid:lcjHAyhFZBuITj1wLItkbO-->跨地域不要做同一 etcd 集群</strong><!--pnid:hAsdu6uNa9I5VTZgjXGS4A-->（RTT 直接决定写性能），要跨地域就做多集群；
+- 同城多可用区是常见做法，但要接受"跨 AZ RTT"带来的写延迟代价，并压测；
+- <code data-page-node-id="U6dpZUrKLeA9cTwy7Gqii2" data-pnid-children="vkgM9aMRNemJ52UZoIkase">learner</code><!--pnid:QyuQDFY5r6jmDDlI96L6J7--> 成员可以让你安全地添加/预热新成员（不参与 quorum）。</p>
+<h2 data-page-node-id="Z7bxS01cOlUZfMpx59aFlq" id="b3-etcd-mvcc-database-space-exceedednospace"><!--pnid:eccu3nf0f2s6zi6epc8gKj-->B3. 最经典的 etcd 事故：<code data-page-node-id="qihzK4RsUoh2XAIUhOoZuz" data-pnid-children="VCVbn0cLzE4if5GHg9Rqq2">mvcc: database space exceeded</code><!--pnid:U8rJFdogSqNTrOlmUv9zD9-->（NOSPACE）</h2>
+<p data-page-node-id="0YmtyazvG98qfN9B8yUq73"><strong data-page-node-id="VW3MJZt3kZIuYCrmjGui2L"><!--pnid:R6exp8duiWOQPCYq7hBeoA-->现象</strong><!--pnid:NrKMHZSFuC5B8ZgzAeYHgj-->：集群突然不能写（Pod 无法创建、删除对象也失败），但读一般还能进行。</p>
+<p data-page-node-id="TpI6zOcdoxhjRegcZKm4VE"><strong data-page-node-id="Z7on70zU6zdfW4zbOWAnuh"><!--pnid:Uu4LKiZ98CrwCmGma4D0NC-->根因链</strong><!--pnid:I1HzVwhgpNmdCmTijJlcDu-->：</p>
+<pre data-page-node-id="pDtUvASDyThsDkNGV4bcEj"><code data-page-node-id="2TpPh4KHCcMNo4mTQOEIBe" data-pnid-children="S29DGBgN6Sd2IkaescHwSf">写入量大（Event/ConfigMap/频繁更新）→ 历史 revision 未及时压缩 → 达到 quota-backend-bytes → 触发 NOSPACE alarm → etcd 进入只读
+</code></pre>
+<p data-page-node-id="rqi9cn4bs0DJlZ2aDDF0PS"><strong data-page-node-id="12LJeuLSQkkGjqxlTm59ZS"><!--pnid:7oQ8WKwRDyE5xzBZrMW1uu-->处置步骤（必须记住）</strong><!--pnid:V0EuzwfSDAz3LL02zzYTCP-->：</p>
+<pre data-page-node-id="EOHH9BbVwO6DFlu5dtMY4M"><code data-page-node-id="LZ8dkyWbUbf1sbPpMaz2aY" data-pnid-children="7i2F1eDL31E26AvKd3XTXp" class="language-bash"># 1) 确认状态
+etcdctl endpoint status --write-out=table --cluster
+etcdctl alarm list
+# 2) 压缩到当前 revision
+rev=$(etcdctl endpoint status --write-out=&quot;json&quot; | python3 -c &quot;import sys,json;print(json.load(sys.stdin)[0]['status']['header']['revision'])&quot;)
+etcdctl compact &quot;$rev&quot; --physical
+# 3) 每个成员做碎片整理（会引起瞬时阻塞，逐个执行）
+etcdctl defrag --cluster
+# 4) 清除报警
+etcdctl alarm disarm
+# 5) 确认恢复
+etcdctl endpoint status --write-out=table --cluster
+</code></pre>
+<p data-page-node-id="qgi2ATKJOKVuntWcvAXn6G"><strong data-page-node-id="tihKTHEyetIklVwRmVDIfY"><!--pnid:oPsgnAE9HYMtBMyQRLYbS2-->预防</strong><!--pnid:cFiktGecqIyxMjbWq6TfNW-->：
+- 配自动压缩：<code data-page-node-id="rYzk1Dp4Hb6HTOM0Z0wtrs" data-pnid-children="kxyIaNiOdN1oKIRz0CJ2XT">--auto-compaction-mode=revision --auto-compaction-retention=1000</code><!--pnid:altgHJYoNwMCRVTXV0mJrK-->（示意值，<strong data-page-node-id="lNgV2o4j5Cg8UYaCMjv4JH"><!--pnid:KPoLdKU4joBltmhYehEJsI-->请与你所用发行版核对</strong><!--pnid:NFue3RkKWLUAAZdqvydSqN-->）；
+- 适当调大 <code data-page-node-id="NiYURpCh1cO3WQoQaccJjL" data-pnid-children="G6U2JWp5zsP7qSpdgsqdLF">--quota-backend-bytes</code><!--pnid:C8EIRfeEhqQIBPHIXqPQNI-->（etcd 默认 2GiB；K8s 集群常见设为更大值，<strong data-page-node-id="0xOmg1rexkHj1ozGfD47bl"><!--pnid:MVCVcpRlOr60t2VecIdecz-->务必先压测且注意恢复时间</strong><!--pnid:7Pt2tRWu4vr4C6rGHpD0vH-->）；
+- Event 独立集群 + <code data-page-node-id="q7BB8W0EsdaYQDZk5oNHRq" data-pnid-children="AZ6gv2nQCzi12VPXTSRwuC">--event-ttl</code><!--pnid:Rm3zYt5gRn5hncspHAyYmn-->；
+- 监控 <code data-page-node-id="h6rVnQta4gVr87YHxlSnVG" data-pnid-children="0HywJwrmK1EXymOl1C5HlW">etcd_db_total_size_in_bytes / etcd_server_quota_backend_bytes</code><!--pnid:nEkrCjpGsXGQQ0pKNHUIcm-->；
+- <strong data-page-node-id="iqymHLkVVrm12CYPOwW7XO"><!--pnid:vlXzZ005WcHJW7eu8ETdVs-->定期做 defrag 演练</strong><!--pnid:v1bSNmZ4EqUHtoEC5Dp3dO-->（这是最容易"不敢在生产执行"的操作）。</p>
+<pre data-page-node-id="46bjm2b4VJEggDGKgmRBwg"><code data-page-node-id="eBhtah1lS2ODdQ93yQSErm" data-pnid-children="283RVuZmMbRa4FeH9gpIVa" class="language-promql">etcd_db_total_size_in_bytes / etcd_server_quota_backend_bytes &gt; 0.8
+etcd_server_quota_backend_bytes
+</code></pre>
+<h2 data-page-node-id="AQGKj6rmBTDXiROiUekEpa" id="b4-etcd"><!--pnid:lub4Ftrus8skEfRP9LOZOg-->B4. etcd 的头号性能指标是什么？</h2>
+<p data-page-node-id="a07HhodaMyH2DG7dLRGft0"><strong data-page-node-id="uOmtrjF6PHZzOUaHioXqgh"><!--pnid:6lKyIl08QJDEY68uZ6lyZc-->磁盘。</strong><!--pnid:fle2kBp19qptAjYE3NO86f--> etcd 官方硬件建议的量级参考（<strong data-page-node-id="UasjJ1aBqX6KflqxBwZTMB"><!--pnid:F78JFfZ3aUhkZvUM6OnCn4-->请以 etcd 官方文档为准</strong><!--pnid:1PYIuiyWxgSOmHWQblrVwC-->）：
+- <strong data-page-node-id="mt2lJE9CKosKhhHdhNrKQk"><!--pnid:b87PSCee4aKn5mLI2wBrRX-->WAL fsync P99 应 &lt; 10ms</strong><!--pnid:0f33tb9OMtDB3Tddkp4MLQ-->；
+- <strong data-page-node-id="onapkmYlDngIFhXMUeM0uh"><!--pnid:55yfLvmsgdxdVOhgMUjWB7-->backend commit P99 应 &lt; 25ms</strong><!--pnid:FNLnHX5HOul0UQsKlw5SWA-->；
+- 典型症状：<code data-page-node-id="He3fI0fcYUeWjUpPscS6Uv" data-pnid-children="VqaupYX1d0hgvBX03QM1Yu">etcd to commit took too long</code><!--pnid:4sbyJrn3zKZgHD3ooo1NBT-->、<code data-page-node-id="WpJZcwS6sLbpNEGHQv4sOx" data-pnid-children="56yUg9jEtKGZGEqmkicWtt">apply request took too long</code><!--pnid:kv23gPvWxiCfCl39u3p5Hg-->、<code data-page-node-id="CsXzoCkM0KAUPsGbHjqodI" data-pnid-children="f4ZqWY7aEaHTo0LbNg77xR">leader heartbeat took too long</code><!--pnid:uvsztIMDlIQYphxQkG6323-->。</p>
+<pre data-page-node-id="9pkcK89wFBixwdPNq4vetP"><code data-page-node-id="DwJ2vlb1TfVMwhOfMNuy9h" data-pnid-children="3gKkDNX0H5Vgg1CVnwtA36" class="language-promql">histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))
+histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))
+# 网络 RTT（Peer 之间）
+histogram_quantile(0.99, sum by (To, le) (rate(etcd_network_peer_round_trip_time_seconds_bucket[5m])))
+# leader 变更频率（频繁切主是大忌）
+increase(etcd_server_leader_changes_seen_total[30m])
+# 慢请求/失败提议
+increase(etcd_server_slow_applies_total[10m])
+increase(etcd_server_proposals_failed_total[10m])
+rate(etcd_server_proposals_pending[1m]) &gt; 5
+</code></pre>
+<p data-page-node-id="yL2Y3Tn3h4d9diz3AFjVmM"><strong data-page-node-id="aV9lxXMV9L75tasNd8hl4C"><!--pnid:px5gD36e8GVj2Zb8qNrFMv-->必答的治理动作</strong><!--pnid:7FeIvtl6GqFYZHLnntccyf-->：NVMe SSD 独占磁盘（不要和其它 IO 密集进程共享）、网络延迟达标、不要跑在"共享/节流型"云盘上、使用独立节点不要与 workload 混部。</p>
+<h2 data-page-node-id="egBBK5l8vKocDpuYr6dniG" id="b5-k8s-etcd"><!--pnid:rjWKGMfwJKGsLSkPgSlwll-->B5. K8s 里 etcd 到底存了什么？什么不存？</h2>
+<table data-page-node-id="TKo5c7CWPzY5PthnUoUnfn">
+<thead data-page-node-id="gxZaDf5bHQxJnZYtGJasCZ">
+<tr data-page-node-id="1E1ShJxJKzlNZxDPnxJlIs">
+<th data-page-node-id="yyxuIuMcmBKZN5avG3tau2"><!--pnid:rDD7qfaYZdn9S9DKPKVa6U-->存</th>
+<th data-page-node-id="RBP5xTkDYMlz3b139umugu"><!--pnid:VwvVQ7eQPBY0nsEBd4XHLX-->不存</th>
+</tr>
+</thead>
+<tbody data-page-node-id="uJFdxN0hYOETVqKKfGTPNr">
+<tr data-page-node-id="a9zlYcaZSGwD1RAQMROKEy">
+<td data-page-node-id="gecU4pitrYd5diLQtqjPWa"><!--pnid:Ho068j2qBjHq3sFtkBNzYm-->所有 Kubernetes 对象的最新状态（Pod/Deployment/Secret/ConfigMap/Service/EndpointSlice/Node/Lease/PVC/VPC-ish CRD 等）</td>
+<td data-page-node-id="edyZrLtmEI7F8QEG0SyGOB"><strong data-page-node-id="bTgNUIIMfqIOuX0cwoFHEc"><!--pnid:kB77HkaiOMvThrrmb1QCab-->容器文件系统内容</strong><!--pnid:f5H39c1akdYRs5Ef1cQIzd-->（在节点上）</td>
+</tr>
+<tr data-page-node-id="k7qD87wp3NEfudiYYEWFxc">
+<td data-page-node-id="s9WwaAXyyZWM8cmarixq4u"><!--pnid:hhZbOsPpEIYTzIodReCzNk-->事件的当前对象（在有 TTL 的情况下会过期删除）</td>
+<td data-page-node-id="DsYnfKZ2zKE0cmXdTg5fxD"><!--pnid:h55JmCDpJMVFooNyyrfICZ-->容器日志（节点磁盘；etcd 里只有 Pod 对象）</td>
+</tr>
+<tr data-page-node-id="ONX3H9SOLVRRT0pnic7kjq">
+<td data-page-node-id="kbFsDwhRfoXgmUOVqzZ9td"><!--pnid:KUASjLFx5bKTl3QshBR4mc-->CRD 自定义对象</td>
+<td data-page-node-id="uvrBRsFodvUnzHtP1ixFXj"><!--pnid:7ecxHiRf8FRMn1Cb63Wvco-->metrics / 监控时序数据</td>
+</tr>
+<tr data-page-node-id="mFHmZ8E8oWjB10Pw5rkb8M">
+<td data-page-node-id="JCYjaYTwVBUpVp8UNNhBn9"><!--pnid:NY1mmZNpzLcklkWAQgKafe-->Lease、TokenRequest 相关状态等</td>
+<td data-page-node-id="xa0AqsLL4eAj8Cwj6DJX3B"><!--pnid:FYBqwSizPKwIs3rXjAK34m-->实际网络转发规则（节点上）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="CkObIwym34i3WujAVQAoQq"><strong data-page-node-id="kh0hCfiEFkilaRMnZDtMur"><!--pnid:rXebNIc2aYyqw4vQZ8W3LO-->必答</strong><!--pnid:A3STY04tc8L5oo6Sdj68VI-->：<strong data-page-node-id="vvdy1FFNGMwet9O7Q1FaMT"><!--pnid:Rl3hM43wpNy0vpNrXyNvBo-->etcd 里没有任何"业务数据"和"运行时数据"</strong><!--pnid:5ptcRo4dyeOEwFH63rarMx--> —— 所以"把 etcd 备份好 + 有正确的恢复流程"理论上能重建整个集群状态，但<strong data-page-node-id="6SNDZQJfHGObcOWDdfjYCM"><!--pnid:hEyH8hgzjgH8TmKAggsLaK-->节点上的容器与本地卷数据不在其中</strong><!--pnid:0QBG0L7RlLzlGL0euJNZMk-->（有状态服务要另行备份）。</p>
+<h2 data-page-node-id="QFz401R70IHU9ptDCC8TDg" id="b6-etcd-sre"><!--pnid:i7j6MvFltdiqwJ7rRRbES3-->B6. etcd 备份与恢复的标准流程？（SRE 必考）</h2>
+<p data-page-node-id="QMemZo5zJiAfnYbd9PX1Nh"><strong data-page-node-id="lKAJ5LrqVUZulnxxUngVmX"><!--pnid:NIgRq4BRsDkq4rFfZm2VKc-->备份</strong><!--pnid:91Cf4coNJrkgrqf5KeXRvB-->：</p>
+<pre data-page-node-id="V85KIGTdqh2DkluzcJ3wgL"><code data-page-node-id="Qk2qDEdek9FvwBNGBcIxf6" data-pnid-children="UYZa7eWQGmjmvORh1OfRWY" class="language-bash">ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /backup/etcd-$(date +%Y%m%d-%H%M).db
+
+# 校验快照可用性（不要等到真出事才发现备份是坏的）
+etcdctl snapshot status /backup/etcd-xxx.db --write-out=table
+</code></pre>
+<p data-page-node-id="8ECZI47FoOxUVqj2SjfCSc"><strong data-page-node-id="nfrxEUIeqvuz9LLXuaG7mz"><!--pnid:ihB0NwyBNVIBGjk40MXf6B-->恢复（示意，务必先在演练环境验证）</strong><!--pnid:vboQQOQueyPkdTfo6s465I-->：</p>
+<pre data-page-node-id="kIRjZVsrsBnE85keDsbmGn"><code data-page-node-id="nZ7nYr7mNA52EMxpURYVRz" data-pnid-children="pzWgqD8IQ0v7lktm7zprwo" class="language-bash"># 1) 停止所有 apiserver（停止写入是关键）
+# 2) 停掉 etcd 成员
+# 3) 逐成员 restore（每个成员用自己的 --name/--initial-advertise-peer-urls）
+etcdctl snapshot restore /backup/etcd-xxx.db \
+  --name etcd-1 \
+  --initial-cluster &quot;etcd-1=https://10.0.0.1:2380,etcd-2=https://10.0.0.2:2380,etcd-3=https://10.0.0.3:2380&quot; \
+  --initial-cluster-token etcd-cluster-token \
+  --initial-advertise-peer-urls https://10.0.0.1:2380 \
+  --data-dir /var/lib/etcd-restored
+# 4) 用新的 data-dir 启动 etcd
+# 5) 启动 apiserver，验证资源一致性
+# 6) 强制重启 kubelet/重建 Pod 让实际状态对账（必要时按服务逐个滚动）
+</code></pre>
+<p data-page-node-id="0cKnzArFxMx87zU1S2VfT2"><strong data-page-node-id="50Dgoj9VJVxuJ91w3eWwfS"><!--pnid:W9cSd66NyEIZNnlflLnXM5-->演练要求</strong><!--pnid:jDpPiFqkLpRpE1vRvi5MLB-->：恢复演练必须<strong data-page-node-id="cvbB3sxNVs2ycub0JyHxEg"><!--pnid:TGrNe3XKshsK4iScnrH24T-->定期执行</strong><!--pnid:mSdcl3TEZfJoXQ2J9NrJXL-->并计时（MTTR），并在演练中验证"恢复后的数据时间点是否符合 RPO 目标"。</p>
+<h2 data-page-node-id="igAgEyO3qzvfcvWB1wK9R2" id="b7-etcd-apiserver"><!--pnid:Oz1a0xT96qm3uajF876eFv-->B7. etcd 要不要和 apiserver 分开部署？</h2>
+<table data-page-node-id="njU8A8S8AIZbRyzzsxn4B0">
+<thead data-page-node-id="9ADMf0yzcnfBnnrrncAYOx">
+<tr data-page-node-id="AAvUoDTp1n1fxpaWGBAMwo">
+<th data-page-node-id="mYcogHyzrNZMZ92myJY9wC"><!--pnid:yHhxvCmSLnthblvj4YsPtc-->方案</th>
+<th data-page-node-id="oQpwRKq3R0ZmCVeipUEt76"><!--pnid:DbllvQAIZggw2nVs4zeei5-->优点</th>
+<th data-page-node-id="VnBtWLwfdNLhbdbf9nFRNS"><!--pnid:5VslQKWifsHrNwO7nlzznO-->缺点</th>
+</tr>
+</thead>
+<tbody data-page-node-id="kYfZUpyZSSbA4SKVjepV81">
+<tr data-page-node-id="kc7wUGf1enkChVmzupEZEJ">
+<td data-page-node-id="eto410QyWXHxg8AXsy6HCQ"><strong data-page-node-id="3kh8jxJZjMzIU3K90qyFUB"><!--pnid:8Hny0ndebH2o8e30a6ORxF-->同机部署</strong><!--pnid:OOb3h4B7PiOwZ8HDHoIcfz-->（kubeadm 常见）</td>
+<td data-page-node-id="m1tFzyyCnuEbIduK1rAbZY"><!--pnid:RxXdslBTtCNnq9vexP6XXF-->简单、少机器</td>
+<td data-page-node-id="jSYs9oHba2Yc0AewA2sWzy"><!--pnid:zSnTWTqehCqg8sTW2kMusr-->磁盘/网络资源竞争；大规模（&gt;~1000 节点）不推荐</td>
+</tr>
+<tr data-page-node-id="4PssfelNMok5cpSAWKRp7T">
+<td data-page-node-id="tb3hbTvKsXi1i8boa4hnwd"><strong data-page-node-id="Cfn307XQ4JuOtbhZSPWxRJ"><!--pnid:RbKSgpeqvQlxaNPRDpwDg2-->独立 etcd 集群</strong><!--pnid:ckPKLqF5EM89H4JNjN3BqF-->（推荐中大规模）</td>
+<td data-page-node-id="VvQV5fdbQboJPRluzlWnGh"><!--pnid:xbj4JT7649I5xgLydC1kZT-->资源隔离、可独立扩容/调优/备份</td>
+<td data-page-node-id="75HQluOr8pmqhf72vn4AbI"><!--pnid:XExyTijZwvxCJ7wEvXXd4F-->多一组机器与证书管理</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="MtAw2XHIKwxZr3uSxWFIoH"><strong data-page-node-id="MZDa05HimXU7cmBbFT3ljs"><!--pnid:MFZqXP0bXcNYJNejWuW3zA-->建议</strong><!--pnid:BwCxIpikN67uitOSOapj1d-->：集群规模上来或稳定性要求高时，<strong data-page-node-id="Fbk30DPNXEboNAk7VAng3n"><!--pnid:2yElcrJ3SMgZiCYV6DIcJW-->etcd 独立部署</strong><!--pnid:T3OOB2MtyLdsJfGXZW2NnR-->几乎是必选项，且管理面要能做到"先停 apiserver 再动 etcd"。</p>
+<h2 data-page-node-id="uwpOn8pmvYBkV11NOXe5dR" id="b8-defrag"><!--pnid:b7TaOTz1GtcCDgfms9nmZG-->B8. defrag 有什么风险？怎么安全地做？</h2>
+<ul data-page-node-id="7tUp9VDyORGNys07UXZPZa">
+<li data-page-node-id="q081f3jU4rvDD4m8Eu9w3c"><!--pnid:hqdEZ6JQVfj809tdTU6tC1-->defrag 会<strong data-page-node-id="5WcDIJGpJbvYnD11B5vOko"><!--pnid:PAHgGw2o89OcEdOrhwAcE3-->重建 bbolt 数据库</strong><!--pnid:Ukne4xJpvUBlDhySlkuRkD-->，期间该成员<strong data-page-node-id="Fi5jp3KGu3SWENKaDc0mJn"><!--pnid:dUlTnrziaL7TEGPepidyYF-->阻塞/拒绝请求</strong><!--pnid:WTP4iaIe34Dl1I2mSK5MnH-->（视版本），因此对 leader 执行会触发重新选主 ⇒ 抖动；</li>
+<li data-page-node-id="bCkK9J7pSrDAiCW9CMDv1s"><!--pnid:iOPGh3yhMCPSqbxd5NIdO5-->做法：<strong data-page-node-id="QHREZURsgcWpy2zuQKQMw0"><!--pnid:vuBwFb80j6J7cga95tkMmf-->逐个成员执行</strong><!--pnid:KtLmMMuWgJ3oZikHWVEkeW-->，先在 follower 上做；某些版本支持 <code data-page-node-id="ROsJdTggVEZqxKEr6Dc4ws" data-pnid-children="7VuL3pYntFP5J9ExRXXDvy">--read-only-timeout</code><!--pnid:TfT1SD04GMdd0ck0PwOePY--> / 延迟 defrag 的规则（<code data-page-node-id="iuJ4zDJWEKL39tGMtQiz33" data-pnid-children="mMagr6edVxoEpItb8bTBqX">--defrag-rule-method</code><!--pnid:AY3zutL55RFSV6bd4l9QFw-->，请核对）；</li>
+<li data-page-node-id="3YpIyQUFN5KIgF9kZnD3nJ"><!--pnid:uIBhQYAjdr3Z90Psy3agd9-->磁盘空间要足够容纳临时文件；</li>
+<li data-page-node-id="4pBJFtuJuK98NVsv6TDt4b"><!--pnid:SzD3EFxCfmvNrNRM0KYiUz-->建议在低峰 + 有回滚窗口 + 已备份的前提下执行，且<strong data-page-node-id="73CfdnUpVwghtvsL4oBs0w"><!--pnid:6Go1H4cx5cTCtSMJFgKZuF-->先在演练集群熟练</strong><!--pnid:9Bl70HOU2y7epwv2N3MOsI-->。</li>
+</ul>
+<h2 data-page-node-id="NTR0Xrb81jL0f2JSpymI8f" id="b9-tlsetcd"><!--pnid:6CKcbnV71hiQAbKK865hrc-->B9. 证书与 TLS：etcd 的一整套证书体系</h2>
+<p data-page-node-id="rEGFz7w6SQFe1z0I7sks7w"><!--pnid:aPBNda0JzlRaL2o5BW1Dob-->etcd 需要：
+- <strong data-page-node-id="igTLCKhc4RDdr2eTIaoYtf"><!--pnid:Xj4K42zbWBiP7CQT7C36Kg-->server cert</strong><!--pnid:20hEw56yYZWiUL8QyYzRX7-->（给客户端用）、<strong data-page-node-id="MqMZHujJov4zcPpikiP9HL"><!--pnid:UqwzPj8NsokhcDncUNvmB9-->peer cert</strong><!--pnid:ALtg2GTKvCCqF2gsL4Qfk7-->（成员间）、<strong data-page-node-id="keR2BF4xDq8MNxJGOZq0tn"><!--pnid:zXNsXn8OC5XT33JSYXGTBQ-->CA</strong><!--pnid:Z5Xr8gupM1efMtE1oM9jnj-->；
+- apiserver 连接 etcd 需要 client cert（<code data-page-node-id="S5h4A9aBVX8YlNEYY2uXhM" data-pnid-children="zGA2lRCLpB1L0QKfg9Q6Qa">--etcd-certfile</code><!--pnid:UY8gZKO2EtWXiAm8KEn4T2--> 等）。</p>
+<p data-page-node-id="29S8nGCF8yuWFjGNEMDMDz"><strong data-page-node-id="BioiVWgGriice12wJUvTaa"><!--pnid:cezFb4c7V8XVgPUV8CGVce-->典型事故</strong><!--pnid:3bPoOsmodSu2MbxIqhypqG-->：证书过期 ⇒ apiserver 无法连 etcd ⇒ <strong data-page-node-id="MTLzqPGXGvTQDLI7Dvb5Rt"><!--pnid:i0z1lB4r5pfJtwQlcbrZQF-->整个集群控制面不可用</strong><!--pnid:tNh8gcKLfm31SH0P3iIwGa-->。</p>
+<p data-page-node-id="By6pUdbKnckEYEsKLEYDmQ"><strong data-page-node-id="zeALNdPQd45QCAtKroPoHP"><!--pnid:uUotZu6sr1tnCMxQM8c1vo-->治理</strong><!--pnid:emLnUNSMMj6guqGJntQ0rd-->：
+- 监控证书有效期并提前告警；
+- 证书轮换必须走受控流程并在变更后验证 <code data-page-node-id="I1VASp2cDZejWPF16G8mzB" data-pnid-children="VqBU6P779hZOsinBuiyNn8">etcdctl endpoint health</code><!--pnid:QMGcCfaswW0t2I8h4qyjZy-->；
+- kubeadm/托管服务会自动处理，<strong data-page-node-id="DDdIAeRUUgRLzVvkpkVNqJ"><!--pnid:frBApj5peASpmNhNnxQ6DF-->不要手动改一半</strong></p>
+<pre data-page-node-id="9ZdAQXVEGjfmRJzNeDQBoR"><code data-page-node-id="LQxqCxa4nDNq5LqBHDF0UW" data-pnid-children="LrJAlHIfweRgZ8iSujWref" class="language-promql"># 依赖 kubelet 或自采集方式暴露的证书过期指标（指标名以实际环境为准）
+# 建议：对 /etc/kubernetes/pki/** 做定时检查并输出 gauge
+</code></pre>
+<h2 data-page-node-id="mTneg5mdhIfpwNFttylR2y" id="b10-etcd-key"><!--pnid:SVcezNdMFjzvyZkTQgAGqg-->B10. etcd 的 key 个数/对象数太多会怎样？</h2>
+<ul data-page-node-id="4Db5ESCBNNr3US1W0eMSUX">
+<li data-page-node-id="EM7Lgt51szNb58E9dF45dn"><!--pnid:bEGoZ9sI2uVLmwKAFMZhLI-->单 key 过大、单 key 个数过多都会增加 bbolt 树深度与 commit 成本；</li>
+<li data-page-node-id="tpTcRugNvZukAsojjbE5Hk"><strong data-page-node-id="xj7T4OP9xUlP9eucEkHUM1"><!--pnid:jxfNpZDHjpDGrL6Ktq3hJQ-->Pod/Event/EndpointSlice/Lease 是数量增长最快的对象</strong><!--pnid:eQdPnFbz7VRIywmxlhTmcW-->；</li>
+<li data-page-node-id="piAfu1JDXZ9SCaA6XeXMNz"><strong data-page-node-id="vkDSRjfsRySxLHMp3ordka"><!--pnid:3uDOO2FnyR0AAlEaqgnFrv-->不要往 ConfigMap/Secret 里塞大二进制</strong><!--pnid:8xD9QISmnPCZK036NAMVxt-->（会影响 watch cache、list 成本，甚至超过对象大小限制）；</li>
+<li data-page-node-id="paDQhCrPm4HU3UyrTC5dYn"><!--pnid:YiIgDbXg6nR0kzOjnS6mfX-->清理策略：删除无用 CRD 对象、控制 Event TTL、审视 Lease 数量。</li>
+</ul>
+<pre data-page-node-id="OOXJH0sP7Ivasz75mUZQps"><code data-page-node-id="qXa0tN3TOJPja10PHvce7P" data-pnid-children="GxThnIA5zLnnybgT9RfqVZ" class="language-promql"># 对象数量视图（需要 kube-state-metrics 或 apiserver 侧计数）
+apiserver_storage_objects{resource=&quot;pods&quot;}        # 指标名与可用性请按版本核对
+apiserver_storage_objects{resource=&quot;endpointslices&quot;}
+</code></pre>
+<h2 data-page-node-id="a4AXji7pdF2eTPG3S8lcRw" id="b11-etcd"><!--pnid:D4QOcZmComlXkEBmmmASxG-->B11. etcd 的成员替换/扩容怎么做？</h2>
+<pre data-page-node-id="tY0baJbRBhay2n1Btdnmlx"><code data-page-node-id="Lij4bS9k9Zz2DDAzvi5Pgf" data-pnid-children="KczjIW3CYgcs6RRb8FeFGB">加入新成员（推荐先以 learner 身份加入，等数据追平）
+   → etcdctl member add &lt;name&gt; --peer-urls=... --learner
+   → 启动新成员进程
+   → 追平后 etcdctl member promote &lt;id&gt;
+替换旧成员：加入新 → 删除旧（一次只改一个成员，改完必须确认健康）
+</code></pre>
+<p data-page-node-id="b4WbQsoDlT6qgibGjwmbwm"><strong data-page-node-id="eZMYeysaQWFNE93e5DnBRS"><!--pnid:odG3rlIeimV4YcT3cmstIK-->禁止</strong><!--pnid:pL05II9VWW5dgvrwM7ytRh-->：<strong data-page-node-id="RtsSslglTATEUx294KstDz"><!--pnid:zQmbpB3K8nZIVmjsDT2HMq-->同时改多个成员</strong><!--pnid:sEHnNph2Js9pCxHBl25bgy-->、在没有健康 quorum 的情况下操作、在没有快照的情况下做成员变更。</p>
+<h2 data-page-node-id="P7GMPYSigktnIXQWhBiYQB" id="b12-etcd"><!--pnid:5Z7gjrYontujktVOcqpqTb-->B12. etcd 常见日志报错速查？</h2>
+<table data-page-node-id="qZ1VSX34FTQBJHkQ1Di4gm">
+<thead data-page-node-id="bXmHIZYOAh4yCGoygheYI7">
+<tr data-page-node-id="C8ArNgTHCuH6uT4dBVPukc">
+<th data-page-node-id="JfTckp1khUpPDZcEuTyeQf"><!--pnid:PtkGXNeW9S21JQ8yv86mAl-->日志</th>
+<th data-page-node-id="5bTqsUKygnz58fbWzK53h9"><!--pnid:zLzK9z4mWy2SlpghWEEt2a-->含义</th>
+<th data-page-node-id="oKdJvQAa5tASyyH7cWfPCF"><!--pnid:5L1Spy8lAr3sUMT9ZgeBk7-->处置</th>
+</tr>
+</thead>
+<tbody data-page-node-id="VB8rlw93sNT7CEhQYK1NV3">
+<tr data-page-node-id="wGmiual3VyjuqfpK8MLUTC">
+<td data-page-node-id="wyFbCELtSpGdazIy1N9xkm"><code data-page-node-id="9YUSqn4csCHLJIWLWmq2zY" data-pnid-children="0AVX5UmVk3cBLvcL3dsa33">database space exceeded</code></td>
+<td data-page-node-id="poiSTsERY4JksgcMaC7Te8"><!--pnid:BKS15Cs7uAsFrrQKnFvY7a-->配额满</td>
+<td data-page-node-id="I2Ylo9S3LVniCWo4cTBo4j"><!--pnid:ZxX5dsfns34QuQ7SJoWAYX-->B3 处置流程</td>
+</tr>
+<tr data-page-node-id="IGfniv2nJyagcmXts6cAGo">
+<td data-page-node-id="oWJcoU57Jw0Noy3TXlxbpD"><code data-page-node-id="TLTXg9RE7D3zxeqeyEu14v" data-pnid-children="kNnkZX4VR4DnwqMQYdPUWa">apply request took too long</code></td>
+<td data-page-node-id="11151ENM78B5IQgT059jUF"><!--pnid:diOYX1yndxoKY2slKODzOW-->commit 慢（通常是磁盘）</td>
+<td data-page-node-id="hJhltSyCqajbhfhL9A2ReI"><!--pnid:LrbJl9ESQyx8bX6R0AAUGc-->查 fsync/commit 延迟</td>
+</tr>
+<tr data-page-node-id="T51JsjpQcl8iKYE9i7nDyJ">
+<td data-page-node-id="tZnMy6WNoT1jVm7uazi88j"><code data-page-node-id="xIMs6qXy54ueAPfO5NtY0i" data-pnid-children="14hlZpRrlyRiTQe2STsGij">leader heartbeat took too long</code></td>
+<td data-page-node-id="5KL1jIyVEJfUv0qbRjIntc"><!--pnid:Jme0mMCRhwRGThoBDvl03z-->网络或磁盘慢</td>
+<td data-page-node-id="gb2Y05gVgXeE7p3qXF1cLy"><!--pnid:YSIpxZBA2jc5iqhuYM4uDq-->查 peer RTT + fsync</td>
+</tr>
+<tr data-page-node-id="42d94igYUqjan79VgW6KuQ">
+<td data-page-node-id="gAdJpFua38JArqdGHL2g0v"><code data-page-node-id="8ZijmtoK0qjiBbYUJUNrGE" data-pnid-children="ODnKIb9a28xL1oxjfH8mkb">request timed out</code></td>
+<td data-page-node-id="GSlO3QdYSh5rblVzkh14cC"><!--pnid:8f75S9nQtLN8DAbPAhErUA-->客户端超时、集群忙</td>
+<td data-page-node-id="WzdJo3MADImgKy5d6qaetP"><!--pnid:GMpq6KtcKbYylh18d149T0-->查 in-flight 与慢请求</td>
+</tr>
+<tr data-page-node-id="HlpwPwXD2RjwuL4ZXkfwUu">
+<td data-page-node-id="mBgXp17R1kJ94ZtUBEHPJP"><code data-page-node-id="H7DcYnfTJrtdTHW0dUsomk" data-pnid-children="aoJF50G6xhUoQv9KirWB0S">etcdserver: mvcc: required revision has been compacted</code></td>
+<td data-page-node-id="BbJzNRpgdsPXCvjuYNqSU1"><!--pnid:Sq1sZCeySLsSsVhp8Ibe50-->客户端 watch 太老</td>
+<td data-page-node-id="hEXGwhKINjmU91bMHO9SMu"><!--pnid:MyVgbiJ81h2JzNgJbKGqs9-->客户端 relist；缩短 list 周期</td>
+</tr>
+<tr data-page-node-id="0zOZTkdipP1fdiekPBvvUZ">
+<td data-page-node-id="L5SLzOsguduxWIuFcPDEHF"><code data-page-node-id="8UCpzfXaMUm8nbkFudmPMW" data-pnid-children="eekZreUQxHKxnZAKqlAhzT">authentication failed, invalid peer certificate</code></td>
+<td data-page-node-id="uHGD1fE8PVxmYOJAEoOedO"><!--pnid:K0fKtTi9kEuX58GSN2CokX-->证书错/过期</td>
+<td data-page-node-id="WKexrrnQegf0JVs8G9Wnwn"><!--pnid:y2j5RzJsxFMYKZQcvKkAah-->校验证书</td>
+</tr>
+<tr data-page-node-id="9w3Ornpmg0Rn8cMN6GGuO8">
+<td data-page-node-id="ZuTb8rl9zyBSxIF0wHxkp8"><code data-page-node-id="e9hVvD1lRUBF05mL17ntcr" data-pnid-children="i1mwa9mESdXuWh5NVUA9Tq">read-only range request ... took too long</code></td>
+<td data-page-node-id="pHEqjSVGBGBz88wJvCd0VP"><!--pnid:T8z3TF2yZC1MkV1i44CHOw-->读慢（大 list / 磁盘慢）</td>
+<td data-page-node-id="UoAGkURgYsJBoCtMl1mlIF"><!--pnid:3FHgMm8ro97Hv5jF60RoNM-->优化 list + 磁盘</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="2SPeOROE8Ww9pCjJ1OqStV">
+<h1 data-page-node-id="MOccRE9fcXRzxof42ZwfbM" id="part-c-kube-controller-manager-12"><!--pnid:7cDTszsiyiiqA6SKjLOODr-->Part C · kube-controller-manager 篇（12 题）</h1>
+<h2 data-page-node-id="HYwYsl0ih3b1mIody8u8c2" id="c1"><!--pnid:28ox6DBIfynebOanPvyVCH-->C1. 控制器的通用编程范式是什么？</h2>
+<pre data-page-node-id="UxW2LQJlEReGW1Dkdp6YJC"><code data-page-node-id="GouRTlcWum49QUXfzBvTWL" data-pnid-children="fLZPydDWqC53YgyThw0TRX">Informer(ListAndWatch)  →  本地 Store(缓存)  →  EventHandler 把 key 放进 WorkQueue
+                                             ↓
+                                       worker 取 key
+                                             ↓
+                                   Reconcile(key)：
+                                       读期望状态(API) vs 读实际状态(API/外部系统)
+                                       → 有差异则写 API 让它收敛
+                                             ↓
+                                   失败 → 按限流器(指数退避)重新入队
+</code></pre>
+<p data-page-node-id="HLweGn2gTKh5ekQQO189dz"><strong data-page-node-id="YCrHnGcoNUH2OqI0OoYPM7"><!--pnid:uUGKFwjTi48fyufBhIU61n-->必答的四个要点</strong><!--pnid:pzdavBAUU5rs6ZtxAqtUZi-->：
+1. <strong data-page-node-id="svXzkJvBI9bxTnXHkyql1S"><!--pnid:6bcgo3AGLzlqxAd9rsfTH9-->Level-triggered，不是 edge-triggered</strong><!--pnid:eheuD1tM24lQbRfHZRczXy--> —— Reconcile 回答的是"现在应该是什么样"，而不是"发生了什么事件"；
+2. <strong data-page-node-id="YM3dNoXoKSj1EE3qAJD80I"><!--pnid:u73HdRkHLFrQfDxv18Y4Wp-->幂等</strong><!--pnid:MFZ0s6Ie4RIN48O9Wd8FlK-->：同一个 key 反复 reconcile 结果一致；
+3. <strong data-page-node-id="uJhAheHWZ0AYMa1zgmQ3J4"><!--pnid:UpTOGFg3NzpCKHCr50c4O4-->resyncPeriod</strong><!--pnid:yHXGXU09h00bAVIF247D7i--> 兜底：即使事件丢失也会周期性重放；
+4. <strong data-page-node-id="UpUZdaGTYqKXUXncV1j9tN"><!--pnid:F9FR9pC1cJdw6itIxO1RPU-->不持有外部真相源</strong><!--pnid:ZtXgoWg6Oy34bRe8NHbTp8-->：状态要么从 API 读，要么从外部系统读，绝不假设"我上次记的那份是对的"。</p>
+<h2 data-page-node-id="QYbP3J9XmrwUqLRhqYcglE" id="c2-controller-manager"><!--pnid:IK4V3AjEO4DYn48NUvLBit-->C2. controller-manager 里到底有哪些控制器？（要能报出一大串）</h2>
+<table data-page-node-id="uC56IsZuGfwitIRCifBEPb">
+<thead data-page-node-id="xOYwYEK9k9cBe6TANVLUkq">
+<tr data-page-node-id="P3ayr11hQrXd3mvE1Ie9pO">
+<th data-page-node-id="x78yQf5pyVemcaJlXl6C7y"><!--pnid:csFCHTLVB7tJ9LXh25Ivl6-->分类</th>
+<th data-page-node-id="KC8jeEs25Y67IZM8wRwRiN"><!--pnid:WseXns0L5GBN3nCUjB10ww-->控制器</th>
+<th data-page-node-id="YJiwzeFQ8wiq3XRqS5U2jR"><!--pnid:jXydnk5tMnVOFydLs6rKcI-->作用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="kWkjP8EaZKD4FN2pifvEVm">
+<tr data-page-node-id="ll6f79Rpcmigb7GJErsixR">
+<td data-page-node-id="F8LwILZTrnFNkFSK9SYbPO"><!--pnid:UExswlJKFg66tKVioao6pi-->工作负载</td>
+<td data-page-node-id="p7steaNlnxUfx6Bs3ti9g0"><!--pnid:N5dzjIFG2lpfvSLApbsyF5-->Deployment、ReplicaSet、StatefulSet、DaemonSet、Job、<strong data-page-node-id="SvsSwSivFyvy3KJffW4Lv5"><!--pnid:q9NuSaDCM3JKEJFrYdHOcH-->CronJob</strong></td>
+<td data-page-node-id="2TtUzNspo78c6rlJ3iqu8L"><!--pnid:OhLkxkAaUShjN8BuqutX37-->副本维持、滚动更新、定时任务</td>
+</tr>
+<tr data-page-node-id="CI9l7254uG8QV1KDaEeQGW">
+<td data-page-node-id="AhEU1vqt3ckQRDCSKYwjj8"><!--pnid:0oTRQtRZbJzHqNAmBhqRUu-->网络</td>
+<td data-page-node-id="qg0lTPEtfKqIkvTHIDILrv"><!--pnid:YUAPgp7EOOSg6BGxhZNxDk-->EndpointSlice controller、Endpoints controller、ServiceAccount token controller</td>
+<td data-page-node-id="wHyIwObbGVXeA2B30kQ91K"><!--pnid:ZtX1C51jyhi55FeZmlqIJU-->服务发现后端集合、SA token</td>
+</tr>
+<tr data-page-node-id="FeRvshTKmZ29EFOlqG7V3y">
+<td data-page-node-id="9OaUVjD4HBIZxwsZ9vnuId"><!--pnid:RTOCs130IgQBBNZEaWgFdd-->节点</td>
+<td data-page-node-id="OrQFNbGAaUl8SJrQqxtwFX"><!--pnid:C7EJWd5dvlasGYPfNrU6Lo-->Node lifecycle controller、<strong data-page-node-id="n75g2fx6sAA0b3zI4OHt6s"><!--pnid:JswrMWWbtrJETJhdVe0L4n-->taint manager</strong><!--pnid:uJhcMOOlrcg6M0Xljk604D-->、clusterrole aggregation</td>
+<td data-page-node-id="WC8U6Vx1aMoCeHYegZIChv"><!--pnid:9Cqybpxath3WmnXaAQLbGr-->NotReady 标记/驱逐、聚合内置 ClusterRole</td>
+</tr>
+<tr data-page-node-id="hDa5j35963PPbCS4et2zyj">
+<td data-page-node-id="8vsNAxrhMW53bEkxEXikW8"><!--pnid:hy7Ac0EONczmf0CEMs1AWd-->存储</td>
+<td data-page-node-id="3J8w5PicMMRigPwkBICLto"><!--pnid:73zyAnQ7RTs0HlC4zOskK3-->PV controller、Attach/Detach controller、volume expand controller</td>
+<td data-page-node-id="FkJ26oBOXSwCdLrG3rW8je"><!--pnid:vKUHlYWhHC056TaLtLbtQv-->卷绑定/挂载/扩容</td>
+</tr>
+<tr data-page-node-id="IEhql1Ny880ytFRKp4zKOx">
+<td data-page-node-id="Ccq0YgpFs8vglVN6Kce1cp"><!--pnid:CnGzTGH11mtJzd3gtyzfcc-->资源治理</td>
+<td data-page-node-id="J7k1z0FiHokzKE1xjaQb88"><strong data-page-node-id="xFesjDILnAaeGdj2lxPuB5"><!--pnid:jaIeb8wZdIIlDMmfNwIWjw-->ResourceQuota controller</strong><!--pnid:4K3nUh5mcMvgzFfOWWiHvO-->、Namespace controller</td>
+<td data-page-node-id="hs3ckdM3cUrVpqFnTS0dI2"><!--pnid:SBHbS38dRDTRpsWDFJt3Ui-->配额用量计算、命名空间生命周期</td>
+</tr>
+<tr data-page-node-id="vHC19ieWiZF4r9fxIzMrrr">
+<td data-page-node-id="2pVL5aGRtQfGuuQiuVN1av"><!--pnid:Xe3npobL3zm6FLlfDAnvQh-->对象关系</td>
+<td data-page-node-id="Gjglh1zIyBAB03XPqtzsdW"><strong data-page-node-id="zvj09NRbqfUqcpOZYPHIg4"><!--pnid:iRVbWPyT133P54x0HeP0rt-->Garbage collector controller</strong><!--pnid:KYcH81N66xjmJTOA69vsx9-->（级联删除）</td>
+<td data-page-node-id="NTFdxx1mamtYRPlID4eQao"><!--pnid:jS5qY7iQwswIduFq6GhRU5-->ownerReference 级联删除</td>
+</tr>
+<tr data-page-node-id="qg6s22OoJaWNuY7xw5Ozav">
+<td data-page-node-id="6IMXY1aHm5N76dPopT6Uki"><!--pnid:hBFCFIoHGozyExUc6JJVSq-->证书</td>
+<td data-page-node-id="vIIiD9wfvA3fV2H53PLGTM"><!--pnid:GVhFlokpbZUVQHsaf6tJYX-->CSR approver/signer 相关、Certificate controller</td>
+<td data-page-node-id="YdWiWzyDwbZcaT6YBn5hLx"><!--pnid:3xu46ewsa3SD7qJxESaYUY-->证书签发（<strong data-page-node-id="MkVNADEda53n6OrggXQaJw"><!--pnid:8ckJd5PfoaBbnMblpSo4Id-->注意：node serving CSR 的批准策略依赖发行版</strong><!--pnid:I1FLABMnokNMMn6VBptu6c-->）</td>
+</tr>
+<tr data-page-node-id="sUPwpzkcrNipeny34dPaVk">
+<td data-page-node-id="RGkQ4HpFcHfdXzSBHrOKhl"><!--pnid:49ELwXwzUjn5G0Sw4vOkgY-->扩缩容</td>
+<td data-page-node-id="uMOEoM543UbTu8ILP9dCRC"><!--pnid:eIIOONOazFyD30605p2ltp-->HPA controller（常挂在 controller-manager 或独立部署）</td>
+<td data-page-node-id="3ptDhqrdD6ZmpTWBhajCu8"><!--pnid:Sy197FWKxc9sOyzZzpfc5V-->基于指标扩副本</td>
+</tr>
+<tr data-page-node-id="L38JGSMGyxKmfB9INYDKDY">
+<td data-page-node-id="NyxGUSgqb5IpMtzfs1P9SC"><!--pnid:fg2Gw0iYysnDfZd2JqNXU5-->其它</td>
+<td data-page-node-id="PAm8gvfU1a5mgUHxkEG7eu"><!--pnid:vXargo1dNZH5oJEjH1XiPw-->Job TTL controller（finished 后清理）、ownership 相关</td>
+<td data-page-node-id="A2I4nghRkO0oWrtbeQVKaE"><!--pnid:7mPsyZQln1BEYYLFqXcjxo-->TTL 清理等</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="ZkMy0CIg6Obe7yWQv5oQvu"><code data-page-node-id="uET5t8kMlVeZjHhsqxrIyE" data-pnid-children="xAjEWD6IJbjES3MOQZ5QQs" class="language-bash"># 按需启停（示意）
+kube-controller-manager --controllers=*,bootstrapsigner,tokencleaner
+</code></pre>
+<h2 data-page-node-id="s6VZlqVXuRYRS9nzv7oAAK" id="c3-controller-manager"><!--pnid:OZHcyHnGKUOFkevgrBqews-->C3. controller-manager 怎么保证只有一个在工作？</h2>
+<ul data-page-node-id="ONcATbbIEBQ0aCNsAI6oVP">
+<li data-page-node-id="U2NbLqHbZ9o1ceVNXCldPg"><!--pnid:oMP8jlORaudi9BdqPgzb4Z-->基于 <code data-page-node-id="fFTirvrh2n1uqDDa23kQ9o" data-pnid-children="99LdOTdk9NkLzxP1EYtkV4">coordination.k8s.io/v1 Lease</code><!--pnid:4hilQa7wyxNpbpJ8VTM0Lo--> 做 leader election（kube-system 命名空间）</li>
+<li data-page-node-id="PWlXkwfoRZ91yNAMbY1Ktq"><!--pnid:fqxPWN1F99xWwjG9aFXi0M-->只有 leader 执行 reconcile；其它实例待命</li>
+<li data-page-node-id="RzmIPtH4RvEN6tW5eqT64R"><!--pnid:leTmtsmSHAGJgzq5dICMgi-->相关默认lease/renew/retry时长请以所用版本为准</li>
+</ul>
+<pre data-page-node-id="54tE9LVdAKY0WZ1kQCVUFX"><code data-page-node-id="kFdp1Ijo9q4SVixKceaS7f" data-pnid-children="b6T3Wmq8SP6xplhpCKioH0" class="language-promql"># 观察是否有多主或频繁切主（指标名以实际暴露情况为准）
+increase(leader_election_master_status[10m])
+</code></pre>
+<h2 data-page-node-id="CWtt6UnnvOQRqJ5CWiIxSE" id="c4-node-lifecycle-controller-taint-manager"><!--pnid:zV3UvHTh20YrosTDJQ13tJ-->C4. Node lifecycle controller 与 taint manager 的完整时间账</h2>
+<pre data-page-node-id="GAkEuwxwY99gecDbSTbu2D"><code data-page-node-id="a78fuo5CwGSFrJI2K7G4c7" data-pnid-children="YlKLdd34OE8gd0nmwIwuta">① kubelet 每 ~10s 更新 Node Lease
+② controller-manager 超过 --node-monitor-grace-period（默认 50s）判定节点不健康
+③ 给节点打 condition：Ready=Unknown/False
+④ taint manager 打 taint：node.kubernetes.io/not-ready 或 node.kubernetes.io/unreachable（NoExecute）
+⑤ Pod 默认注入了 tolerationSeconds=300 的容忍
+⑥ 5 分钟后 taint manager 才真正驱逐 Pod → 重新 Pod 调度
+</code></pre>
+<p data-page-node-id="Xxi8tAAPFwbX9lYHcCrZAS"><strong data-page-node-id="nJ7atP66l3FNUctY9ZPQUI"><!--pnid:y72LOV8OgC224iirBbnXpK-->结论</strong><!--pnid:fqR8EDmY48RasempEwNyMf-->：节点故障约 <strong data-page-node-id="IQB41QHW5uAaLyujtcmWEl"><!--pnid:u4C4Odk0hxWYX3CfWPLEUP-->5~6 分钟</strong><!--pnid:eEyibuIDw9no6bk0lhFCec-->后工作负载才会被重新拉起到其它节点（与 Kubelet 篇 Q16 完全对应，面试时可联动作答）。</p>
+<h2 data-page-node-id="CJJQ2SHmMr9Op81Fx8xNxO" id="c5-deployment"><!--pnid:GSAQO39SaQlWo7epiW9cP9-->C5. 滚动更新（Deployment）到底是怎么算的？</h2>
+<pre data-page-node-id="WI2zhIVBFekXA4SUdYcqM8"><code data-page-node-id="a2I7YwWKVTcFpgspyNvdXn" data-pnid-children="gIY6KciSrxn7FJyU8Hc88n">maxSurge      = 25% / n：允许超出期望副本数的比例
+maxUnavailable= 25% / n：允许不可用的比例
+</code></pre>
+<pre data-page-node-id="NpJpCJvV5fZPPSBIvJUKfr"><code data-page-node-id="MM3McZW9irRlxMiKULA4xx" data-pnid-children="fuBPfZzHmoZy0QmqwhU62Z" class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2            # 建议：按绝对值给，比百分比更可预测
+      maxUnavailable: 0      # 零中断场景建议配 0（需要集群有冗余资源）
+  minReadySeconds: 15        # 建议：给&quot;新 Pod 已就绪但还没稳定&quot;留观察窗
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 10
+</code></pre>
+<p data-page-node-id="XEZInVah0a28kIA3SXUuHX"><strong data-page-node-id="HUCzCT0fWHAubJkslKvgGk"><!--pnid:zXlBOaSkWG55pBjrocKKC9-->必答</strong><!--pnid:PLV9nX3wDz1PSs5lVneeeH-->：
+- Deployment 只是"创造了新的 ReplicaSet"并按策略缩旧扩新，实际扩缩数量由 <strong data-page-node-id="iuqPpikJF4je0e6K3IYAot"><!--pnid:SShC9suqLp1t4HpDMpmOQy-->ReplicaSet controller</strong><!--pnid:S8OCJsjBudiiiJpV9Akso9--> 完成；
+- <code data-page-node-id="HQywcdNLw55kjGnn9DiRGd" data-pnid-children="zcvsFpfNvHiXwhu6wlzACe">maxUnavailable: 0</code><!--pnid:Wjfu5Y8M7S2obnAe3C4MLb--> + PDB 才能保证真正零中断；
+- <code data-page-node-id="bzNxxuRcFheBdGnQnw555V" data-pnid-children="KgCVgbocNpNEG0psE8wid9">ProgressDeadlineExceeded</code><!--pnid:6hyARqcxhjPPJ1N0W7YEHu--> 说明更新在期限内没完成（常见原因：镜像拉不下、配额不够、探针不过）。</p>
+<h2 data-page-node-id="VpAKvcYGU75SGs0QNQOC1c" id="c6-garbage-collector"><!--pnid:JNpp1blY4j2onFqXyHE9S4-->C6. Garbage Collector 的三种删除策略？</h2>
+<table data-page-node-id="ddfpdqrhpgCnqDpMR0m4Ip">
+<thead data-page-node-id="1yhSE1XdJSErv7e8o65DJX">
+<tr data-page-node-id="ekzlJZYN7vU078ZVLl5aI8">
+<th data-page-node-id="alQdAfDNJl220twVD9V82o"><code data-page-node-id="9AibtjkJQJkHpNs6Lb8sbn" data-pnid-children="rxAj7SjskB6h7FDPKZwSe8">propagationPolicy</code></th>
+<th data-page-node-id="PrwiJ6X8wUkj2nCOp0zNTT"><!--pnid:OsZF9lOc1ImWQDx1iGPFvK-->行为</th>
+</tr>
+</thead>
+<tbody data-page-node-id="9mxn62HHlC61o7LSUoEqEh">
+<tr data-page-node-id="AfvO4MK7Uxr2JxyDVQzG7q">
+<td data-page-node-id="2bO2LKmHKLbqWMuve1VUxd"><code data-page-node-id="4YWtcruRFzfvlR93PazQHY" data-pnid-children="m3KYF1oLuIn8EWv5Nw7Jcs">Foreground</code></td>
+<td data-page-node-id="xWXWM8z0ouh1NvM9x6NpWv"><!--pnid:oN0aAWP0KyLzVLl1R8D5Ed-->先删除依赖对象，再删 owner（会进入 deleting 状态等待）</td>
+</tr>
+<tr data-page-node-id="xe6VMNLVc44QmcV0tQlJMg">
+<td data-page-node-id="Ej4VVAMoglcGWfc00mSm5r"><code data-page-node-id="bwTr1DZP82raawC2Mgg0eu" data-pnid-children="RuX8gV6HuHu0R6ooXsfPq8">Background</code><!--pnid:JsFxsdsiRRGSwqhN7KDV6V-->（常见默认）</td>
+<td data-page-node-id="syfIFH86ifBeaB8ss7p0vf"><!--pnid:sUpF2kbbHXmj8gLzMzTkYs-->立即删 owner，GC 后台清理依赖对象</td>
+</tr>
+<tr data-page-node-id="e379P3Zc7A3wrwWm44FtXG">
+<td data-page-node-id="OX4pLTxXa4lvPpX0lloEOg"><code data-page-node-id="jErflYH0Ex2rp2hyqTVhJ2" data-pnid-children="hpqcZ68HGrGrVrc7M82Z2B">Orphan</code></td>
+<td data-page-node-id="hjaVDPZCqgoOneI7bJHENP"><!--pnid:kK55niifIGDBLgmfo9OHQn-->删 owner 但<strong data-page-node-id="GICZpNRaBppDgYNFGufkcm"><!--pnid:GFMJhx5QbEeZwR6WfxCghj-->保留</strong><!--pnid:V1ICEQPpJfC466Ke3xU2J8-->子对象（断开 ownerReference）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="XYngJT96GKYdStusnR1Ij4"><strong data-page-node-id="aP5uxVmK6W6nK53Q2Ta5jn"><!--pnid:B77bB5I7HTIZjp0OJTXEev-->必答</strong><!--pnid:cp3lUvPw6dOjtjgJpQIAX4-->：<code data-page-node-id="ndgWai9zFi36Nw66BDt4xm" data-pnid-children="30zZ6sZn5w9FQLmddxpFFv">Finalizer</code><!--pnid:Q6TpwXuP8hGi1I384wdoJe--> 会<strong data-page-node-id="KXAJfTxMReudd38CTZGczW"><!--pnid:gRR7f2M7yQoNYxRnkIEXDm-->阻塞删除</strong><!--pnid:fi3AAHBL6PK1WISpZ4xAqY-->（对象保留 <code data-page-node-id="YPTE6A84lAlOayj18vmdOw" data-pnid-children="OIeHASqfh2aKF1Rl7gEqqe">deletionTimestamp</code><!--pnid:xKLB76MwLnXGgF8Tb8naqW--> 直到 finalizer 被拿掉）——这是"Terminating 卡死"的头号原因。</p>
+<h2 data-page-node-id="H23BMlGuDwUF6Xjmc4hHk0" id="c7-resourcequota-controller-admission-resourcequota"><!--pnid:IAxJoQ3UkDuRju46mYakvw-->C7. ResourceQuota controller 与 admission ResourceQuota 的分工？</h2>
+<ul data-page-node-id="X8MgvMTQPe5NEzdnOF4EcU">
+<li data-page-node-id="1a62FqHQblAcYNXFwmVfnK"><strong data-page-node-id="kvAq0EoO0KDFSrkWew3vuo"><!--pnid:vTnzcOBETvl5w6f2pO9GXu-->Admission（ResourceQuota 准入插件）</strong><!--pnid:3cepjeR4UdSY8O4rpgQh1L-->：在创建/更新请求时<strong data-page-node-id="q1nbgLi6yaRThsYq4m4drL"><!--pnid:ZgzHaltsSsoIL9Y5FnPdmZ-->检查是否会超配额</strong><!--pnid:yOiyGZSkLx6qv5bFQ3d6Ek-->，超了直接拒绝（这是"为什么 Pod 创建被 403 forbidden"的原因之一）；</li>
+<li data-page-node-id="G9AMgJGF5ezMhcPHqYefj1"><strong data-page-node-id="aWck7EbRlTQwPSzLHSZRiT"><!--pnid:FjxXlT2kSDoHa2GalYpiMX-->Controller（ResourceQuota controller）</strong><!--pnid:75obVs13Sq840KTQefTkuz-->：统计各命名空间的已用量并写回 <code data-page-node-id="PdslV4cU9XV6jDxtVLFjhK" data-pnid-children="yYIWAi76C0xs4XHCPZKOmo">status.used</code><!--pnid:LzPXwVxVGtw1o8eyTxyVMa-->（用量修正是异步的）。</li>
+</ul>
+<p data-page-node-id="KCbsvlUs10Wtlz5mun0h3h"><strong data-page-node-id="iA4aGojtXioz6ljFcqlqRY"><!--pnid:haj8QTAMMjNFXOeVfYCVkt-->坑</strong><!--pnid:JlHGXLslHA2HuuiEXWRK3S-->：异步统计意味着短暂窗口内可能超额；所以要结合配额 + 上层审批 + LimitRange 默认值。</p>
+<h2 data-page-node-id="p0LXlp1hN38xJLkYDAUM5F" id="c8-attachdetach-vs-volume-manager"><!--pnid:6zeGWQNFVX4L6W5KzkTedG-->C8. Attach/Detach vs Volume manager 怎么分工？</h2>
+<table data-page-node-id="jckAQzJb4zbYHvaFbFmZ4K">
+<thead data-page-node-id="l2EjNsP37po4E5z7HEvhkE">
+<tr data-page-node-id="lfgoyq8QBlrYANpqW8qaVd">
+<th data-page-node-id="xTTkWhd75ycvfnJV8cMwvj"><!--pnid:zftucoMw6BnIdH4NuBidxU-->层</th>
+<th data-page-node-id="ERhQMJZ2xzTPp1ZmDLDBQR"><!--pnid:N2e6TWqG63YD5xPK5NaQcG-->谁</th>
+<th data-page-node-id="8Ik34viAnhAC5dTofvj640"><!--pnid:Fs08JEgw7XDS3DixWw5pRX-->干什么</th>
+</tr>
+</thead>
+<tbody data-page-node-id="D9XuKXnCnOcEIV73zOkbfg">
+<tr data-page-node-id="OGdJTdASB8qH9BOG7HWHrm">
+<td data-page-node-id="92jSK1FxAtStQ5fkt1yUz3"><strong data-page-node-id="pjN1Iu0YmQVIsKFpCvg4kW"><!--pnid:Qk4FKV1X8yvkeUD19Is9HQ-->Attach/Detach</strong><!--pnid:cC8VeoGAQjZ0iobGFEsCll-->（controller-manager）</td>
+<td data-page-node-id="T9CZ5BmHW2iVS0DeLOgIli"><!--pnid:YLbQ8zxHDZqefv2GFkOq8V-->与控制面/云 API 交互</td>
+<td data-page-node-id="h2nPodlX6HeVaUK2idZKa6"><!--pnid:ZBhu7NjW6qmxRtcmXqCkcs-->把云盘"挂到虚拟机"</td>
+</tr>
+<tr data-page-node-id="eygFfwCNqdGtjePHSotfFR">
+<td data-page-node-id="dbd1LguAHjdigXqxi5juZj"><strong data-page-node-id="TExZxYqRzTF9sDK6lAfeaE"><!--pnid:VCqlcY0js9ffWuwvJn3TKj-->Volume manager</strong><!--pnid:rQ5rp9UIc1dBZUv1CeAley-->（kubelet）</td>
+<td data-page-node-id="uJ0jhoZEipkL8SwovGaTFV"><!--pnid:VI5zpa2Z7qFHemiocy6OpX-->节点侧</td>
+<td data-page-node-id="4wxPtSSoNoGFSnJD1PPdQm"><!--pnid:ecDLKQgsU7YiSyVCfKlhI8-->挂载文件系统到 Pod 目录 stage/publish</td>
+</tr>
+<tr data-page-node-id="29G1vllxY3Vi2BcHVtDd3w">
+<td data-page-node-id="SUTA4QaPFgpLEDRJB9Z8YB"><strong data-page-node-id="rZNNyMwHKOFI3TjOiajkVx"><!--pnid:1ntVd9r9AEeWiEQ51HgPqN-->PV controller</strong></td>
+<td data-page-node-id="rWwORYNjP6OkzM4FRCKh4I"><!--pnid:MAN2XT9W4J5n36NbFEUe1f-->控制面</td>
+<td data-page-node-id="LsCqiWQVhsAzmg83hUkxu0"><!--pnid:6ywg00gHYb6Ggua9occt7l-->PVC↔PV 绑定、延迟绑定（WaitForFirstConsumer）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="2KsUyQrUrL5KUFvoQU9Ya6"><strong data-page-node-id="cHgxNwy8QZsV2lhNucdbpq"><!--pnid:iFaT9Pa0S6c5yLpwcSnYJK-->排障分界线</strong><!--pnid:TvqDS0k19OkSLH9FpZrlLJ-->：<code data-page-node-id="BsiIBJQMQ9RYfWAG34j6tu" data-pnid-children="xaH7l3S4yyzkBrBNYpGCK2">FailedAttachVolume</code><!--pnid:WP9ksJgrMALcyTyIMiwVqh--> 属控制面/云 API 问题；<code data-page-node-id="tY3j2LMrHLYHR1CaR1LjEH" data-pnid-children="ms9QsNTvZASIfdDgSwPFoY">FailedMount</code><!--pnid:fCffNTTMyWNSBXS70OaC1m--> 多半是 kubelet/CSI 节点侧问题。</p>
+<h2 data-page-node-id="XoYuLByuvgdioPfYVc3ukj" id="c9-hpa"><!--pnid:VW3XN219lUXzP1CTItoMQA-->C9. HPA 的指标管线与常见参数？</h2>
+<pre data-page-node-id="PahhMApLkMSSp7iyNYMFFL"><code data-page-node-id="ki3A0YRQCOHeruI3hUxHn1" data-pnid-children="IDQfMPaGfcfXgsnypLRdoD">cAdvisor → kubelet summary/metrics → metrics-server →
+      apiserver aggregated API(metrics.k8s.io) → HPA controller → Deployment 副本数
+自定义/外部指标：
+      Prometheus Adapter → custom.metrics.k8s.io / external.metrics.k8s.io
+</code></pre>
+<p data-page-node-id="87HsVpaq9ZSpAHI14Wh6LP"><strong data-page-node-id="y6lshb8CvsKi7iaPWikIrn"><!--pnid:6hcMpKwJVaoMBqu9Uw5Ooi-->常见参数</strong><!--pnid:Yp6o0Co7lJSqSFvDT7qNgE-->（请核对版本默认值）：<code data-page-node-id="6vSTOUsRVuTe216y56t8zc" data-pnid-children="7MZGQXZ0SksIjKnm94DTu9">--horizontal-pod-autoscaler-sync-period</code><!--pnid:miAPWhQ8Uv3MvRLPYKW5sa-->、<code data-page-node-id="mYW3GvwyceZdwb0FnrD3cZ" data-pnid-children="fcUpeDPjRh7o6nIyUIZHL7">--horizontal-pod-autoscaler-downscale-stabilization</code><!--pnid:HpbUwKhxPyAGMHQBMsgMup-->（防抖动）、<code data-page-node-id="X1S2i33lgBWfgsvp0ypZF6" data-pnid-children="dLrs69iGmQMlYwcqFdxoeh">--horizontal-pod-autoscaler-tolerance</code><!--pnid:VPAWzbkBa9Q2YJFOYSyUeI-->。</p>
+<p data-page-node-id="3D1HBLnnWWYQSUY8e3yHwt"><strong data-page-node-id="RjZXFLHs6M1Bz7IkoBZUhS"><!--pnid:erofMT5XNjRdLFYeWmaDTY-->实践</strong><!--pnid:DMdZ2rNsPcWZmuSmjjKDH6-->：给<strong data-page-node-id="bUjVINHqD82bRwbZRJ40GQ"><!--pnid:PATgtyCfKgXmU3otPV9OMM-->扩容快、缩容慢</strong><!--pnid:J6kUoZcXnqDsQd4bpj9lZ5-->（different stabilization windows，<code data-page-node-id="t5lmNWzTzoSO2yRIfBtbjV" data-pnid-children="xLGCAawns5Em31AjQ1sA0q">behavior.scaleDown.stabilizationWindowSeconds</code><!--pnid:JG1x8EHdUVLOWtvxCaRWkq-->），避免"抖动导致副本数反复横跳"。</p>
+<pre data-page-node-id="DjIbZv3y5iHQZAMQrwNBCq"><code data-page-node-id="VJeljoVg4P9OiRi5RvmHd0" data-pnid-children="Psoky1vC2qCI6WQQlHHGrf" class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+spec:
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies: [{type: Percent, value: 100, periodSeconds: 60}]
+    scaleDown:
+      stabilizationWindowSeconds: 300       # 建议初值，需要按业务调
+</code></pre>
+<h2 data-page-node-id="rn9x1PBm9MtbYqEAqKW6Ep" id="c10-controller-manager"><!--pnid:5pvDVlY4RkvpY2cO0Gxyp7-->C10. 大规模下 controller-manager 的调优参数？</h2>
+<pre data-page-node-id="8BI41GRs3VJ29KRkuhWLxU"><code data-page-node-id="J3WkvB64K8RFmC3vMWw2Oe" data-pnid-children="X7rTzlsA1uW9KXFe2NtCQq" class="language-bash">--kube-api-qps=100 --kube-api-burst=150     # 建议初值，需实测
+--concurrent-replicaset-syncs=20
+--concurrent-deployment-syncs=10
+--concurrent-endpoint-syncs=10
+--concurrent-service-endpoint-syncs=10
+--concurrent-gc-syncs=20
+--concurrent-resource-quota-syncs=10
+--node-monitor-grace-period=50s
+--node-monitor-period=5s
+</code></pre>
+<p data-page-node-id="zrGSS7Os5vYz8UxyCO8VhY"><strong data-page-node-id="UgNgJS4hpP8J9WjXzLEnzL"><!--pnid:31Vk8QTuROeKs9B230zo8R-->风险</strong><!--pnid:QPdoQCUkJiAJUYXKs862HZ-->：并发调高会放大对 apiserver/etcd 的压力（尤其 endpoint sync），<strong data-page-node-id="IrtciVwFdardDbe7ln9s3v"><!--pnid:59PMVqa2Ih7AuN1CAFDDH8-->必须与 apiserver/etcd 容量一起压测</strong><!--pnid:bf0JhqG1eMjDE3ap4lxjfs-->。</p>
+<h2 data-page-node-id="Vam32BboHOMMY7P0hqPh6S" id="c11-deployment-rollout"><!--pnid:8m234uw9y6pBs2HCzXJwpv-->C11. Deployment 卡住（rollout 卡住）怎么排查？</h2>
+<table data-page-node-id="10tnURIGBPFToF83xvctkS">
+<thead data-page-node-id="ORQOWgCLYZXdeGt2iraX8h">
+<tr data-page-node-id="nK4dO4B0OKnnzq3Ltrwdrf">
+<th data-page-node-id="vCiVp7oalgTdWyCKzf9yet"><!--pnid:Vfot8eyOvlGRnkE7PkW8Qe-->症状/证据</th>
+<th data-page-node-id="vObA3ied7xa7cKFNQ36yaK"><!--pnid:S9dfgMEGLKGeQ4RLGGsgXW-->原因</th>
+</tr>
+</thead>
+<tbody data-page-node-id="o5vhqM6nNvqRkdCs14brqA">
+<tr data-page-node-id="ro4EjL2eqk1db18W5JWgbj">
+<td data-page-node-id="X4e3rIvKUJEDXuoP0dT5S5"><code data-page-node-id="Yx4QB3I4llwWCQOSEkRW1m" data-pnid-children="xlY2nwbJQ8lZM8C0bFfxVK">ImagePullBackOff</code></td>
+<td data-page-node-id="AcE9zVnhtK11QZQ8JmYmdh"><!--pnid:tZuy5MssXzS5QAwfqCyzMy-->镜像/仓库/凭据问题</td>
+</tr>
+<tr data-page-node-id="GXjb37AyGj89nCmtarpzJ5">
+<td data-page-node-id="tayBhaGb8Z5LNbbQpSL0Ti"><!--pnid:mEwEi5Q7WcQuPWMgTNtlRt-->Pod Pending 且 FailedScheduling</td>
+<td data-page-node-id="EwnQ861SfXA6tYU3SNU9CY"><!--pnid:usnlLjpT52j7TiLVLxXC8L-->资源/亲和/污点/配额（见 Scheduler 篇）</td>
+</tr>
+<tr data-page-node-id="zcH0We4LYFKVcO1qID1RVq">
+<td data-page-node-id="Un0laZbh42ISrwBErm8JGO"><code data-page-node-id="B4S9pz1zwxesrNcGpZRXcE" data-pnid-children="ue1LJRfHHSpsPiCxHiza3B">forbidden: exceeded quota</code></td>
+<td data-page-node-id="5qcSPyLpHwVRDdAdyOtYGz"><!--pnid:jLcAb0VKA0vAU2pF35K7kX-->ResourceQuota</td>
+</tr>
+<tr data-page-node-id="4uOLJtZ4Rxg1SFHk0CnRQ4">
+<td data-page-node-id="NQasCen1axMlIl69U4kcmB"><!--pnid:ZWlYRlqYFxuKDEg2txkjMr-->更新没法进展</td>
+<td data-page-node-id="X4TmfrjfM3lBTDdTBGq1HH"><!--pnid:bEskuaCohZZLjeHIubyhu2-->PDB 限制导致旧 Pod 无法删除</td>
+</tr>
+<tr data-page-node-id="tm8P1ou2CiNNKBUv2kyGBH">
+<td data-page-node-id="XCYruX1LjbKidgeM8mLLLc"><!--pnid:FSwr4bReQNLYhdsqV6B1sE-->新 Pod 一直 NotReady</td>
+<td data-page-node-id="CJ3F6RkePbpHZ9sGzfEx32"><!--pnid:2WT79hSyatJzp3JkOtmgCg-->探针/应用/网络策略</td>
+</tr>
+<tr data-page-node-id="UssSZp4bDATQvEJ7v1YBiz">
+<td data-page-node-id="5H8C2lHjYOuEjYQUl2Wmng"><code data-page-node-id="kE4UgzxSc1emVLIhiLRXzX" data-pnid-children="ncHD92OA7LMxKUkl2wyIDO">ProgressDeadlineExceeded</code></td>
+<td data-page-node-id="rAV8BK1drAkJ2YJjaD1Vqb"><!--pnid:qOEkP3yUlVaWyxGcDr8nPM-->上述任一原因超时</td>
+</tr>
+<tr data-page-node-id="pW7t5ct8K13tzyswxvGoZ7">
+<td data-page-node-id="PzAVc2K43FbJQKEA02d361"><!--pnid:IIdryESQfDpq1ydcd1ulD6-->RS 数量异常多</td>
+<td data-page-node-id="XUOdY43V6uQEtfPcNOVZJO"><code data-page-node-id="SNvFbk9prCKe0E8pPr9OPf" data-pnid-children="Jqu0oXaTbutaevakb1XMv8">revisionHistoryLimit</code><!--pnid:gKPtEJIfSl9JkBJEaXcRkN--> 过大/频繁发布</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="tYeYhEYOTvTdfzPOM6GJkW"><code data-page-node-id="fpsF04HSjIIwi8sem72p4O" data-pnid-children="okaqv31ayfXSLoWmKVVS6T" class="language-bash">kubectl rollout status deploy/web
+kubectl describe deploy/web | tail -30        # Conditions 有原因
+kubectl get rs --sort-by=.metadata.creationTimestamp | tail
+kubectl describe rs &lt;new-rs&gt;                  # ReplicaSet 的 Events 最有信息量
+</code></pre>
+<h2 data-page-node-id="eI4qTEHnsYU7iYknTF9Rnc" id="c12"><!--pnid:7IXia5OYM2iohRjzsVOQgL-->C12. 自研控制器要注意什么？</h2>
+<ul data-page-node-id="dR1F006ifyUF0NhYt1tNif">
+<li data-page-node-id="Gz6khT9iKBmayMqqkuYgrt"><!--pnid:BX5XyJmjrkCIKkgwFR5m9m-->用 <strong data-page-node-id="FyGanY2yKQrnxwDjxvRuLA"><!--pnid:YMypOMrgSW4KqLxiVuFHCl-->controller-runtime（CR 生态）</strong><!--pnid:YwE24qm9DkYHSVTTSfFZ12--> 而不是手写 informer；</li>
+<li data-page-node-id="zitmYVyVZKUETdNNRnpUvz"><!--pnid:Q01Lng9T9E69fdphlOSKFd-->Reconcile 快速返回 + 用 <code data-page-node-id="zQtmNQ9ZBZOkDirf4lA8eq" data-pnid-children="0IVQXihMzxOdz6rnVISGw3">RequeueAfter</code><!--pnid:eCvPqCyETLtjj0i8bFYcrJ-->/事件驱动；</li>
+<li data-page-node-id="FhS1TjhSnRM8ETLHnFs3Uu"><strong data-page-node-id="OTExWk18RwowOrmCNKA8tw"><!--pnid:NEpWeJO8gQmUBjGypmIIu7-->写操作要有 check-then-act 的乐观锁重试</strong><!--pnid:UXc0lCLhdMNWl9LsRTxJua-->（409 处理）；</li>
+<li data-page-node-id="34rWxjCTqgBrZWpCwIx047"><!--pnid:Xgn1QcWVzKPOsnI6wFTh0S-->合理限制并发 worker 数与 QPS/burst；</li>
+<li data-page-node-id="UiHwAW4JheTfJwl4e01KDj"><strong data-page-node-id="t1bcKElaEWz01sbgQ2iZX8"><!--pnid:dJCgNJCRQR1NDvnYkAJkYr-->不要高频写 Event</strong><!--pnid:hbBBctE4n5EmoONJb0oyiu-->（会放大 etcd 压力）；</li>
+<li data-page-node-id="gxyQ6WpMWrEEpBebQjeyCJ"><!--pnid:0UrlAdDqHeCn6SJzNuWkQZ-->提供清晰 status/conditions，方便排障；</li>
+<li data-page-node-id="3vCHJtD1hSl9bQB7uON0WU"><!--pnid:PllZnfAmZjr3L8BP3lNLNo-->健康检查 + metrics + leader election（单副本语义时）必备。</li>
+</ul>
+<h1 data-page-node-id="zUJHcIq3IMVU5ojNdMcxfG" id="part-d-kube-proxy-8"><!--pnid:8DMMRBdCKNmgUCWfCl1mb5-->Part D · kube-proxy 专项篇（8 题）</h1>
+<h2 data-page-node-id="QmNoIphUHScbqrq1mVgONz" id="d1-kube-proxy"><!--pnid:t5g7M9gFtqdxae8CE0VbTg-->D1. kube-proxy 到底"转发"了吗？（最大误区）</h2>
+<p data-page-node-id="Evtjei6b6w7g1BGYegv6Ak"><strong data-page-node-id="TcS01Z86ff6KmyyE89wH2G"><!--pnid:Yk7rkjANKumvU4e4ZSEhgv-->没有。</strong><!--pnid:wRrv8fYFQAebVn0fZLZJWz--> kube-proxy <strong data-page-node-id="p5psFVbiCnXNY8h5b49dBn"><!--pnid:8J5ipOLdbGj16tFkkIPTpy-->只写规则</strong><!--pnid:VxD8X8e6OkoWhODG87k37K-->，真正转发数据包的是内核（netfilter/NAT 或 IPVS），或者完全不经过 netfilter（Cilium socket-LB 在 socket 层完成）。</p>
+<pre data-page-node-id="C9BbsbGaMfYBssE5Mf3bDK"><code data-page-node-id="0qusqeAajSftfK5xjc2FB5" data-pnid-children="Yqsh1JwWhVvb7O7ZF9S4qG">Service/EndpointSlice 变化
+    → kube-proxy watch 到
+    → 计算规则集合
+    → 通过 iptables-restore / ipvsadm-equivalent netlink / nft 下发
+    → 内核按规则转发包（kube-proxy 不参与单包处理）
+</code></pre>
+<p data-page-node-id="QE4wvrNG12kTU3zGNOiQq2"><strong data-page-node-id="burisrnk4pI4Gs3jNdQUK5"><!--pnid:1sd06zweo0eMraPjYTD1kh-->结论</strong><!--pnid:8yuxP0fY06dWFKC7tUu0S9-->：kube-proxy 挂掉 ⇒ <strong data-page-node-id="RWijUViMIJvw5uAheJVJz4"><!--pnid:IXDTIgOEmPspKwqwu0NSHr-->已下发的规则仍然生效</strong><!--pnid:Rq6SUUChMhlaH8Ype8aDki-->（已有连接与 Service 访问不会立刻断），但<strong data-page-node-id="veyo96KYeXZHWwYWQghjlk"><!--pnid:dUFrVLGiFHySzNfF0e3P3J-->后续 Service/Endpoint 变更不再被同步</strong><!--pnid:EoLWbA1071sOAzd7LY0QX1-->（这是"为什么节点重启前后不一致、某些后端没更新"的根因）。</p>
+<h2 data-page-node-id="QdSEQX0fvPq4CMNFczxHqR" id="d2-kube-proxy"><!--pnid:nGhLEIoQKOVXVAksowFfbe-->D2. kube-proxy 有哪几种模式？各自的关键差异？</h2>
+<table data-page-node-id="BZahpaG7C3CZnr6PSThbBk">
+<thead data-page-node-id="QpfLP6jhLbHAe5hVfJBr1b">
+<tr data-page-node-id="AcoHtyjnmSsKhREkbQd7YK">
+<th data-page-node-id="vZCx9KM9MRRoCj9qD0zf7w"><!--pnid:UKfZJs1BFRV8tYW8kD8mPR-->模式</th>
+<th data-page-node-id="YfZ8yulcL9dl919LDDSAji"><!--pnid:oGUh6OhprXW7i9cP3GV1Ix-->数据面</th>
+<th data-page-node-id="0IgClARkTvddB1qdqiV5la"><!--pnid:HEhDmOmIw8FAp4bFal5Rs0-->查找复杂度</th>
+<th data-page-node-id="OZznNEZ8fM4jJiPeTonl6z"><!--pnid:dqpOYSXRdLBiyIkb2AiqCf-->主要优点</th>
+<th data-page-node-id="F4ag2wS6bnFWcnOZITUyaW"><!--pnid:LL8vGcrsbGyrDbvDKe6eKd-->主要缺点</th>
+</tr>
+</thead>
+<tbody data-page-node-id="lCPItSOXLlSrF36Xy1j2Za">
+<tr data-page-node-id="zbKwwrbVl2Rg3gXUrFUZtJ">
+<td data-page-node-id="t2HWhrzSCOSBLKuXwL9c3Y"><strong data-page-node-id="lsrnXFGBpjAOngln50H2tQ"><!--pnid:vKkh5CcPnrkn25lE4oxHLs-->userspace</strong></td>
+<td data-page-node-id="5brQIITvwg6lyhAeet4Tjw"><!--pnid:voAZxE8ujTitkK4dYwPSb4-->进程代理</td>
+<td data-page-node-id="yseV41yHyL11dOcjIP0jsa"><!--pnid:jQpHWN9igzCzIXQPdgHtSC-->—</td>
+<td data-page-node-id="xyixnxg6HIm3DZZiLgGwKK"><!--pnid:wRSXARx0J37oCgkLVKwpT1-->历史实现</td>
+<td data-page-node-id="NtGz1xmsjFyUEwGNJWdJj2"><!--pnid:D9gAjXX3t5Jy9qq5mzLrjI-->已弃用</td>
+</tr>
+<tr data-page-node-id="tBij8cvfpDxfULmM59fVCm">
+<td data-page-node-id="AtXrSMI9TToolA0eHrTUsX"><strong data-page-node-id="1DbhtHNMIBkDmBSH88jYmz"><!--pnid:O1lyAmh2Q2EsXPqXMRie8u-->iptables</strong></td>
+<td data-page-node-id="uWWrFgYyNqXoBEu4y2CPzw"><!--pnid:rV9lgHE6UGKB6NxtFC2IdP-->netfilter 链</td>
+<td data-page-node-id="9NaBYM2GtGIkLb8fsIbUHC"><!--pnid:roml95SSRTquASwDWHmeNf-->O(规则数)</td>
+<td data-page-node-id="qzLdAA42LxzQNbQ5oFSfTI"><!--pnid:yjvDSEslKiyMXo7ieOnj6r-->默认、依赖少</td>
+<td data-page-node-id="GzQj88Nyb4S6CNwzo2ZH1N"><!--pnid:zyIyGrSG7uTquviC1gDPgk-->规模大时规则膨胀、更新全量下发、无真调度算法</td>
+</tr>
+<tr data-page-node-id="aXhKiMDsZExpAonDWhRswK">
+<td data-page-node-id="xZjSD5LSApvaMNDTX7CQyE"><strong data-page-node-id="rxZlFeRnc3ruswNeHdoo4H"><!--pnid:49sMPnCU4MDYrTJqljusJF-->ipvs</strong></td>
+<td data-page-node-id="eyBtj1azUHbfMjL2cE8KBp"><!--pnid:9quPARm6SC15gbU5pAfeR9-->IPVS + ipset</td>
+<td data-page-node-id="Sfpx0Kqutdqyi2Oqg6XG4z"><!--pnid:9SHPE9Pfx9NSEo4km9Oqab-->O(1)</td>
+<td data-page-node-id="WJFXu5p3bJkp7Yf3BPnFCI"><!--pnid:lKhjENSkFvUJWL5kNnF1cz-->规模友好、有调度算法</td>
+<td data-page-node-id="ReunKiK2EUcdryPlCjYmM8"><!--pnid:nPW1KZbGjpQz6hCwz5kZx8-->仍用 iptables 处理 SNAT/包过滤；内核模块依赖</td>
+</tr>
+<tr data-page-node-id="QtTJLhJsfn7si2ur7Oe7nN">
+<td data-page-node-id="imAn6au1Bqjh89RKgrfszj"><strong data-page-node-id="9xDd4j8RCnFJYrhSe8T0xh"><!--pnid:58VWtQDtC32OzMppvTRwFt-->nftables</strong></td>
+<td data-page-node-id="Zz44ZbjWDMheZvfaix5UKA"><!--pnid:v0iLytr88vJ685o7yLDMjB-->nftables</td>
+<td data-page-node-id="1xopWEHtPOfL1ymLCvrdAI"><!--pnid:bnqNY7tLLgbAho3xxWiqwk-->较好</td>
+<td data-page-node-id="MZUaMk50MCZWGswr4dpGPy"><!--pnid:ANJlzh6nPkCAAYtiVL9q7y-->较新的替代方案</td>
+<td data-page-node-id="a5NaicTjG0SB10n63IbjYU"><strong data-page-node-id="G5BvSx3tr6sdl5jDEiUGef"><!--pnid:izyPiM1wo0U3DyBsQGeqqy-->版本相关（处于演进阶段），请以 Release Notes 确认成熟度</strong></td>
+</tr>
+<tr data-page-node-id="FlunJEntBaOngKvNnMVVp8">
+<td data-page-node-id="uzC7IwR7IQbT67n5qBwkec"><strong data-page-node-id="9UXXpNKIRqLqroC8wm7Z4f"><!--pnid:emrssE3GpNUXbR0TV8ZjRA-->无 kube-proxy（CNI 替代）</strong></td>
+<td data-page-node-id="seoemBSeykQmu9KD4qW1Mh"><!--pnid:SHMzRuRx1iVDsfxzP8VqH0-->eBPF socket-LB</td>
+<td data-page-node-id="ip8CjZhe7YKbRv955rVNSw"><!--pnid:NIQAN4OPMZKU1LkG7I0jtp-->好</td>
+<td data-page-node-id="S6AJiipARMvVXx7XZN9dfj"><!--pnid:T1XLU5fODTsU8WvhgjjJgE-->绕开 netfilter/conntrack、保留源 IP</td>
+<td data-page-node-id="ilNaS5Lhe8EQlJhGp5hQYo"><!--pnid:G2yXZ6NN6CFLeXbUGnutQ3-->需 Cilium 等支持，依赖较新内核</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="zlTiwcxXrTYDLNMT0avXmh" id="d3-iptables"><!--pnid:m6UaXgFXkf1c1vPvNphcB8-->D3. iptables 模式下的一条链路长什么样？</h2>
+<pre data-page-node-id="SLBdtaQM8r1ceKF4mCZjwx"><code data-page-node-id="6dQFavNLWkIWUIcLbLdwPb" data-pnid-children="LNn8uA4ojy9oahFLgp0mul">外部访问 ClusterIP:80
+  PREROUTING → KUBE-SERVICES 链（匹配 ClusterIP）
+       → per-service 链 KUBE-SVC-XXX（statistic random → 挑一个后端）
+       → per-endpoint 链 KUBE-SEP-YYY（DNAT 到 PodIP:Port）
+  NodePort 场景：先经 KUBE-NODEPORTS
+  出集群/源 SNAT：POSTROUTING → KUBE-POSTROUTING → MASQUERADE/RETURN（由 ipset KUBE-LOOP-BACK 等控制）
+</code></pre>
+<p data-page-node-id="whFWGooOtvP2MbpGQRpsWa"><strong data-page-node-id="lhvkRGI4Zzt67U38vMMjQx"><!--pnid:flwFBAph3fAyFDvAC5qbWj-->排障命令</strong><!--pnid:8da5YuGHjFrVzNZAABjNma-->：</p>
+<pre data-page-node-id="avke2Tdkm3lCoR6kNv7RAd"><code data-page-node-id="WDcVmaD3ZCl6toDzt9kYdQ" data-pnid-children="ywHWXCJ6upIaMDmfNc7uht" class="language-bash">iptables-save -t nat | grep -A5 &lt;clusterIP&gt;
+iptables-save -t nat | wc -l              # 规则规模
+ipvsadm -Ln --stats                       # IPVS 模式
+nft list ruleset                          # nftables 模式
+</code></pre>
+<h2 data-page-node-id="REhauDzGbPzycljLePmzIU" id="d4-kube-proxy"><!--pnid:HAQsjdgZBk8pCJYC5pnezv-->D4. kube-proxy 的关键参数有哪些？</h2>
+<pre data-page-node-id="Mz15YdzfL86yUOEOiskXh6"><code data-page-node-id="dvPSGdV1X2zErSgN4FeAOC" data-pnid-children="akQaIvZDOXgkYqYwWNDWbL" class="language-yaml">apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs
+# 通用
+bindAddress: 0.0.0.0
+clusterCIDR: 10.244.0.0/16
+healthzBindAddress: 0.0.0.0:10256         # 端口请按版本核对
+metricsBindAddress: 0.0.0.0:10249
+detectLocalMode: ClusterCIDR
+# 抖动控制：避免 Endpoint 频繁变化引起规则疯狂重写
+iptables:
+  syncPeriod: 30s
+  minSyncPeriod: 5s
+ipvs:
+  syncPeriod: 30s
+  minSyncPeriod: 5s
+  scheduler: rr
+  excludeCIDRs: []
+  tcpTimeout: 0s
+conntrack:
+  maxPerCore: 131072                      # 建议初值，需实测
+  tcpEstablishedTimeout: 24h
+  tcpCloseWaitTimeout: 1h
+</code></pre>
+<p data-page-node-id="B6v1k2J60TJptyZWgZvJ42"><strong data-page-node-id="u1qPmQPPCZweVrCNGQ4kye"><!--pnid:KQhua2ygEdv36NmOYgRPzc-->要点</strong><!--pnid:7i6RUPn19oywyvJ1qdBczg-->：<code data-page-node-id="aqmdTPsa3HlF5nYhsw7vZj" data-pnid-children="1x6dSjYZxwG7lVf2oXGNBj">minSyncPeriod</code><!--pnid:fZPJUSBZwhgjeftaNwWDun--> 太小会让 kube-proxy 在 Endpoint 抖动时频繁全量刷新规则（CPU 尖峰）；太大则收敛变慢。</p>
+<h2 data-page-node-id="ndQ1L8deQU4aRmHmuhY5jG" id="d5-kube-proxy"><!--pnid:tavBYQa4aDhknFzdIJluxY-->D5. kube-proxy 挂了会怎样？怎么发现？</h2>
+<table data-page-node-id="VUiFwdoiMl047lSq3l2cVg">
+<thead data-page-node-id="EyXeCFGJg2JsFUeI7W5XH8">
+<tr data-page-node-id="7P4DtEnWE5LnACi36OuvRH">
+<th data-page-node-id="ccoLsfjpVDbNYdoK3wVaBr"><!--pnid:mYejZqEjZ5aKjmqs3kASeG-->表现</th>
+<th data-page-node-id="DlTn4C5Jm9MH31bHapp1l0"><!--pnid:onXWZSHAJgWE0TGx15WYyj-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="XRC2yvPo2BHVsJqx6rLt12">
+<tr data-page-node-id="oXY0FKRvCXCKrNRQOSKOUW">
+<td data-page-node-id="Y04Wjj75mm84ihtnTOPitK"><!--pnid:WehklhjtJowMBW9JJvd3q9-->已有 Service 访问正常</td>
+<td data-page-node-id="D3CLRJDDNr1qB0uq6V8m0f"><!--pnid:bAznQoVXPw8dY7TwnE5oWZ-->规则还在内核里</td>
+</tr>
+<tr data-page-node-id="JG8Hhghbn5p5DSrN5ntxHz">
+<td data-page-node-id="OaeL7BGtAokj7QAhkBT19l"><!--pnid:TxlBHA33K0UntVYRZJYZxD-->新增/删除 Service、Endpoint 变更不生效</td>
+<td data-page-node-id="cJYcXxDp3BuFnLV7t4tchH"><!--pnid:0ONkrny2DX3JrxgJtHaGxg-->规则不同步</td>
+</tr>
+<tr data-page-node-id="8tJ5OphoVWCjY4GZaHbavV">
+<td data-page-node-id="IIHUhx5tqmm3vds6SXEeeL"><!--pnid:zz0dLYAgSzXHDOpdmrTYaP-->Pod 访问新上线的后端失败</td>
+<td data-page-node-id="3XgRClxtqdAR4tRIk430Ql"><!--pnid:kHdqsONBa06i0myoolbwQr-->旧规则残留</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="LlP2H9MvH89nBiyE6XlFRk"><code data-page-node-id="blMwyNI9aZyR79D63dIBPz" data-pnid-children="J4tcw8poW1onZGfubyYjQA" class="language-promql"># 规则同步是否还活着（关键指标，务必先核对目标版本是否暴露）
+histogram_quantile(0.99, sum by (le) (rate(kubeproxy_sync_proxy_rules_duration_seconds_bucket[5m])))
+# 最后一次成功同步时间：长时间不更新即意味着 kube-proxy 卡了
+time() - kubeproxy_sync_proxy_rules_last_timestamp_seconds &gt; 300
+# 进程存活
+up{job=&quot;kube-proxy&quot;} == 0
+</code></pre>
+<h2 data-page-node-id="2maSqo6UXdZANkTjKSHrcH" id="d6-healthz-lb"><!--pnid:fDvQ7BVr26Ol9I7rXykYkP-->D6. <code data-page-node-id="PFc3ftS5WaZN8uURKCckSq" data-pnid-children="mVqmpMpHrp74h34YYtDu7R">healthz</code><!--pnid:NdcWcGMDnG2JxA2fxQVJlR--> 与 LB 健康检查的关系？</h2>
+<ul data-page-node-id="SHreyzvJ0AkM9u7N6yjFls">
+<li data-page-node-id="SYVBsh544WTLlGyelYC2hr"><!--pnid:a9qOg7SyayykRaQir5rjLu-->kube-proxy 提供 <code data-page-node-id="C0BHYsTGLuqe3aCV1lyqde" data-pnid-children="02bMBnGyaBFQ07G3161A60">/healthz</code><!--pnid:UrvkRurmCVjbjF6atojpb9-->（默认端口 10256，请核对），可用于 DaemonSet 的 liveness/readiness；</li>
+<li data-page-node-id="eyncTcM5fBJmFt3YPSaVJk"><strong data-page-node-id="Hd1f92xWz9qtReZz4bDI6u"><!--pnid:H60Q0XaU71e3ajTp7wYM9J-->它不代表数据面一定正常</strong><!--pnid:yiZattK07gVRQ7oJRudjgc-->，只说明进程活着；</li>
+<li data-page-node-id="md8PSylMHRMdG1XTDJco5z"><!--pnid:uAHqWJNpMAMhK6MZ5SgvnX-->真正要监控的是"规则同步是否及时" + "业务合成探测是否成功"。</li>
+</ul>
+<h2 data-page-node-id="WWraZLSSNKkm5CTxE53qnU" id="d7-kube-proxy"><!--pnid:Yl2gIPikItEHF7ElHM3U2U-->D7. 大规模集群 kube-proxy 的优化清单？</h2>
+<ol data-page-node-id="sel85WCaFZLHwZsaqnT3z3">
+<li data-page-node-id="H4fIKvVNpGghkwcN8PsQEj"><strong data-page-node-id="FrYXqCkWcW0Sx55uavsv07"><!--pnid:lVG4HlP5ccJ9PFMGGdwBE5-->切 IPVS</strong><!--pnid:aXbMWxp5UwHSWey2vRjPwy-->（或 nftables/Cilium）：摆脱 iptables 规则线性增长；</li>
+<li data-page-node-id="6hFYtXfgEgHhdyTtmFuvTI"><!--pnid:fCh0ZX2JIIcZu9ihVYrsGE-->合理设置 <code data-page-node-id="KlwwsIBMmO1WDPOPgLSNbp" data-pnid-children="LsIvk8sPjo1Zg5YcaY4nku">minSyncPeriod</code><!--pnid:omuF92CDMDfTSjTyGJ4R3u-->，避免抖动放大；</li>
+<li data-page-node-id="1i07eQnCnsNgMxKOvRYSxH"><!--pnid:oIuuFyx9Z0dc7ACoS7FhrY-->conntrack 扩容 + timeout 调优（见网络篇 C5）；</li>
+<li data-page-node-id="R12pzs3Ltf2y13CiLlNydA"><!--pnid:ajLfp7TacOCDsUGTPVaYDF-->控制 Service/Endpoint 数量增长（架构侧）；</li>
+<li data-page-node-id="4q7xuMKDTMNCwuZpYNEqUo"><!--pnid:PUZhyNOVKgVBkHLUcv0NP9-->EndpointSlice 默认切分更细可以减少单次更新 payload（<code data-page-node-id="oFyDQSVMBTZDhodcRYNA1i" data-pnid-children="oRy07YLGZ8KNV9SV1nRQ3j">-max-endpoints-per-slice</code><!--pnid:YFdj0uIdhL6AEYonEn7UUM-->）；</li>
+<li data-page-node-id="el7ycV1HPum4tqftKQqkXP"><!--pnid:S91b7oKmWpqceYEgy5AXsk-->kube-proxy 的 API 客户端限流（<code data-page-node-id="kTpVxCiFbrLhtA6AzKU9WC" data-pnid-children="knj2JWapzuhBVD2VQS5xrv">--kube-api-burst/qps</code><!--pnid:ZOzJ0q0tLHsQyTRkyiaf6O-->）别太小，否则大规模下追不上。</li>
+</ol>
+<h2 data-page-node-id="P40EZt1V07KcxzvyKf5Kx8" id="d8-kube-proxy"><!--pnid:JPpItkJupeuckT0Y2WPEO1-->D8. 什么时候该"去掉" kube-proxy？</h2>
+<p data-page-node-id="tnc3iXIXkGiCSvBTiWCJWo"><!--pnid:xHdDW0B0uxaiy1jlnhMuUb-->满足以下多数条件时可考虑 <strong data-page-node-id="rqZi02GBozV2AhYYm4iMG0"><!--pnid:O8ob1O9tKHr0DzWOqHFsWD-->Cilium kube-proxy replacement</strong><!--pnid:iJwFB6eEEWtF243dWreH3D-->：
+- Service/Endpoint 数量大且持续增长；
+- 短连接高并发，conntrack 成为瓶颈；
+- 需要保留客户端真实 IP 而不想用 <code data-page-node-id="woegjFBXnlHKSHPUkOheQo" data-pnid-children="Yq5VianubdLeRWBb746cdk">externalTrafficPolicy: Local</code><!--pnid:i5AWuRhCLSkkg7cQ2r7Y2Y-->；
+- 已经具备 eBPF 的排障能力（团队 skill 到位）。</p>
+<p data-page-node-id="ZETbbB7IQDZyMln3zJeaNv"><strong data-page-node-id="yrSgU90GmGyvwgxQiqBkEz"><!--pnid:GnJFlnO2igJhgkCWQbQT7E-->反之</strong><!--pnid:BO0ifMn0dwI81qUc6uGqZ9-->（保守为宜）：内核版本不满足、有强依赖 netfilter 的遗留组件、团队缺乏 eBPF 排障经验。</p>
+<hr data-page-node-id="W2BTVVjejsyEGpOPqCEdAn">
+<h1 data-page-node-id="V2Cpf0VTiQwRsvrM5y2r8y" id="part-e-12"><!--pnid:zymjmyja7qO3IM9shCxjdk-->Part E · 大规模控制面优化篇（12 题）</h1>
+<h2 data-page-node-id="V34sE6xOYTBA73hoNfSzUb" id="e1"><!--pnid:AO6M6pTUQMQxFsVcj5qjRT-->E1. 控制面的容量到底由什么决定？</h2>
+<pre data-page-node-id="3XpQdWBMKFqBNj3DYGYyBA"><code data-page-node-id="OwCNegW2TW7z4MDNFPEEji" data-pnid-children="csCnyoB9zTlo0vPt5og6n1">apiserver QPS 上限 ≈ min(
+    CPU：序列化/准入/审计的 CPU 成本,
+    etcd 写延迟：每次写都要 WAL fsync + Raft quorum,
+    watch fan-out：副本数 × 各组件 watch 数,
+    list 成本：大对象/全量 list 打穿缓存
+)
+</code></pre>
+<p data-page-node-id="eJ8lBtVOfnWeaZPJVxRnrc"><strong data-page-node-id="0hrLHyxgYvrXQ72OScmTPQ"><!--pnid:9pGOHbK9LzRxmhv3oMNti1-->结论（必答）</strong><!--pnid:HerTIY9SWpMkwYTshoKe4B-->：<strong data-page-node-id="tnZN9XvtFj5t88QAcXM1ma"><!--pnid:G6y6AFur49h6NXQCtAJ7PU-->apiserver 可以横向扩容，etcd 不可以轻易扩容</strong><!--pnid:OjZ2V4SWQJTCtt5MmFgByW-->。控制面性能治理的终点几乎总是落在 etcd 磁盘延迟与"少写少 list"。</p>
+<h2 data-page-node-id="60v51hpZn1nxGppkmFoeeX" id="e2-list-watch"><!--pnid:W9Of04PhtkVEDBYuWrhvk2-->E2. 最常见的两类"控制面杀手"：大 list 与 watch 洪水</h2>
+<table data-page-node-id="6hro6iIB4gABLUjV9qLchk">
+<thead data-page-node-id="bHZYPsQ9J6v0MnU2gUGDjf">
+<tr data-page-node-id="qGYfL9vsrogF6CVDCwSSOv">
+<th data-page-node-id="haBFru6pwcV349vfZ92MLl"><!--pnid:7Dp9DuGwjqdFA8IAgwYp3q-->反模式</th>
+<th data-page-node-id="udnQZmFYAwo92oznQvZrbE"><!--pnid:ViEWwAGi3XWxAUPU0TUw5U-->后果</th>
+<th data-page-node-id="CMEGK7kWZIs4mYp9RYOwUT"><!--pnid:rX26SQ1X8JmrH7kwWrKkyF-->治理</th>
+</tr>
+</thead>
+<tbody data-page-node-id="vV8PEfr1Q0SgKnQVFjJBo2">
+<tr data-page-node-id="nFc9KqchOy1WTxx1A1ylfF">
+<td data-page-node-id="vugbFWwQwnvY3oCL5A2zj1"><!--pnid:zZvP8FDNblydR6ky8Njade-->控制器全集群 list 且不带 selector</td>
+<td data-page-node-id="jYZZzkjfRFrr3kpbNPx3LI"><!--pnid:1JiJLdaHZSyOtRWCaUzrEL-->巨大响应体 + 序列化 CPU</td>
+<td data-page-node-id="iJULjxrujE3zuH43VTT8WA"><!--pnid:QeB8QNVWMef5b4oiMRd29D-->强制走 informer + field/label selector + 分页</td>
+</tr>
+<tr data-page-node-id="h1IXErfjJsxWgrfJIElWDO">
+<td data-page-node-id="Oy8gtsOv2raSmVCniopAp0"><!--pnid:iGakvGKubpBkCBP0wUzt28-->每个组件都自己 list/watch 同一资源</td>
+<td data-page-node-id="2t3FuTGfjLTySeSp3lNh3O"><!--pnid:IgXnKqIwy76Hl0G1mDTwce-->N 倍流量</td>
+<td data-page-node-id="k41sfitEhJ7IieGwGYXjvt"><!--pnid:K5f1HxicOrZNcCsrbayj8j-->使用 <strong data-page-node-id="x1mXeiFmgFkMu3lHUEoEm4"><!--pnid:H0sSTkJImRIuFyxlGqwQk5-->SharedInformer</strong><!--pnid:lxCUUcb46IBDLo1d0npGre-->；或走 informer 缓存代理</td>
+</tr>
+<tr data-page-node-id="PpY6OyczKs41gIzkYAKayF">
+<td data-page-node-id="dAWMfc0yXxXuvqKNdGWxCj"><!--pnid:wMBIbQo9A2CdZZaIcdrZRv-->watch 不带 bookmarks / 反复断开重放</td>
+<td data-page-node-id="TeoUQFpdQCxtd2S2jfgrc2"><!--pnid:iD0es46uluUyHpzqV642ji-->消息洪峰</td>
+<td data-page-node-id="1UYSViP16sYi9jcSDYpHJN"><!--pnid:jlR82JynjrPxNH8uM74kMf-->开启 <code data-page-node-id="oEGNnX79BhogDozJ4RvprJ" data-pnid-children="SZKlhpEkcYIjEEiOuyRpnP">allowWatchBookmarks</code><!--pnid:4W1NeV7P0SVqrbbfymFrYR-->、指数退避、合理 relist 间隔</td>
+</tr>
+<tr data-page-node-id="KlvA1NCrdYzW01xXrSwyia">
+<td data-page-node-id="G14qO36jytP3qD2AyCcW1d"><!--pnid:nERbWFphLQwLLyFkKoGy65-->客户端忘记限流</td>
+<td data-page-node-id="X8qYNz70uGV9o9996yWcXH"><!--pnid:nut38Dlg2GwE2KTrcInDJE-->打满 apiserver</td>
+<td data-page-node-id="ucU4uqlZ33SWTjSBOPqzGL"><!--pnid:wTQvjGE43hUyvTUBj92bOu-->client-go <code data-page-node-id="A5AgCrpJeez11VTCxRtGud" data-pnid-children="MuoftdcPCwqnYLLFaIxLYA">--kube-api-qps/burst</code><!--pnid:sEydL77KdLJ8plnGeE3KaX--> 或 client 侧 rate limiter</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="L5zjxENQdDXccrge34Sg1y"><code data-page-node-id="ifd8BJqbsIOv3CvO2Uyv1t" data-pnid-children="gbAdEE6sFGFMs97EJuX8U0" class="language-promql"># 谁在大量请求？（找吵闹邻居的第一条语句）
+sum by (user, verb, resource) (rate(apiserver_request_total[5m]))
+# 响应体大小（大 list 的直接证据）
+histogram_quantile(0.99, sum by (resource, verb, le) (rate(apiserver_response_sizes_bucket[5m])))
+</code></pre>
+<h2 data-page-node-id="p1a4JUd6QZtK18aR1gmKy2" id="e3"><!--pnid:HmS1iI7NeqjYACdoJxt88o-->E3. 对象数量与体积治理</h2>
+<ul data-page-node-id="OBXdreXLVM1eMW7egIuEzo">
+<li data-page-node-id="cfudDLJRxCqSSrNvaxwzn0"><strong data-page-node-id="ohZSrnh3CkWPKNUxgEsZrq"><!--pnid:GEaJYXRzP1bfnHwaeSTh7Q-->避免在 ConfigMap/Secret 里放大对象</strong><!--pnid:byDwSv97TWAhgNNvoYSFeX-->（有大小限制；大对象会拖慢 list/watch/etcd）；</li>
+<li data-page-node-id="xie0JbpejQUy17t3olNwfc"><strong data-page-node-id="7I4NXjFnGt7wbiOg27hoV7"><!--pnid:jQYM91QLNWMkCufTUo4gwn-->Event 治理</strong><!--pnid:0RTruV41RJUgmQa64xW4OM-->（TTL、准入限速、独立 etcd）；</li>
+<li data-page-node-id="4w79O2lGb5RRHWDRzABOO9"><strong data-page-node-id="cn4cMesXNPmxx9LRMhof8V"><!--pnid:BFxRmGywvvT1tyxUZlmkOP-->减少 Lease/CRD 的无效增长</strong><!--pnid:stexdkZuFqCGbEnmtXDdmY-->；</li>
+<li data-page-node-id="2ANWhThFoPMY4VAeNy41Ul"><!--pnid:NckI77SBwB8XdOrbpnCTCh-->定期审计：<code data-page-node-id="Tohc8xeju8bAseuIh3wsQM" data-pnid-children="GKlnKaToISAaUUpNqsklFA">kubectl get crd</code><!--pnid:zq21lBNu12IXVjKSSBpNmg-->、按对象类型统计 Top N。</li>
+</ul>
+<pre data-page-node-id="ZahTak6d2OtC5VYvfQlUgJ"><code data-page-node-id="gz63XMROR8tSvOzJHmM0Xi" data-pnid-children="erVYIak9Efo7JfJs8Vy00J" class="language-bash"># 按对象类型快速估算数量（示意思路）
+kubectl get --raw /metrics | grep apiserver_storage_objects
+</code></pre>
+<h2 data-page-node-id="xQUKSbme5yGTmGDzKZXFEe" id="e4-apf"><!--pnid:xtpwhcNDC8AMYAeinqma65-->E4. APF 的生产配置思路</h2>
+<pre data-page-node-id="hQGrFaE2UZxXFHkw0GCN7h"><code data-page-node-id="0aMdMMsqkyniEgikFUcjs8" data-pnid-children="QNfnmpUZFOKxyUvxUl9f0l">① 先区分&quot;关键流量&quot;：leader-election、kubelet 心跳/status、scheduler 绑定、控制面探针
+② 为它们配独占 PriorityLevel + 队列（避免被吵闹邻居挤掉）
+③ 对&quot;全集群 list / 非关键 controller&quot;配低优先级 + 短队列（打不赢就让它们失败重试）
+④ 监控 rejected/queue depth，逐步调 shares
+</code></pre>
+<blockquote data-page-node-id="P1eeBIOj3ZTZb0VkM7vTJ2">
+<p data-page-node-id="RqYYMFTWguQn4jUZYdn08y"><strong data-page-node-id="15racrjcYwBsQE8si6rTEf"><!--pnid:HngdfN4LUAjogC82j6cfNu-->注意</strong><!--pnid:TuAUWoYjqamsQNlIwJYSn4-->：错误的 FlowSchema 会<strong data-page-node-id="jXyl2Uw2NooaN1M6IEVPwy"><!--pnid:B6cezblsSQsoOH1Bxrovhr-->误伤关键组件</strong><!--pnid:9WLFFODutiVn7A5f6vokut-->，任何 APF 变更都应在测试集群验证，并保留可快速删除（回滚）的变更记录。</p>
+</blockquote>
+<h2 data-page-node-id="w8TVUvT7nykFkbutr9hrob" id="e5-watch-cache-per-resource"><!--pnid:ClA0wZolFQ6WP4NU0aYC6o-->E5. watch cache 与 per-resource 调优</h2>
+<ul data-page-node-id="OGe3yXso7vPXsUQ3gdatru">
+<li data-page-node-id="j8tVxoDHQfBCjxjG4A0Oly"><!--pnid:r1kpj4CcnZCSVXn93qQz2U-->热点资源（pods、endpointslices、nodes、configmaps、secrets）优先加大 cache；</li>
+<li data-page-node-id="SDwGp25BGRcVh2f4U6o7lR"><!--pnid:YWhhGcxnK3hxJEx8iz4Ziu-->观察 <code data-page-node-id="PWGbEy2gkBobKtB1mmaueZ" data-pnid-children="BDrixLDCONNaPZDsZutyih">apiserver_cache_*</code><!--pnid:vmgINRDlPomuYnNssv9SIn--> 指标与 <strong data-page-node-id="mgeZP2fPt3lwlvoGZrjGda"><!--pnid:RdawTHBBhTYXvb5SoWQQ2D-->apiserver 内存 RSS</strong><!--pnid:C7Z4n044ybxde3cCQ1zyFX-->；</li>
+<li data-page-node-id="JvENuX6yJJli9ySqQVqkbM"><!--pnid:Kq7Q51i52ICdAsXCGFjhxc-->内存与一致性之间取值：<strong data-page-node-id="JQ9Avbdh2HHBQMAtjaeRLu"><!--pnid:1ShPVEL5gM8BYT5fQADXJu-->建议先给少量关键资源加大，观察 7 天再决定是否继续调</strong><!--pnid:tzvFb2inWwIPl6Dyn4UC2P-->。</li>
+</ul>
+<h2 data-page-node-id="bBUVv7fXnEyPJkOuRTAOnC" id="e6-etcd"><!--pnid:nCr3cWYBYiGKTwILOf7hxo-->E6. etcd 侧的大规模最佳实践（汇总）</h2>
+<table data-page-node-id="C8msp65jMGmMpzolwPe9az">
+<thead data-page-node-id="nGjrDlSSYdWuVOWHqoGXZb">
+<tr data-page-node-id="KEu8FDvCVX78yaZCIPOJLV">
+<th data-page-node-id="FCzno4cXalmmZNTRyAqkAi"><!--pnid:nPtvRvKptdGkKwinBKV1Zo-->项</th>
+<th data-page-node-id="yu09HIZ99KCxFMYJ6TevE5"><!--pnid:4mABCtUXFJ1hTdbyLRIUDY-->建议</th>
+</tr>
+</thead>
+<tbody data-page-node-id="k5yPkrIMJH79Lvvl0wr0Dk">
+<tr data-page-node-id="qyWfJbXRgfVnChjCFOrwQf">
+<td data-page-node-id="WljIlrTMYUkEcJgAGpnR3A"><!--pnid:OrJNsTVbebYMQZD387qdEd-->磁盘</td>
+<td data-page-node-id="Q94nPcqDX2oy2ta0TRWpw7"><!--pnid:6xfbjy5ymrKcWmOGJ7WTln-->独立 NVMe SSD，不共享</td>
+</tr>
+<tr data-page-node-id="rq6Xcv2ZaAbg96snXtCzv4">
+<td data-page-node-id="TtW0c3bchp74cMhdz38Z1p"><!--pnid:odvP7nmQdCpbR6Hm6dGmFi-->配额</td>
+<td data-page-node-id="ARmc3cxU7jwGFjdxBVC60s"><!--pnid:zyMIvnJo6oAYhARbAPkCHu-->按数据量规划 <code data-page-node-id="A1vLHf5D6cQ7tTp7jFxyTa" data-pnid-children="O1TMus9Zpu1rEAMB1OrG8K">--quota-backend-bytes</code><!--pnid:9qytidSuZAuMCsciOECDZV-->，并留出恢复时间余量</td>
+</tr>
+<tr data-page-node-id="Ow0v3mX8HSF3zkdweEDBiJ">
+<td data-page-node-id="aRrPCXJCqWK186CL4YMAfH"><!--pnid:tTvQ46m5NCxjsY3CPC1F75-->压缩</td>
+<td data-page-node-id="3Q2yMoZRaUZhgEWEXKA2Me"><!--pnid:W8eLa84SrfjQ39qrCfW5nV-->开启自动压缩；保留策略按审计/回溯需求设定</td>
+</tr>
+<tr data-page-node-id="dh6GXgkTv5hTr8c2g0XIiQ">
+<td data-page-node-id="tFo7JB76RdKr6bhx8fwcBE"><!--pnid:NUBsp7rycndGofZxK8BJgf-->defrag</td>
+<td data-page-node-id="l8EnqTxkenqcCaIIKaYtcm"><!--pnid:3VBL1VYcRIIztQ2dQkMBjA-->定期低峰执行 + 演练过</td>
+</tr>
+<tr data-page-node-id="5CZR34IhlneSz4bQqs5wLm">
+<td data-page-node-id="amxHV5dmN8ReFozLnffBL6"><!--pnid:Czhe7GkcWDG32pXwx0bS9u-->Event</td>
+<td data-page-node-id="2bglTnKxBiCHj4siIjJTN7"><!--pnid:FeIDEex0KnUKtmI7mhryKo-->独立 etcd 集群（大集群）</td>
+</tr>
+<tr data-page-node-id="OHWyplV3FV70V6SO21gTrS">
+<td data-page-node-id="9PVHasSEk64vSLSS1R3hOg"><!--pnid:QepzbW9UoWoFG2wKe70uDS-->机密性</td>
+<td data-page-node-id="bVude8CrqUWV8CGrtETPyk"><!--pnid:cyZ96ZEYndgj2himl8FkbM-->Secret 静态加密；注意 KMS 可用性风险</td>
+</tr>
+<tr data-page-node-id="oCbKmGmZ1Ezd6QkjGKd54P">
+<td data-page-node-id="L2LBBM4sLIAIbGgOrcESbt"><!--pnid:XQJunMsiKAowguw8XZoLfu-->拓扑</td>
+<td data-page-node-id="7ClI6GrXgNafGPW0EwoFOc"><!--pnid:V3mDe3iUhQx7p9V0YvPLMf-->3 或 5 成员，<strong data-page-node-id="cxN3znv3P5TrscRiTMlM8y"><!--pnid:Vx1h0skt2gSYWYWIfXrcrT-->同地域低延迟网络</strong><!--pnid:XawamVqTPyI3hWb2S8VVTJ-->，跨可用区需压测</td>
+</tr>
+<tr data-page-node-id="OdxgF37aliI5lYaHDdDuGE">
+<td data-page-node-id="Wk6v1SkZ00bUgApWUGxJcL"><!--pnid:5TR2TxZcLsAblzr7bio8jM-->备份</td>
+<td data-page-node-id="xMMM4AJ0sL9H90cOto6r8R"><!--pnid:kKQv1BhgkS6IekfiOBzAaE-->定时快照 + 定期恢复演练（RPO/RTO 写进 SLO）</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="qOc85C1GCMdV8wIpH4VjFW" id="e7"><!--pnid:mNN8ThdAYqTK48PgGyArrs-->E7. 控制面组件升级的标准顺序与风险</h2>
+<pre data-page-node-id="uBJBuF375rWlzqXgX1o096"><code data-page-node-id="hnLkcVoiVUHzOs06CuO0f4" data-pnid-children="bbO8P3xxUHLqjAMbjbmHIp">① 先备份 etcd 快照（这一步永远排第一）
+② 升 etcd（一次一个成员，确认 health 再下一个）
+③ 升/滚动 apiserver（先灰度一个副本，观察后再全量）
+④ 升 kube-controller-manager / kube-scheduler（依赖 leader election 自动切换）
+⑤ 升 cloud-controller-manager、kube-proxy、CNI、CoreDNS
+⑥ 最后升 kubelet（按节点池灰度，遵循 skew ≤ 3 且不得高于 apiserver）
+</code></pre>
+<p data-page-node-id="DpAJoeJYCfreyN69RhWz2V"><strong data-page-node-id="eEXcyJpyQBg1lmHqjknIks"><!--pnid:d2tZQBJe6Oz3XN5k99wrsl-->风险与回滚</strong><!--pnid:7hFv2XbOtFf1JdjiAaDPoU-->：
+- <strong data-page-node-id="DrVYLqppxmGX8quAlIWA6G"><!--pnid:wE2n1fo79vLvVJvZqtLUfR-->etcd 版本回退几乎不可行</strong><!--pnid:6ym2PiSeYLpPBSrJ2HfSqX-->（数据格式/dbVersion 一般只能向前），所以 etcd 升级必须"先快照、慢一点、一次一个"；
+- apiserver 回滚 = 换回旧版本镜像/二进制，<strong data-page-node-id="Ce4Z63seyK5zYX0lldIXJC"><!--pnid:DIt2GIHjTrgVNOZNKtVnHh-->要注意 API 是否已经对新字段写入</strong><!--pnid:5Wfhek6D7fgfnpSn4vaCxn-->（可能不可逆）；
+- kube-proxy/CNI 回滚请见网络篇 C13 的双池灰度法。</p>
+<h2 data-page-node-id="O1WmGmM1sznFCsHyv9JHsg" id="e8"><!--pnid:Oj4x4nb8dOfBZHuHYYDDwe-->E8. 多控制面副本的流量与优雅下线</h2>
+<ul data-page-node-id="rPytWUHxbVovkhEq6dwI8a">
+<li data-page-node-id="4CeZjU6tqMDcY3piPFOkxo"><!--pnid:xnYL2ve27SGLlJJLKMwKO3-->LB 健康检查建议用 <strong data-page-node-id="CDkOgDZ6nh0no0LrhQ32ef"><code data-page-node-id="RHY1UilSbrs305jOWtg1FS" data-pnid-children="px6OSRRVRuXoPCBg4oPwre">/readyz</code></strong><!--pnid:oArb9s098OOAIf8y8N4A52-->；</li>
+<li data-page-node-id="kIDMt2A7Q7hxR35CeqZkW0"><!--pnid:gn6Cftz05bZZkRj17IjSRK-->副本滚动时要保证 <strong data-page-node-id="zwtevjkQGP5YNvc88yKD9z"><!--pnid:5a96Jl23Jr4gwubezfZTcb-->watch 连接平滑迁移</strong><!--pnid:gHmWkrrAUlo1UyA1daEv71-->（客户端要有重连退避）；</li>
+<li data-page-node-id="CrNMVRxcJlhVWCGDJ4sdjw"><!--pnid:RibpbLeLtp6wpaCJyBTVZZ-->注意 <code data-page-node-id="HI2IiRRvO8kDJp1ceLQTD6" data-pnid-children="MwKskBm1vlCm6AnUO2p3kK">--shutdown-delay-duration</code><!--pnid:8RC7biMw7vh9yltNYhwfGL-->（或对应机制）配合 LB 摘除延迟，避免"已经停止服务但 LB 还在转发"。</li>
+</ul>
+<pre data-page-node-id="CZLU3QwjgwgQqPmKkHdg8b"><code data-page-node-id="P4HLFquqX13ls7yIPCal11" data-pnid-children="emvYv6zsQhH1kCVGp0CFeP" class="language-promql"># apiserver 就绪度
+sum(up{job=&quot;apiserver&quot;}) / count(up{job=&quot;apiserver&quot;}) &lt; 0.66
+# 请求 5xx 比例
+sum(rate(apiserver_request_total{code=~&quot;5..&quot;}[5m])) / sum(rate(apiserver_request_total[5m])) &gt; 0.01
+</code></pre>
+<h2 data-page-node-id="nm45VxQoGXChQqfWnObWKc" id="e9-etcd-vs"><!--pnid:VzYIZCpiSZLLyeHvR1N8Ux-->E9. 灾备：etcd 快照 vs 对象级备份</h2>
+<table data-page-node-id="tKKkuMDntWfXUgtBz9LBtm">
+<thead data-page-node-id="Sxr6VEnbPSbb9AWo7ixFQK">
+<tr data-page-node-id="I4dF09HjMrCJ0ftsejufzy">
+<th data-page-node-id="0Gd5BsGuG5A8jnMAWVwQUZ"><!--pnid:T2fuOnEUQBxcbq720QEB8A-->方案</th>
+<th data-page-node-id="GohafK5IaGPA8Zx3H6Tqa6"><!--pnid:DZBhvP93N2w3WQkYNcxr89-->覆盖</th>
+<th data-page-node-id="6aFqcnU18nrdUvI4dCGFsX"><!--pnid:UuJ55OR0JYoTF4PlngZlNH-->恢复粒度</th>
+<th data-page-node-id="mdVWz5J9rWx4WHpVw2G7ts"><!--pnid:vonSDuXtW4mYDdWtkSQG00-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="fjChNKHouLtHpseiRm54Is">
+<tr data-page-node-id="lhmEg3VrQRIyKbp8n083Td">
+<td data-page-node-id="d4dXgKmyL0EA3mXHLx9xbL"><strong data-page-node-id="PmWuwk9HfZiQpSe4oODd0R"><!--pnid:LVzPC3YvACb9wOv05Z8ARo-->etcd 快照</strong></td>
+<td data-page-node-id="uzOV1WdVjPkldFP0aLFtfd"><!--pnid:uai5giNBHOx9hEb9UBGAO6-->全部对象状态</td>
+<td data-page-node-id="2ISIjMn8V0CjTzvbAevCQE"><!--pnid:tIM3P7jffl8lU02pMSJUFk-->整集群（很难只恢复单个 ns）</td>
+<td data-page-node-id="13RzF8aPpOV6ZNmoMmOl6S"><!--pnid:GsdjrLFp8pSQ0zVIHFCA9a-->集群级灾难恢复</td>
+</tr>
+<tr data-page-node-id="l7VxD7svBLfFkLdxTVWIA5">
+<td data-page-node-id="e1zs3jM3QEva4rNZw16O3W"><strong data-page-node-id="6XVNAbHxGb5qo5ychtgiQm"><!--pnid:hQ9z6GmYymhGKP9hB18ozA-->Velero/对象导出</strong></td>
+<td data-page-node-id="qJO0k8ANCdAR4FYicQi2Z2"><!--pnid:rdf4AWnYJVb0yiLzXP3xKY-->指定资源/命名空间</td>
+<td data-page-node-id="QXvtR2r250jl2Uui5YmjXk"><strong data-page-node-id="LUY8ckAvgzpAZrlVhXJ5aI"><!--pnid:90xOV8hiORJHFbEVFu4vTR-->细粒度</strong></td>
+<td data-page-node-id="l0Ir2j0GWOhdDwSrg266JI"><!--pnid:czF4JaDxNoMbuIDwuWLU0t-->误删恢复、迁移、审计留存</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="b0GL7LM4d2eAxAwOjtZyRa"><strong data-page-node-id="1AHyWIYllrBZDHjA3ZFrRb"><!--pnid:LZC0qbmO5QfJGFqqYnPQE5-->建议</strong><!--pnid:NC66GjaohMtEYjS7hC2BoO-->：<strong data-page-node-id="PFKR81EoZG3gVGfUqgQvE7"><!--pnid:3YyBtbz9GocjXd8EUZ9lOX-->两者都要</strong><!--pnid:hRO3vaUkIyQqLiQAtqVym5--> —— velero 负责日常误操作恢复（高频、低风险），etcd 快照负责集群级重建（低频、高风险、必须演练）。</p>
+<h2 data-page-node-id="XT9VdiX4BPnVhJOFGofigy" id="e10-slo-sig-scalability"><!--pnid:D7eoiWcfhQcOwteucn7BIC-->E10. 控制面 SLO 怎么定？（SIG Scalability 口径思路）</h2>
+<p data-page-node-id="oMcpi4ZhLj5lXw2w2bVLf0"><!--pnid:3MN889bB1if78nGjDKoWBS-->社区对 API 延迟有明确的 SLI 定义（<strong data-page-node-id="czuBaKE2ajEd7IMKoalx9X"><!--pnid:yepw9RqCNRKRYJ5VMUIsZf-->口径请以 SIG Scalability 文档为准</strong><!--pnid:uGauBCj9KdbUfWoUCZH8Uv-->）：
+- mutating / read-only 请求的 P99 延迟（按 request scope 区分：cluster / namespace / resource-level）；
+- 通常 apiserver 会暴露专门的 SLI histogram（如 <code data-page-node-id="6dkpuO5AMMhuccPbr3aF30" data-pnid-children="hAcvvjO28qRHo2XnQBOIeZ">apiserver_request_sli_duration_seconds_bucket</code><!--pnid:AeruCYOfUXIYipyYGFL76k-->，<strong data-page-node-id="nMXZUehOo7Mj2UUCo05HDk"><!--pnid:zISs2oOP5c9DZ6XJyVThDj-->指标是否存在请先在目标节点 <code data-page-node-id="IAKhqAIG31lihdMsR2o7rm" data-pnid-children="gsL6LMWEWUcGNWxwjIEp3w">/metrics</code><!--pnid:dV2Kq2oaWA5Lg9SQzrIhR6--> 核对</strong><!--pnid:vISKekduXK8Ovdi6N8cD9I-->）。</p>
+<pre data-page-node-id="gHhqsbTyvQbDlTejtSsNuR"><code data-page-node-id="TwzBsVJD1yZdCgzrTO1Dw7" data-pnid-children="aD1hH98p8Zp1bkyhLqWdbU" class="language-promql"># 通用版本（可直接用）
+histogram_quantile(0.99, sum by (le) (rate(apiserver_request_duration_seconds_bucket{verb!=&quot;WATCH&quot;}[5m])))
+# 分 scope 观察
+histogram_quantile(0.99, sum by (scope, le) (rate(apiserver_request_duration_seconds_bucket{verb!=&quot;WATCH&quot;}[5m])))
+# 写操作单独看
+histogram_quantile(0.99, sum by (le) (rate(apiserver_request_duration_seconds_bucket{verb=~&quot;POST|PUT|PATCH|DELETE&quot;}[5m])))
+</code></pre>
+<h2 data-page-node-id="OiZV0JUVSDVoTKrGczZGxz" id="e11"><!--pnid:O8vjrZuPL8EPMdXwHuUDvs-->E11. 控制面故障的三类典型剧本</h2>
+<table data-page-node-id="869M974GGewxgcbnxKnfAq">
+<thead data-page-node-id="0igm6yUIyRNyJ9ifEGqpay">
+<tr data-page-node-id="E1DYocWwuEgNSdKFSx74pQ">
+<th data-page-node-id="k672brO10clCbFAT9rhJ6R"><!--pnid:Czg4ne25Klql95OrioF7zk-->剧本</th>
+<th data-page-node-id="owPndUeCKwBqXt9OuVimCW"><!--pnid:BARxwEjJpRkZymxHLIVh2N-->现象</th>
+<th data-page-node-id="ilTdKxzrdUNqhizONj9ANk"><!--pnid:1iyIwY2QYCbqB0jrjNyWOW-->首要动作</th>
+</tr>
+</thead>
+<tbody data-page-node-id="Q7Mx19qqahBXriQ0ff3aQP">
+<tr data-page-node-id="xJzvAwFeFryS8UOWjV6RpZ">
+<td data-page-node-id="vcGFzzG31ywAGXymUoNCxK"><strong data-page-node-id="AHXO2qgqinfRBaZ2cUzRei"><!--pnid:Uj46BxQtcjIWpCftXpgvGq-->etcd NOSPACE</strong></td>
+<td data-page-node-id="yOHMo39TnGL1Stht2nKAi8"><!--pnid:niPN7tTBNcP891ZCLxzb28-->全部写失败</td>
+<td data-page-node-id="tffql2l5BpkvGxrJFLGt77"><!--pnid:enGA7HK4uESF6dnywpqAQj-->B3：compact → defrag → alarm disarm</td>
+</tr>
+<tr data-page-node-id="rqMJ388tHAIN7lLSFbdHrb">
+<td data-page-node-id="vOLzvXvlGYWw02ap82uWBU"><strong data-page-node-id="9JJ3CmmP8nWBGi0aLuDEu4"><!--pnid:St8UJp0N1MfjEfT9lIhAEs-->etcd 慢/频繁切主</strong></td>
+<td data-page-node-id="VFiljHCjoqltmQ4L5QXW0M"><!--pnid:QmhyzRncyPr1rxpKCecTBq-->全集群 API 延迟高、大量重试</td>
+<td data-page-node-id="TKLHMEnOUL25iNAfbHLbvu"><!--pnid:0UXFhrLA3rFGCQkIXEe7uT-->查 fsync/commit/Peer RTT；查磁盘和网络</td>
+</tr>
+<tr data-page-node-id="sKCON6nDF8dVfHtuqX8spl">
+<td data-page-node-id="XrkofipNXsOh775xjSC7AD"><strong data-page-node-id="sk9O18RrMKK1pv8BD08PuK"><!--pnid:eg6sqYteMuu74Vbw7F7gSs-->证书过期</strong></td>
+<td data-page-node-id="qQr44AZoRbhEgSHugI9Qgi"><!--pnid:no3jWXiebdRMf1NzprEutK-->组件互相 TLS 失败、无人/auth 失败</td>
+<td data-page-node-id="yYSKxEk9q9WY8PQNfIcDbr"><!--pnid:nNuSdN57K2KVS5pMjhCchh-->轮换证书（<strong data-page-node-id="yA9V2gFmZIFzSW7wIFlmqj"><!--pnid:ed91kXKKSDVZdt4pwKZVrO-->平时就该有提前告警</strong><!--pnid:pj1TVKBKuH6FAv0sBH1arA-->）</td>
+</tr>
+<tr data-page-node-id="yksypzGbg1BMLmY2ZK6rQi">
+<td data-page-node-id="LAlw9GM6pppKP7iD2ez7qF"><strong data-page-node-id="0ItWs6PD7AEZYTAWeABLr3"><!--pnid:rYoZkI5RgNXg4YaCQtwtU9-->Webhook Fail 卡全集群</strong></td>
+<td data-page-node-id="fRHLPDuKpGS15wcPZc5JQX"><!--pnid:bpbgy66kiLjx6p85F144W2-->所有变更被拒</td>
+<td data-page-node-id="j6w4iv0wP4GmRrVNfC6DOY"><!--pnid:DFWM6bohBiWvlQKXHG7yqH-->立即删除/禁用该 ValidatingWebhookConfiguration</td>
+</tr>
+<tr data-page-node-id="wRdnfgW2PJ9JehJyMf7eKH">
+<td data-page-node-id="HBPFiyUJjnruRGzRiXWDdD"><strong data-page-node-id="CjR2NRejTWEA2EU8ToNTIS"><!--pnid:ojNGDKotCIgfFeUm9WZpLz-->APF 配错误伤</strong></td>
+<td data-page-node-id="Z1DoZ0f5snu8q4lLc0Kh7p"><!--pnid:yKirH1zMHqTxueZU9xnBcO-->关键组件 timeout</td>
+<td data-page-node-id="pPJVgARWkl2dXyCRICkVD6"><!--pnid:syWmegqhAG5xFt3TmT7lOL-->删除/修正 FlowSchema-PriorityLevel</td>
+</tr>
+<tr data-page-node-id="4EsvrRcBT1xbdqidaJhd2M">
+<td data-page-node-id="fLaRh6e4zKf5OLZsDYaGAR"><strong data-page-node-id="qiIgaqBMXnUUlPU3HRvMnE"><!--pnid:ky1YiNNUJdwrBXBAuEw53L-->LB 导到坏 apiserver</strong></td>
+<td data-page-node-id="ZDXrNyVCOCLl5kR7KV1Qdi"><!--pnid:ehMsZExrW08iUcWwdI1prM-->部分请求失败</td>
+<td data-page-node-id="HuEwmnHvS3nrntuGSeXs7w"><!--pnid:kQXFOTgCnlGeBT6Zh4OS6P-->健康检查用 <code data-page-node-id="4yoM34u4wnZHU45oQ3IteS" data-pnid-children="AQ4YB7AhcMDeBLhNKSSuBl">/readyz</code><!--pnid:kMLZPxXZ44UOqYcqlHZ6gg-->，确认 LB 已摘除坏实例</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="aSMryzVK5AVRJO7s8DBtv8" id="e12-2000"><!--pnid:1n0lpmiOeGuC57AIuaVqj7-->E12. 给你一个 2000 节点的新集群，控制面怎么设计基线？（综合题）</h2>
+<p data-page-node-id="VhYqLe7l6NSeic2y58mbmz"><!--pnid:ay3IVlDcjlZnqENIIbWOHi-->按顺序答：</p>
+<ol data-page-node-id="iMAKcGddZXlU0heYXjVFXD">
+<li data-page-node-id="GJUL1olsqKiztZpnFSUhyP"><strong data-page-node-id="45avD0DnKeAhtCZF0vEOeT"><!--pnid:3cMWhuC0sqQseS7OSzuzbU-->问 SLO</strong><!--pnid:ukCxoTPxYzjLOzAOptZG2z-->：可用性目标？RPO/RTO？业务对控制面抖动的容忍度？</li>
+<li data-page-node-id="IMWkN8V2kAf0yPIzg50FjK"><strong data-page-node-id="2mblQYvo8WlXLlVK3ievv5"><!--pnid:eGLBrGdkcsvLeTKvQFxTNz-->拓扑</strong><!--pnid:isrfCbQtJ5txRrR6xBlwGp-->：apiserver ≥ 3 副本跨可用区 + LB 用 <code data-page-node-id="TsHNxj2SWl04FWrIqmgIxf" data-pnid-children="OeNgVllXyTR0mXHs9ZLCTj">/readyz</code><!--pnid:wL9FxcZO8VMwZrJl7zAklb-->；etcd 3/5 成员、<strong data-page-node-id="dP8cWTxsBwRWDQOjBWlrDO"><!--pnid:ZDCLi8YTzVr9YUmOc8tpT0-->同城低延迟</strong><!--pnid:cl6LBBiNnay9x0z5vXQt16-->、独立节点与独占磁盘（NVMe）。</li>
+<li data-page-node-id="bVLs6sAE0OureCOZi8oeEb"><strong data-page-node-id="CYpbd85grB2z96Dmj3iwEV"><!--pnid:6E72gAOwl52d158GJ7NvBe-->容量规划</strong><!--pnid:Qc5ARKdwR2fHtolxh12tNL-->：对象数、Event 量、list/watch 主来源；是否 Event 独立 etcd。</li>
+<li data-page-node-id="TcxDsaobEWQOvNzMDZIZk7"><strong data-page-node-id="2hlCdIpcZldV3cX3EMQGf2"><!--pnid:dFvuzrxBmQiMAuZYDr2q6Y-->参数基线</strong><!--pnid:kC1DfGSU5TM2mE5bNMbQwm-->：<code data-page-node-id="cgqCqW0smSOQshoteias45" data-pnid-children="Mg1bV3PU4OicLepmSabDMf">--max-requests-inflight/-mutating</code><!--pnid:J86k0cpUzSIPU0YitDpVYv-->、<code data-page-node-id="S8aqOdFt0z2XeCP7zEi3pI" data-pnid-children="wz9bhBdA5XC3kNQGA5JZ4A">--watch-cache-sizes</code><!--pnid:SMPF5xUc1G7SacM1CcIzwt-->、<code data-page-node-id="wS7DjHg4E1QJ6Dey9EDyyS" data-pnid-children="kcWMg9rS9adu5gI8CC8hfp">--event-ttl</code><!--pnid:lQ8F7lExeERs4taASo9TjJ-->、<code data-page-node-id="5vywDDii3i3NDrNDBvKgt5" data-pnid-children="pePCw78y4aIHfpKbUgMpE3">--auto-compaction-*</code><!--pnid:MzVwI0ANPJV48UbaZVg90w-->、<code data-page-node-id="WQshsEDWd4Jk6yJgRNx6F9" data-pnid-children="1X5jmF7kKCmp2eAZKj3uo1">--quota-backend-bytes</code><!--pnid:IxCwJ2rM9fpPCmOhAqNodS-->。</li>
+<li data-page-node-id="0swNuTLHYF5MKAFHOP1w1f"><strong data-page-node-id="H10SDUA78SzhMlUFl65Dmt"><!--pnid:D1LEnsbgy5YHJ77DKyCVaL-->APF</strong><!--pnid:Av65m7xze5cMJbDnkKu4O0-->：为 kubelet/scheduler/controller/leader-election/探针保留优先级。</li>
+<li data-page-node-id="DLUzlyZcB4ZOZiZvPYiZHi"><strong data-page-node-id="oKNZlkW4CcO1uBL2YVgVYp"><!--pnid:PjWDlnh4CjljwZluaod56M-->安全</strong><!--pnid:fUveerA2sbDYErhxj2t4T7-->：关闭匿名、最小 RBAC、NodeRestriction、Secret 加密、审计策略、webhook 作用域限制。</li>
+<li data-page-node-id="mySi8j0xEdpS4drTGIv9ZM"><strong data-page-node-id="yI8SsKJx2iQ2u15Se0MulD"><!--pnid:4w9i3SkA1NsOhGxOh8JUgl-->可观测</strong><!--pnid:5TF60jm88gjd5Wilfb8hQi-->：apiserver/etcd/controller-manager/kube-proxy 指标 + 8 条核心告警（见 G 篇）。</li>
+<li data-page-node-id="CXYN0bYTTnRS4hfnz2nF1a"><strong data-page-node-id="8XQ50R4ajnI5ps8VRZQKf2"><!--pnid:rMn34iSJ1hsXy7R0K7GBMg-->备份</strong><!--pnid:RE3u6zryyX28gL034sPlHD-->：etcd 定时快照 + 定期恢复演练 + Velero 细粒度备份。</li>
+<li data-page-node-id="ZqbHMhLEkpo01RDqOF6JIq"><strong data-page-node-id="AHWfjsT43zNEDM6CqeJOO0"><!--pnid:SYWOWehFno5Q83me8UoDNl-->演练</strong><!--pnid:2tbVGqqTcl1lSCJFOy5AEJ-->：GameDay（见 H 篇）。</li>
+<li data-page-node-id="JbGGX8XWrkUG5mYXStTxKk"><strong data-page-node-id="x4IfZ4tSdBU3vNE8uIvjIc"><!--pnid:fEfMkugQqzR1X9epQB0p4V-->变更治理</strong><!--pnid:elTwSVGG9JXekGWkKGXY6h-->：E7 的升级顺序 + 灰度 + 回滚预案，全部落到工单与脚本。</li>
+</ol>
+<h1 data-page-node-id="GlugPlt9P6utXGNujoto4p" id="part-f"><!--pnid:oYSVvhdMIFxctr7TGBtGGw-->Part F · 反模式清单（可直接用于生产巡检）</h1>
+<table data-page-node-id="fcgiJZq2vEy59x6GHLyET6">
+<thead data-page-node-id="jg6E3sDcYRvs7tiVfazkoJ">
+<tr data-page-node-id="W5aiKk3vjhgaeCMw2KELCq">
+<th data-page-node-id="axr9RZ8EpEj6xi4Nw88ygJ"><!--pnid:Yu5Pf9hmpt79sUxRr1Xs4f-->#</th>
+<th data-page-node-id="WW1gMk6Et7KEkChrIH9Eem"><!--pnid:3YH6Nqg372Gzuz9PKYnCy2-->反模式</th>
+<th data-page-node-id="0kZPWJIm7hMNKLnRFtDUKh"><!--pnid:cwiaVcCelYEys44ra3qjbw-->证据（怎么发现）</th>
+<th data-page-node-id="YrGpzzBFaJ5WPzJcDWzcXg"><!--pnid:szl5bFHnvthbYsURz48YN6-->等级</th>
+<th data-page-node-id="sh4SBGTmZLzhY3yWxcPMrj"><!--pnid:O28B2UpsTOIr48vCvCNRgS-->修复动作</th>
+<th data-page-node-id="S2uUB03vlGi2XFuEelEl7o"><!--pnid:VHii2ru1ZFJ3eVatTW8JPg-->验证方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="AIyf56vUDumj5t0RPRTlpc">
+<tr data-page-node-id="mAquZl49XHv7MMhjXOpH96">
+<td data-page-node-id="XIxiWRSi5rbRTw2PwzENnF"><!--pnid:exX0TvRalVjpBDmYKXhUth-->F1</td>
+<td data-page-node-id="wX8OKaQxtilpmSMB6m9xd5"><!--pnid:0HiDxBc9XWvITgGTmmIUS9-->图省事给 <code data-page-node-id="9CWBnljXdL7E1FMgc0fLmT" data-pnid-children="CcYvGoDEv6i4V6nf4ibMpQ">cluster-admin</code></td>
+<td data-page-node-id="y45OQnGUwZtNMC9O6J6O2j"><!--pnid:yxbS235XXReaWgkZzaXpYW-->RBAC 审计里大量通配绑定</td>
+<td data-page-node-id="WuFnntAxeRgAg3BVSyvhYb"><!--pnid:usOtNlpd0AxGI9rNHdfLF3-->🔴 高</td>
+<td data-page-node-id="aJRpVPk4iMzwq2L9QQWPD2"><!--pnid:WeVeG3KQSet6kVafvMMctX-->收敛到最小权限 ClusterRole/Role</td>
+<td data-page-node-id="kdk03JbbaU7B6TwFCkse6W"><!--pnid:kkLuvz4s3OR2F4rfwxI1Ei-->权限审计脚本通过</td>
+</tr>
+<tr data-page-node-id="3ZyCuiadZOOYNWRY25I2wj">
+<td data-page-node-id="lylveZQ9o9V1QVoU0HjOjZ"><!--pnid:V1qsSFeehnU79SWNX9Ttsh-->F2</td>
+<td data-page-node-id="bR4gL4QfLHqOmpaCfHBWv8"><!--pnid:wLCJRUpRQF3sc1l4XEq0JT-->Admission Webhook <code data-page-node-id="keXWrxVTukMOBW26hHBDO5" data-pnid-children="kubocwJlOl2hXmHefQKUZm">failurePolicy: Fail</code><!--pnid:y4PJB3LB6zqeF3kLbadrts--> 且作用于所有 ns（含 kube-system）</td>
+<td data-page-node-id="lOjFxReGVZvT5nfiSY31x5"><!--pnid:CdrI69tSvo5JbtNcUbhy0k-->webhook 挂 ⇒ 全集群变更失败</td>
+<td data-page-node-id="GQnP3kwej5GaB6lyHa19d8"><!--pnid:hxT8t6xuqnbtPVjGdV4TbT-->🔴 高</td>
+<td data-page-node-id="wGnHqn5GJ1gLos1ZGg64mN"><!--pnid:YnioMdCT9Wn95UKlUbuZIg-->加 namespaceSelector 排除系统 ns + 多副本 + 短超时</td>
+<td data-page-node-id="jgwVp8RiMTlU9gU0jZMGzq"><!--pnid:HSsC9M4ndfktFc1heiAYlD-->停掉 webhook 副本，系统 ns 仍可变更</td>
+</tr>
+<tr data-page-node-id="bmBsbSfmeEDqGGN2wkII5P">
+<td data-page-node-id="pcKgqmimKED09NxWNsokyC"><!--pnid:8l6dgs5MxWp8r5chWkoECf-->F3</td>
+<td data-page-node-id="Z4mODhyUkPMTdCPt4eelRF"><!--pnid:cWsZAWsZPnIAwEN9Hgan7r-->控制器全集群大 list（无 selector/无分页）</td>
+<td data-page-node-id="ir3oT63C6ly29LfByjHOSX"><code data-page-node-id="W5dvTEwHp0hQ0yWdEbFnoD" data-pnid-children="dNaZSXwW6TUAg8jEWyfwOD">apiserver_response_sizes</code><!--pnid:aL769XHzptIFqvFLsjRj1X--> 巨大、CPU 高</td>
+<td data-page-node-id="hEAu4ag7XhXHQVm1ydFHgI"><!--pnid:Sumu0nZZ2MvaXCiIMuTJPt-->🔴 高</td>
+<td data-page-node-id="QWhg1o3kpLPGhbECWmkDvH"><!--pnid:BepqqD7shUUNeTCSGsnNlo-->informer + selector + 分页</td>
+<td data-page-node-id="6RWtmxJUUmI6OYrrNROEOG"><code data-page-node-id="tP8ksTR00V3CYJT9jN1kCY" data-pnid-children="Um3iobiXV2GeHtSmMygSPz">apiserver_request_duration_seconds</code><!--pnid:thsniKMxhRiFJ2YTMjvoAF--> 下降</td>
+</tr>
+<tr data-page-node-id="IJaGlOCwqi3gHK8Ege0E2D">
+<td data-page-node-id="GbtEakdcEFkIh34ZXixAvb"><!--pnid:BkiFIdWS58KTIBzosz8PJq-->F4</td>
+<td data-page-node-id="MyICCjgFXK2nCltYhiJlBn"><!--pnid:e5zYaXGdK3Gnz7olqQ0wFy-->未配置自动压缩/定期 defrag</td>
+<td data-page-node-id="JPoLvAvn5R03EbS5AVGBOw"><code data-page-node-id="F9IUZGYJeabxZrnaVsP2mj" data-pnid-children="v6yGmPX38LioqHY6c5Y8vd">etcd_db_total_size_in_bytes</code><!--pnid:pF3H8Aiu1FNSPNku4yRuMi--> 持续爬升</td>
+<td data-page-node-id="G3OZvvYdMwRuWR4pFdA440"><!--pnid:50GS92lBs0PvY1BVGRyarx-->🔴 高</td>
+<td data-page-node-id="5OriuJiYYMkwuyTSXUxSay"><!--pnid:1mydIbmAQBSjMYz9HYXcNO-->配 auto-compaction + 定期 defrag 演练</td>
+<td data-page-node-id="k2SGIQAugXew1AoiFJbgUi"><!--pnid:igPPoPOdIDgiisnhdIak99-->空间占用回到稳定水位</td>
+</tr>
+<tr data-page-node-id="eWdLeNaGVYm7Xm6QyBlWLO">
+<td data-page-node-id="GvI0DW8k3L7FMURwgreTYz"><!--pnid:EJfECpgKDGMPg6kAkOxV2p-->F5</td>
+<td data-page-node-id="dGtTN8Pxe23dfB9Q88Zw96"><!--pnid:pp0fgKrqt2BO9qkeI1ei84-->etcd 与 workload 混部 / 共享机械/节流盘</td>
+<td data-page-node-id="bGFhzm970LIWgMT8xBhia7"><!--pnid:zobhtguBnH3OAicFF8qGj8-->fsync P99 高、慢日志</td>
+<td data-page-node-id="bircYHHjUMUvFfNq8KhmzP"><!--pnid:3uqxTpC2EZB9dn6LY3YZDq-->🔴 高</td>
+<td data-page-node-id="o0Dn2H4ap0ASg9DKySUx1y"><!--pnid:elnHpbkRb6HVETmWslJuZ2-->独立节点 + NVMe</td>
+<td data-page-node-id="IxNCUsgUqjzAMCGal6MyWq"><!--pnid:gXZaGHeIippZV0VLtNAbjE-->fsync P99 达标（实测）</td>
+</tr>
+<tr data-page-node-id="3Ec9AWLgYAufou364X1lJj">
+<td data-page-node-id="xCZHpXaQJ1NvGI2O2OeJj0"><!--pnid:Roxq5lYuDWFzbUbfmUuUPs-->F6</td>
+<td data-page-node-id="C3Mtr19ioOLwFkbMttLvj1"><!--pnid:h126qksXgv0llXNueBpB6y-->没有 etcd 备份或从未演练恢复</td>
+<td data-page-node-id="fPrMWGokT5QOCPfI0s0hAG"><!--pnid:bY8ZnAGuuPc2Qoq4Nqj8GD-->无快照文件/无恢复记录</td>
+<td data-page-node-id="4OMcuymgl65pi7HxeIZQ6u"><!--pnid:ScP9EKByKMUHLofzVnzKzB-->🔴 高</td>
+<td data-page-node-id="lAkgs5gxsi58IaQLma8Sdz"><!--pnid:bbvoRprV44spkAT5jotEbg-->定时快照 + 定期 restore 演练</td>
+<td data-page-node-id="Tx5Jo68OrV1zIO4lySxgpb"><!--pnid:8NEYjnsRiHVtM39ZQsNOrY-->演练记录中恢复成功且计时达标</td>
+</tr>
+<tr data-page-node-id="suUzS1HLT9c9lLegTJd8nC">
+<td data-page-node-id="WFph8fOgV6tDAaTzkyjrWC"><!--pnid:Qd3jrb69r8WcY9eOf0Z9Cw-->F7</td>
+<td data-page-node-id="zhV981Ej0B0aGuDVeKEhpb"><!--pnid:GQRmgUMmzsiHazYCznZHIE-->证书无过期告警</td>
+<td data-page-node-id="vRbnxohEWqchecX2xPo1yV"><!--pnid:PfIJewWUI56L2DvsK3l82U-->证书到期突然全集群不可用</td>
+<td data-page-node-id="om76JyHIzEuhkvY6fuKTMq"><!--pnid:0zbs9nHFJL9fP7GVvw8pmj-->🔴 高</td>
+<td data-page-node-id="aGNKrN2NSyng24LC0KAp2k"><!--pnid:pu0jdI7q59v8TEDpVDVfoR-->证书有效期监控 + 提前轮换</td>
+<td data-page-node-id="kP4kf8hq7SIzzCaqUUX19m"><!--pnid:bAVHLDdc7NekeH6mIIjpwr-->告警在到期前 30 天触发</td>
+</tr>
+<tr data-page-node-id="KZi5Q8OrfxiK2tndmB5ayr">
+<td data-page-node-id="isMrv2T10W6b2Gva6mNoKE"><!--pnid:x4bfNh39nXMvFpItOX1Ggu-->F8</td>
+<td data-page-node-id="wRvQDf5fN9LR4ED0rNADuv"><!--pnid:5Ep8w3EvwDrjK2IkYqgzeJ-->APF 未配置（全靠总量限流）</td>
+<td data-page-node-id="2lVsn1GLTBzqlaXKueC52Z"><!--pnid:S5PfsgpTIfL2KCZqJCQXqK-->某客户端打满限额饿死 scheduler/kubelet</td>
+<td data-page-node-id="NAclQKEfopOBdJAialvd7M"><!--pnid:pWJ06m7yzFARFT6F9mNjop-->🟠 中</td>
+<td data-page-node-id="uKk4TA3xBZ0MkB1Ip9fzXi"><!--pnid:tTQwDYjLvuPNsgI4goCXcX-->配 FlowSchema 保障关键组件</td>
+<td data-page-node-id="pd8vycnN4uU6wsnWhxL6SV"><!--pnid:GUh5nTtU9gA9wyatVK2w1c-->压测吵闹邻居时关键组件不受影响</td>
+</tr>
+<tr data-page-node-id="xw9GpEKdv8nUkznSjiK3xL">
+<td data-page-node-id="aLPksxO240NXI9bhUa46yO"><!--pnid:6nCBNcC3yCGiBAaOb19mJ8-->F9</td>
+<td data-page-node-id="TUlYEkf8WdnmT0T5TjRcP7"><!--pnid:giY84oFOITwj2LIvbSgLwq-->Event 无 TTL / 无限速</td>
+<td data-page-node-id="EgsWFx8QQlROU0eeR73Ojz"><!--pnid:vGAlEnOkSrIyeMSP0fG42w-->Event QPS 巨大</td>
+<td data-page-node-id="pVrJnxHGbVyzV1PZ6jitvX"><!--pnid:2QPHcb5wErHAZV8GGoxweU-->🟠 中</td>
+<td data-page-node-id="5UJ2LhdYGnQ6MV3B8q7WCk"><code data-page-node-id="S4FbxQc8ec6dzRDVzULZ3A" data-pnid-children="ata3aF91YcHUebxIZK7OaJ">--event-ttl</code><!--pnid:lt5U9vJSew98i3mUfNRjWt--> + EventRateLimit + 独立 etcd</td>
+<td data-page-node-id="hzbti4O7n3wuY1KMppx3CJ"><!--pnid:5pTxZyqwLBhWZlcXCv6BCs-->Event 写入速率回归合理区间</td>
+</tr>
+<tr data-page-node-id="4Ez73VmgbPkTzDtFwCIXk2">
+<td data-page-node-id="vh0D8DUdIVaFc811NOe51B"><!--pnid:GE1bZ6ckwlfGsH8GlyXytp-->F10</td>
+<td data-page-node-id="WI4cTOQ5g35LJ7TL8S8mMV"><!--pnid:IQ7gRdDEeP1gucMtCfAt4w-->大规模仍用 iptables kube-proxy</td>
+<td data-page-node-id="LgDrBwtjS5lJfGCV1dlKF3"><!--pnid:gDfHba7zwJ6CDRExrri0kP-->规则同步慢、CPU 尖峰</td>
+<td data-page-node-id="EBnwBuJR6JkiaL1XYtNg1V"><!--pnid:FDHdD6un935waXMOTBQ6ln-->🟠 中</td>
+<td data-page-node-id="GUANiuYo4ClHsfB2twmKIu"><!--pnid:qDtd1htBMKbfAZ5gpeemyb-->切 IPVS / eBPF</td>
+<td data-page-node-id="djSaNI1IYZe2MojmI7sA9y"><code data-page-node-id="qSbjuFJ7HdzoPCjWYwZB6X" data-pnid-children="0WPhFdjKPOm2DpKkA6Rt4T">kubeproxy_sync_proxy_rules_duration_seconds</code><!--pnid:SkBpbCEKZx5L6uJ4z6Xvcu--> 下降</td>
+</tr>
+<tr data-page-node-id="3WvlQfXgzLJ5mbzalbXtRi">
+<td data-page-node-id="GDmvCQ6iifkwiNmtL6K02j"><!--pnid:I3AGA2UKaUqJ61KdtFZZFD-->F11</td>
+<td data-page-node-id="zHiMtDNvbkmPaxfg5kPzYN"><!--pnid:PJrJwiYSL0byrdDwNCEE6o-->Secret 未静态加密</td>
+<td data-page-node-id="fomikryS5I9X3dSS3BPKyc"><!--pnid:Yl4EYFxxovTJkWvxnDj5dW-->合规不达标</td>
+<td data-page-node-id="X9dR3Pk6iWB2XbQuLfu9sc"><!--pnid:JE7TLRwq7hGFQsWIG5D6Bp-->🟠 中</td>
+<td data-page-node-id="fZjFx5Y9HpBTguy1XbKp0D"><!--pnid:mvJOiry01KGnIj3swObUQA-->EncryptionConfiguration（注意 KMS 可用性）</td>
+<td data-page-node-id="22HYTPlwSZZZOtwSSa9Gbh"><!--pnid:RYTrmF3sSKLWnhaeEMAXT9-->etcd 快照中 secret 非明文</td>
+</tr>
+<tr data-page-node-id="onNkDYoi9BSWkLXAlGO4oC">
+<td data-page-node-id="jGribcL8SEWiuSQjwuEPkI"><!--pnid:e3wjMcVsaBkBvJFuhznr9q-->F12</td>
+<td data-page-node-id="809LoxbI0HHv6QRxxd2YGJ"><code data-page-node-id="uy2CMkntOtrIIf1PEu5XyG" data-pnid-children="B1ktePSESbeYXtAhQkXNqO">--profiling=true</code><!--pnid:In8Wfr5N1b2bbGdI3YKJy9--> 或暴露不必要端口</td>
+<td data-page-node-id="1qffOVfcer0zuXcXg0yLjv"><!--pnid:HxOkWnE9dBu9y0iJtiv8Ep-->安全扫描告警</td>
+<td data-page-node-id="SsFhLL49Cqhc1jOiLZ7zM7"><!--pnid:HajfgWZM9rz6IreUjQQD7y-->🟠 中</td>
+<td data-page-node-id="hQJxFbNPErbsY6zxP5gPvT"><!--pnid:KGYbBki99RrzZTylPjEUeb-->关闭 profiling、收紧安全组</td>
+<td data-page-node-id="9nOsvi5x2SzzaN6PauWdi7"><!--pnid:YRBVhBT6L0N4yqtNUkNDid-->端口探测与基线一致</td>
+</tr>
+<tr data-page-node-id="t2dH5M6pLR4sABOyTSCwIm">
+<td data-page-node-id="6hvukSaBDnMu3OeniF0ysI"><!--pnid:CyBMgRmElClamtkZxdv3LD-->F13</td>
+<td data-page-node-id="OvEf9RvIQk4gKL4QFAEmaV"><!--pnid:QVsuH9LcY4TF8cJAK8KgPZ-->控制器并发参数盲目调大</td>
+<td data-page-node-id="xqpTRa7pVg36FPvLTh4CqH"><!--pnid:NYNGXkKUvtiavtGz9cTosd-->apiserver/etcd 被打爆</td>
+<td data-page-node-id="ZEqABY6s4T23HFbfsMPtBZ"><!--pnid:8Rut0qdhZ1MspvhDPJxJQ2-->🟠 中</td>
+<td data-page-node-id="eRvFC9F72vJt0cfbN1Ag6B"><!--pnid:Ssi6e0pL7fIrZwyhbz5DyN-->与容量一起压测后再定</td>
+<td data-page-node-id="NhvfclUTRf3e4D5EJJhwlF"><!--pnid:JJqCIXwzubxxNWDP7Xwo00-->压测无 5xx 与 etcd 慢日志</td>
+</tr>
+<tr data-page-node-id="RjuIDDfaNRj6SrvpjgS3ik">
+<td data-page-node-id="xES57h3L74Hwt5vcpNmyAG"><!--pnid:PO39dDVjyKoFXBRpaoT0cG-->F14</td>
+<td data-page-node-id="0gDLvnqlz21wLjYtVgwXah"><!--pnid:AfJBc2ChnyTfxIwMnI75eb-->HPA 缩容无稳定窗口</td>
+<td data-page-node-id="nt3rZyxGCw5E9NtrjM2xfL"><!--pnid:ZKfujcdaQY3q9HTvtZCFNv-->副本数反复横跳</td>
+<td data-page-node-id="q25dnK95qUVkBNseBQOGn1"><!--pnid:7sJ7Vdm3YW9h2pHt23PFuy-->🟡 低</td>
+<td data-page-node-id="38UphYuTy3qOh1t56wnxtF"><!--pnid:Oaqeq0eZCTYUEvAoj1zYkV-->配 <code data-page-node-id="bJqGD1INocHQdBPCbAkrXA" data-pnid-children="BLx0k8BMGgKq7ZzMw4oi3Q">stabilizationWindowSeconds</code></td>
+<td data-page-node-id="AFuWo43g9nLsgYnmwtR139"><!--pnid:ni5h1ILpNn9BK64xmDnnli-->观察副本数曲线平稳</td>
+</tr>
+<tr data-page-node-id="KhULTiRJCzanS5VyUF8UF2">
+<td data-page-node-id="U2DttScWCKsQdTxWn3l5fZ"><!--pnid:kajT7nrNApSFPSlqdYxWZl-->F15</td>
+<td data-page-node-id="cDPxh3ILxHDA2tLU5exRzQ"><!--pnid:M2MaJB0QWg0DMJ3KnHsjTF-->直接升级/维护 etcd 未先快照</td>
+<td data-page-node-id="BZDeMLZHZhlwkqrMcdBsrF"><!--pnid:AqLev7yRq5IJEtFEM9VYdl-->出问题无法回退</td>
+<td data-page-node-id="XixstqZKL8SaiNghJPIMnD"><!--pnid:Bo5OU7caeOGy14iTwmjK20-->🔴 高</td>
+<td data-page-node-id="FW4IwYK90bGVxKT6aZsI2B"><!--pnid:1gjj9QGRMruxURFNHmw7Ml-->每次变更先备份 + 一次改一个成员</td>
+<td data-page-node-id="Lefb7xz56kIxzXNXAenQw6"><!--pnid:3yENXfytX8j3r8TeeUUXMS-->变更工单含备份与回滚步骤</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="D5JNkftUAYYz96eG9XaIX4">
+<h1 data-page-node-id="RZHOiTvP0L4XiZaaoykjq4" id="part-g"><!--pnid:wy2YNXOrOesTRCVQR2cSiJ-->Part G · 可观测性：指标与告警（可直接落地）</h1>
+<h2 data-page-node-id="h7JIjhXsnVJX4rMpOLvBJl" id="g1-curl-k-httpsapiserver6443metricscurl-httpnode2382metricsetcd"><!--pnid:9rpXYdYlnhLmlGjx4dp7jK-->G1. 指标清单（<strong data-page-node-id="MsusCIlF6ccuJCtzljgsfm"><!--pnid:sVtHfILnqjxCzimyrdYPkT-->请先 <code data-page-node-id="z56nV3asD2SVOhrLQ68pbE" data-pnid-children="MYEx78D4iuZbSbOv0Msxnz">curl -k https://&lt;apiserver&gt;:6443/metrics</code><!--pnid:DL3p5zfalb17ddowFVCUhH-->、<code data-page-node-id="RoXqSWjyfwMlqaXODGBfE9" data-pnid-children="ANIiED3VYhZB4wIkmxBjZq">curl http://&lt;node&gt;:2382/metrics</code><!--pnid:O3y9Pv8x6PhRFJoaz2G4UI-->（etcd）核对后再上线</strong><!--pnid:PV6asASmiwUcWYs6DcMCpL-->）</h2>
+<table data-page-node-id="04XUEX2DbEkfmv8rS0l1U4">
+<thead data-page-node-id="gtlXM2CZUbifyK3t0lojVX">
+<tr data-page-node-id="7GXHhtzm6NdZuQd3mpUTw7">
+<th data-page-node-id="X8ZlWNnuKjO8SBTcRDxZYx"><!--pnid:2fdMo5JuWXe3syh4lqX2Zi-->组件</th>
+<th data-page-node-id="Xet2ySmXS0snqJ8EP7zDY9"><!--pnid:7xLdgw6tNz2x0sJyQ2s0MY-->指标</th>
+<th data-page-node-id="oPyL9qzKVtRZ6ULNy5CdXg"><!--pnid:k7vB9IP8U9Y04z6JW6Esuz-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="K1g7MFjfokUBvJV9c1Wgq2">
+<tr data-page-node-id="nQAmXQsw2Zea5nZjOPhtDy">
+<td data-page-node-id="6LSnm7klwLvyvRWUAoCGiS"><!--pnid:zXQpYPZdXdkNIXnHEzWU6f-->apiserver</td>
+<td data-page-node-id="zOvzNQvNvApjUPbodLJao5"><code data-page-node-id="DwwkvN9PhOWCEU9XDb5zhB" data-pnid-children="mazCOYIJwHiliZpZcOCwvS">apiserver_request_duration_seconds</code><!--pnid:F8L8wlYo3zlOSnodQ8Ga0g--> / <code data-page-node-id="P1uWujtV1g9UMZiGh9Z5Hb" data-pnid-children="OPNUrNZBkSDmaAymX8IWQA">_ request_total</code></td>
+<td data-page-node-id="gPxaoPRIw2CCPGWtmpF4E8"><!--pnid:BWhRes0HvaodJYcrTsF99A-->延迟与 QPS（按 verb/resource/code/scope）</td>
+</tr>
+<tr data-page-node-id="3eQTRwux04Fq9VfTVv00dT">
+<td data-page-node-id="5B0i03UB6ZpbN1nN4Rpl1K"><!--pnid:O156PXDk6MxFp88BkiKTjm-->apiserver</td>
+<td data-page-node-id="rT2oytafjGmXGc3ihISxLr"><code data-page-node-id="PpJRnMJMsrcSDL0OPNzg4o" data-pnid-children="cWbM7ddZMQuSrexhs2cRYi">apiserver_current_inflight_requests</code><!--pnid:z2xmuEAPqjVN1pVNIXOHmj--> / <code data-page-node-id="BG0OfgK9yqck3gw4l3WTFp" data-pnid-children="1IGlXq0wCwZtBkx0hDM3RI">_mutating</code></td>
+<td data-page-node-id="g0TEh4zhuFJnFbDfi6J7fE"><!--pnid:qQywIZbYqA0KhuMglrU9rc-->并发与限流</td>
+</tr>
+<tr data-page-node-id="Rc6tuqTlljltseN46WlAk2">
+<td data-page-node-id="1Mn0V0oPIBA2UcFQmuPO67"><!--pnid:ZFQrlNiY74z6L7UrRfH9iK-->apiserver</td>
+<td data-page-node-id="xjg7ok4m0yhx3fqaXgCucl"><code data-page-node-id="xhQS5z7Fz5VwxK1AZX2jmu" data-pnid-children="l0eSGqPqM4SbBWMegQ5ZsK">apiserver_flowcontrol_dispatched_requests_total</code><!--pnid:u9fqIy8fLBlJGpnfEagnqG--> / <code data-page-node-id="qXjZHWg9T3JzUEjDlAORV6" data-pnid-children="S972ITG0w7GShsBfadMnYO">_rejected_requests_total</code><!--pnid:9CDXpwGSU4SCRT8ujjUpDg--> / <code data-page-node-id="k0GsMC06jiAsWnS8WFYpwe" data-pnid-children="OGhWNqrxMuedElWLHObyW4">_current_inqueue_requests</code></td>
+<td data-page-node-id="ABG8FMphm13DnYEAtCsq4L"><!--pnid:VbC0N6KPjs01atMA16x3Bb-->APF 健康</td>
+</tr>
+<tr data-page-node-id="JbcMYfvKn98BTHgx1KmpwO">
+<td data-page-node-id="fsRZFffrZC8LtG4Of9IXAc"><!--pnid:8b0MOrDgOiEko1mgXBUTPw-->apiserver</td>
+<td data-page-node-id="v77t1UBEh3hxxbelW66JbT"><code data-page-node-id="grBGQPOZe0byLC3cgfQZme" data-pnid-children="BuMhEkqigYXKsYKrwkACnc">apiserver_cache_list_duration_seconds</code><!--pnid:Y0hKeFZQjzwyQ3BpCuz4fV--> / <code data-page-node-id="JTumRtQyLf7AteT2bnqHVd" data-pnid-children="fulw2IjBGWIAJBTnwbYPH6">_watch_duration_seconds</code></td>
+<td data-page-node-id="A9YiEPq448xcO8iNgC4QLq"><!--pnid:VKePsMYFbxeMzfZKk64Iro-->watch cache 命中与重放</td>
+</tr>
+<tr data-page-node-id="noI3zwzx4q5NveLCZKFdp1">
+<td data-page-node-id="NYVw37NahpcoxK58B8IU8A"><!--pnid:hWIlqggLnHrZH33BiM9bdu-->apiserver</td>
+<td data-page-node-id="zj4q93LZrTDKVtsUbn4fT8"><code data-page-node-id="qz4Y4nU4hgYhk8uhialGk4" data-pnid-children="QDgZmczYCqTHvqMUduzbYb">apiserver_admission_webhook_admission_duration_seconds</code><!--pnid:SUHmi8kRX9fYts0pZyUzCR--> / <code data-page-node-id="PZk7t0GiLdqTwMUJkDthrk" data-pnid-children="XuMFCEiFUbglO5oQIrUjBP">_fail_open_count</code></td>
+<td data-page-node-id="IBVlCcCGGpRLU8pwSMyvHF"><!--pnid:IHCaAaIb9NmYCiNES4QG89-->准入 webhook 是否拖慢/失效</td>
+</tr>
+<tr data-page-node-id="o6y7sLRUJz8b08a9xP1jj8">
+<td data-page-node-id="Ze7kkOuS6hshgTPv0nx4WC"><!--pnid:nNr84FPpv5xQhrjBazOC6K-->apiserver</td>
+<td data-page-node-id="TzRxQXwC7W1AlcM6KrigCc"><code data-page-node-id="lCcsVmP8AVUhumR5kyfU9U" data-pnid-children="TaiICmSyEc4fSaHiebr0i9">apiserver_audit_event_total</code><!--pnid:54bhNUD7IQl7OeNjcj4VS9--> / <code data-page-node-id="XRkQulvXEUng1nj6Ljzwf5" data-pnid-children="DXqvGWwaCuiptQaUuN23x4">_request_total</code><!--pnid:JVEcHfIOePcdxfj3z94w6e--> / <code data-page-node-id="2VhmScKw0OlXpV1fAyAuXl" data-pnid-children="b7F2Y14Yudeqnu1dRBTjhm">_level_total</code></td>
+<td data-page-node-id="oEktEOjpcgjI6vt4jqCSZ2"><!--pnid:92lagajP84hH608w4APpyZ-->审计健康与成本</td>
+</tr>
+<tr data-page-node-id="mh0GpFOEI4Xw6zFDF7n3Bu">
+<td data-page-node-id="I8JOx9qIU0cV1zxql9u3qF"><!--pnid:uhdLigCMYakbZa3NlsDGHB-->apiserver</td>
+<td data-page-node-id="bowP2uXkHkvkT5RBXiclw7"><code data-page-node-id="LzXghIHCZ6HsVwxOsTxYU0" data-pnid-children="Y4bPWOdza22jMlM0bykGCy">apiserver_storage_objects</code><!--pnid:J00ctuFrxCEE1wNLrzQBif-->（可用性依版本）</td>
+<td data-page-node-id="FlSWQjij0qlqBHEPdtAF0x"><!--pnid:miy7YniAZ786GXxBgd3i0a-->对象数量趋势</td>
+</tr>
+<tr data-page-node-id="lTAIktrj3WNiBLls3NYoKB">
+<td data-page-node-id="VXsUQVpYZxQZeXYpQNf6pj"><!--pnid:u0KxPNvnJ2OgxHOX8KAf2m-->etcd</td>
+<td data-page-node-id="kg4Pm1KIzH9rKi78BQtSSM"><code data-page-node-id="xXUpusEtMT6FrccLFiiErY" data-pnid-children="NLecaoGGuSCpF2v2xxWqDA">etcd_disk_wal_fsync_duration_seconds</code><!--pnid:Srs7XaxjV7RKpQsAvShCEI--> / <code data-page-node-id="mX44FsN3irsbCEaZUm0eLF" data-pnid-children="j3clE7l5s4t6tuQUIHCxGF">_backend_commit_duration_seconds</code></td>
+<td data-page-node-id="6RJK6Nk7n5XxZ6MHjK7nfr"><strong data-page-node-id="gyNdQSqmvMocG3zsgdbt61"><!--pnid:JSstQ9LKcV62GkPcxbytZ9-->最重要的磁盘指标</strong></td>
+</tr>
+<tr data-page-node-id="FxshO5xF9cO2YiI1Pcdw1b">
+<td data-page-node-id="kG86QNz2hnojrIMuxRqFaU"><!--pnid:CsWNZuCsl71DKvWqaTraOB-->etcd</td>
+<td data-page-node-id="ga3ILuwhGUC5nbJX4dV0Lt"><code data-page-node-id="YTxRmAVt797IscKzaR6ibc" data-pnid-children="5DnxJ9L30CKI0UZCgmdjSb">etcd_server_leader_changes_seen_total</code><!--pnid:UsWHKUz19pckQzXOaawJ4q--> / <code data-page-node-id="DDWtJ4idHPTXIuAHgoBwj1" data-pnid-children="vcvh0O4d3P9znV1HrgnKsd">etcd_server_has_leader</code></td>
+<td data-page-node-id="mEz4tJcWUEwlEDICQ0hQvZ"><!--pnid:WW9ayOZFucKl0OOFlZddbS-->选主稳定性</td>
+</tr>
+<tr data-page-node-id="JoCHd4z3giBpILF1eSUzzo">
+<td data-page-node-id="eQaRX4P22ys9qWNulcosDf"><!--pnid:f9Hez5Q6OXDT4DCJ8Ur1NY-->etcd</td>
+<td data-page-node-id="VxLAUSix9IdJwGzxFKzxpg"><code data-page-node-id="0BiULl11T4zpvaSY8GAhCC" data-pnid-children="Dw1xo3eN9jzZeTcANBWJ4P">etcd_network_peer_round_trip_time_seconds</code></td>
+<td data-page-node-id="QFOpMGMt5D2tn2ehfoHZK6"><!--pnid:L7lQh3sM5OqaEVKgTT93sS-->Peer 网络 RTT</td>
+</tr>
+<tr data-page-node-id="Y9kjItQZc3PfMe7n7eNflZ">
+<td data-page-node-id="RMRJUeiqAXpuu6U1NMeTTV"><!--pnid:iYcFFYFoSCKSSy4NfMbStV-->etcd</td>
+<td data-page-node-id="DVVE2OfXjNTc1nfDUvAbWQ"><code data-page-node-id="kqbKMmJDuPrkjIFsgplsGd" data-pnid-children="FBTIrTDNKUjdCncm4B2j97">etcd_db_total_size_in_bytes</code><!--pnid:Q1tObX3smZIzjM6cjRCo5V--> / <code data-page-node-id="EublsIKYIoqQgjBs1Ab0ps" data-pnid-children="DC6xaZ8P1wsIAtydNW9FVQ">etcd_server_quota_backend_bytes</code></td>
+<td data-page-node-id="DDqi2iFbOCgYRqPQogTGqp"><!--pnid:P57jkBy7JF6LmFdRvfQjuS-->容量</td>
+</tr>
+<tr data-page-node-id="r9eNB3mMqb9Lyp11NaKv79">
+<td data-page-node-id="HYJzxWDjWs39GtbuWnGKXz"><!--pnid:LDiHesV7wzvLQ3Y0E2bKUw-->etcd</td>
+<td data-page-node-id="05Xqgiu1FbgSPJzT7rVOSI"><code data-page-node-id="DjJwSzYLaHxPW1hylosJ1B" data-pnid-children="KBSCWuwNUjHo51I0hkElNc">etcd_server_proposals_failed_total</code><!--pnid:HBEj3Wjqj5ePvO1Aq2x3IZ--> / <code data-page-node-id="YcerHxBCHZxrGa9A1Bw9kR" data-pnid-children="NmznZTt5lFmU3s5YqWs2kY">_pending</code><!--pnid:ivKh6zZfHDOPKLcIRVcDyR--> / <code data-page-node-id="JtNB9HLZO4p6dc0oR3frrY" data-pnid-children="2q7zkZhDd24JRJoKwoxI4c">etcd_server_slow_applies_total</code></td>
+<td data-page-node-id="DEzrk2ntQ345ou9b6qcEO6"><!--pnid:Dt2gZcZ4lUhRWyhc78gL5M-->写入健康</td>
+</tr>
+<tr data-page-node-id="ZmOibQpjak1extJtg4Q6qM">
+<td data-page-node-id="b1WiF6dsmN2EEMWOP1VZrQ"><!--pnid:IAlm8NhMH50CmOOXTBjUnD-->controller-manager</td>
+<td data-page-node-id="ZJadjcPvzNDsY5poUW8Y0B"><code data-page-node-id="793MbDRZjyLQLamMAhEVO8" data-pnid-children="OLcg9G8MXoCKZi8p5hZM6M">rest_client_*</code><!--pnid:SnDGf0ivpqXaEc1BCQN9AH-->、<code data-page-node-id="zzDeY28EXbIVqrYUw7DBQ7" data-pnid-children="EC8ocE46JmTsGkrxWcaw1X">queue depth/workqueue_*</code><!--pnid:4ap461Uw7we1m3fyip91Fy-->（按实现）</td>
+<td data-page-node-id="HylZ5tcJzzz6xtO7D7m54F"><!--pnid:ZyMIWBiNxgNHpg507EEWB7-->客户端行为与队列积压</td>
+</tr>
+<tr data-page-node-id="Ru291Gdt7x3DM9CGHO20Ab">
+<td data-page-node-id="GBZJfl8WvhDXuQvhe1YR0I"><!--pnid:vqFLvo7zviH6w7k8k8llOU-->kube-proxy</td>
+<td data-page-node-id="Ey3IFqBFjflhuWKTMXtcxQ"><code data-page-node-id="LDo8pAQWOYyWc1pF1BIKIW" data-pnid-children="hhFtvRPSlDfn1RgNxnlwFW">kubeproxy_sync_proxy_rules_duration_seconds</code><!--pnid:VKMvrI0WC8fTboXpX1rY6A--> / <code data-page-node-id="R214ZN5p95iTEb532kJTyJ" data-pnid-children="Jr5bGiyf0zLJlk8D7m0xbX">_last_timestamp_seconds</code></td>
+<td data-page-node-id="72fTrGuVtU3k102TptHyuf"><!--pnid:YVxlw8dZGeXcSc4Rt2l31L-->规则同步健康</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="pHj55erfshRSQTzldbJ75W" id="g2-prometheus"><!--pnid:DPIu3ZCykJn0pMloAKeIDm-->G2. Prometheus 告警规则（可直接粘贴，阈值需实测校准）</h2>
+<pre data-page-node-id="0Yx2VmJ0YY2hCa2hS6zE0H"><code data-page-node-id="qUuuMQ4D0tFHGwlt9Wp3e4" data-pnid-children="4p77uIgB8dQnUaS1Vsi5pN" class="language-yaml">groups:
+  - name: k8s-controlplane
+    rules:
+      - alert: ApiserverDown
+        expr: up{job=&quot;apiserver&quot;} == 0
+        for: 2m
+        labels: {severity: critical}
+
+      - alert: ApiserverHighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (resource, verb, le) (rate(apiserver_request_duration_seconds_bucket{verb!=&quot;WATCH&quot;}[5m]))) &gt; 4
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;{{ $labels.verb }} {{ $labels.resource }} P99 达 {{ $value }}s&quot;
+
+      - alert: ApiserverHighErrorRate
+        expr: |
+          sum(rate(apiserver_request_total{code=~&quot;5..&quot;}[5m]))
+            / clamp_min(sum(rate(apiserver_request_total[5m])), 0.001) &gt; 0.01
+        for: 10m
+        labels: {severity: critical}
+
+      - alert: EtcdNoLeader
+        expr: etcd_server_has_leader == 0
+        for: 2m
+        labels: {severity: critical}
+
+      - alert: EtcdLeaderFrequentChange
+        expr: increase(etcd_server_leader_changes_seen_total[30m]) &gt; 3
+        for: 5m
+        labels: {severity: critical}
+
+      - alert: EtcdDiskWalFsyncSlow
+        expr: histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) &gt; 0.01
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;etcd WAL fsync P99 {{ $value }}s（建议 &lt; 0.01s）&quot;
+
+      - alert: EtcdBackendCommitSlow
+        expr: histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m])) &gt; 0.025
+        for: 10m
+        labels: {severity: warning}
+
+      - alert: EtcdQuotaNearlyFull
+        expr: etcd_db_total_size_in_bytes / etcd_server_quota_backend_bytes &gt; 0.8
+        for: 30m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;etcd 数据库用量已达配额 {{ $value | humanizePercentage }}，尽快 compact/defrag&quot;
+
+      - alert: AdmissionWebhookSlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (name, le) (rate(apiserver_admission_webhook_admission_duration_seconds_bucket[5m]))) &gt; 0.5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;准入 webhook {{ $labels.name }} P99 耗时 {{ $value }}s，可能拖慢所有变更&quot;
+
+      - alert: ApfRequestsRejected
+        expr: sum by (priority_level) (rate(apiserver_flowcontrol_rejected_requests_total[5m])) &gt; 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: &quot;APF 优先级 {{ $labels.priority_level }} 开始拒绝请求&quot;
+
+      - alert: KubeProxySyncStalled
+        expr: time() - kubeproxy_sync_proxy_rules_last_timestamp_seconds &gt; 300
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: &quot;实例 {{ $labels.instance }} 的 kube-proxy 已 5 分钟未同步规则&quot;
+</code></pre>
+<h2 data-page-node-id="XveXlGWzpbLpQ0jGFXZqWZ" id="g3-slo"><!--pnid:nvrlh3JG48shb27m6ET81v-->G3. 建议的控制面 SLO（<strong data-page-node-id="FsfRtugCRTsCWZrY4hwpVU"><!--pnid:aT1y0ZsQ7AuK7KG7cEhVhT-->初始建议值，必须实测校准</strong><!--pnid:H6lqt8FX7FZ5YpsTCojjbF-->）</h2>
+<table data-page-node-id="xdtbNnf2Fsdl20onMFngZ2">
+<thead data-page-node-id="5YmmEJiNsej4wSjpgi4O0j">
+<tr data-page-node-id="hgC3vTWs4t0LNPuBZboCgZ">
+<th data-page-node-id="tWgoqH39w0odFV5eH0EzD5"><!--pnid:5PPRddacLsMuFd0a0lPAVM-->SLI</th>
+<th data-page-node-id="Zyek8yrPCJuPKYXanAXj50"><!--pnid:z54wrX5OQVhTV5tc4bodGl-->建议目标（起点）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ttrsgx8CCZVjob6MJoaJNU">
+<tr data-page-node-id="dZLy8qCoZqifLfjQB6C3Q4">
+<td data-page-node-id="LTn9dcUODRekh6Zn3EDE9s"><!--pnid:BOkyrRxwttBPMR6oM3JJXi-->API 可用性（非 5xx 比例，按 5 分钟窗口）</td>
+<td data-page-node-id="PXIzFV3OlUCxo3Mzya269x"><!--pnid:HsCSxuPSDavukJkmSMK32Q-->≥ 99.9%</td>
+</tr>
+<tr data-page-node-id="EgEB60OfFhEqB2u02DWmwM">
+<td data-page-node-id="qWgkIB8mjZhIpZWPPKgcho"><!--pnid:fSpsrIat4xzKqmDLh3xPOC-->读请求 P99（cluster-scoped 除外）</td>
+<td data-page-node-id="SfJRaUhoD2L8adxL4OS95V"><!--pnid:gUbsDwURO79yO3xzObAjSq-->≤ 1s</td>
+</tr>
+<tr data-page-node-id="0m6mFBZhoTgG4tbZO8MIAR">
+<td data-page-node-id="9plmsBCFk51mxIIAsR437s"><!--pnid:S7lMubH3K0LTNOnfntrPlQ-->写请求 P99</td>
+<td data-page-node-id="lLX4loB22feT4J8FnWIj1t"><!--pnid:mFSiWk5sImRwnVWsqVFm6Z-->≤ 2s</td>
+</tr>
+<tr data-page-node-id="p34CjQKBIVyNMwLIrTKBbr">
+<td data-page-node-id="CRSn7khMnae2Gcb4mQ9BRY"><!--pnid:2gj7T5nAVdSAeOcYmZRVRY-->集群限定范围读 P99</td>
+<td data-page-node-id="yOlYCbQ1YftDus5HxyRVaR"><!--pnid:6mdsQFq19JDuaXOgxkcVUq-->≤ 5s</td>
+</tr>
+<tr data-page-node-id="IyH7fkbmaFHm8rjYV6WMtS">
+<td data-page-node-id="QbekaeJFO4Uo7iAOUThwMy"><!--pnid:UmanvgYhQSKbZXxsGjbaWf-->etcd WAL fsync P99</td>
+<td data-page-node-id="bemLgv4iD4HE1sWxOBQ5gi"><!--pnid:IsF1uSnqacHMLawuvQlWEX-->≤ 10ms</td>
+</tr>
+<tr data-page-node-id="XNVkb7AhHwGx9oJz2dC2I3">
+<td data-page-node-id="ORE1zBi2OxPsOCjQPKwOFI"><!--pnid:XULp2UL3ScRKG9afLCqHe3-->etcd leader 变更次数（30 天）</td>
+<td data-page-node-id="nhRO6UvseXZ0VDZYWnwIOP"><!--pnid:6pHGMeYdUk3rEyJ3sqNjCL-->≤ 3</td>
+</tr>
+<tr data-page-node-id="wXrAPYkZXKMgwrACuYkaUS">
+<td data-page-node-id="FfRZcNA2PDjaOzEp7Acr08"><!--pnid:skXWKI4oVia2WqqMz360IT-->控制面 RTO（灾难恢复）</td>
+<td data-page-node-id="SbrZj8aERGUG0CFhVb0lJh"><!--pnid:3Wi4AU4Tnd2fCQYH02CVu3-->≤ 1h（按演练实测）</td>
+</tr>
+<tr data-page-node-id="e6s0ZcXuc2Gyiv7HBpd6RM">
+<td data-page-node-id="KQpXRwoJNvKUcySlA7TvIM"><!--pnid:wVvc1Cns8vb0uaFYBWBr2J-->控制面 RPO</td>
+<td data-page-node-id="654NVoBlzkX2giNdOXFcpI"><!--pnid:HLrzUfHH990b30YW9gDjLo-->≤ 15min（按备份频率）</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="a78LS9mR134xrJbYBz7oni">
+<p data-page-node-id="TaLS0GDVuC1EKjSI69T7xE"><!--pnid:JzNbMqzPEecc5gBCzfl2Mw-->错误预算：30 天滚动窗口，burn rate 14.4×（短期紧急）/ 6×（长期工单）两级升级。</p>
+</blockquote>
+<hr data-page-node-id="GTnoB9zNe3bIIXo6RJLXSN">
+<h1 data-page-node-id="wSOncKINRafoiyIQG0finh" id="part-h-gameday"><!--pnid:8JbcyhJIeT1b0J4aqe0C3c-->Part H · 演练（GameDay）计划表</h1>
+<table data-page-node-id="B2T04l7YPHX3wptDwE7Ak4">
+<thead data-page-node-id="Q7uunFN8A474DEU8rcEH6j">
+<tr data-page-node-id="331tg9wZ8aVYwAjMuVWTwF">
+<th data-page-node-id="GcGjO6VZkEl2ozxfsvCkbK"><!--pnid:PtCi05UBaVvhj4qKJdx1V5-->场景</th>
+<th data-page-node-id="zm7tNr7SAJ74TVBvmVH2Lb"><!--pnid:0IxVV22q7b4UGhBMcjdiB9-->注入方式</th>
+<th data-page-node-id="UNO1gFn75ONEiQX1ygG6cu"><!--pnid:71yZgS4uUCEH5YSdxL2IgV-->期望表现</th>
+<th data-page-node-id="uLtH2hUcNfhKVDBpexgkvD"><!--pnid:wTcD2hFMuS18ZbwcgL0Y30-->验证的 SLO</th>
+</tr>
+</thead>
+<tbody data-page-node-id="mb4e9MR5SXRJXBrvOkk3H6">
+<tr data-page-node-id="RWBEq4rNT7EYecdlcHrUgs">
+<td data-page-node-id="VlHl7AFQwK72zkY8ZCmRie"><!--pnid:NIMfD6XTW6YHA1SUSFWeoz-->apiserver 单副本挂</td>
+<td data-page-node-id="3L6UdaDwYNtlXCDqIKjrMn"><!--pnid:umirKKNP7fOJkGmZ7I4cYJ-->停一个 Pod/进程</td>
+<td data-page-node-id="SoTE8DkHJ4YytT20FYmv0i"><!--pnid:NZfwpmFcErSLjKTL4nZZpU-->LB 摘除，业务无感；剩余副本够承载</td>
+<td data-page-node-id="brc1ktHtmM16gRDC1dmfmN"><!--pnid:NqgY2eZ1sfyeviQ0BfSlnv-->控制面可用性</td>
+</tr>
+<tr data-page-node-id="OFIqLsgfedl2X2I62JfCms">
+<td data-page-node-id="iboKhRsveeak0BftcyXsYN"><!--pnid:WUgM7vwPP8pItY67UOnZYU-->etcd 单成员挂</td>
+<td data-page-node-id="j9iqt8ypcKeObGetXet4g7"><!--pnid:ByU1rZ7TJedgrtNWapxiJh-->停一个成员</td>
+<td data-page-node-id="5fUenuizJ0s2ufieChoQUK"><!--pnid:hSpCIwKgN7aF6qdVumVpEv-->quorum 仍在，写不中断；成员能重新加入</td>
+<td data-page-node-id="7NM0DRSa95ch15OH1n14yE"><!--pnid:FQy1AIYNEi60fhWEn28Xfn-->容错 1 成员</td>
+</tr>
+<tr data-page-node-id="yaan8On6gX4h2dRIolN5Js">
+<td data-page-node-id="DEPZmgCVzeprHUxgeYPgEc"><!--pnid:PCSFucJiRN2N2B2JhALSkO-->etcd WAL 变慢</td>
+<td data-page-node-id="3NhDc4ikD9eOWZY8K1P1J3"><!--pnid:zH11M72IiRT54CgvjNLACn-->人为加 IO 压力</td>
+<td data-page-node-id="dOSE2KgVnMsSMsnjeWa3e3"><!--pnid:4LMeMOUJT1dMxVjyV2OkQ1-->告警先触发，业务降级可控</td>
+<td data-page-node-id="xStnKlx5yoygnPitQH08Mm"><!--pnid:L2akgzKEd7IABkAx2TNBib-->磁盘 SLI</td>
+</tr>
+<tr data-page-node-id="nzCBzVE1zpf7RWFJpK4aQl">
+<td data-page-node-id="v5yFo9vxVKqr3hefwuv4FD"><!--pnid:WbtDF85mSFeqJMshigt9FI-->etcd NOSPACE</td>
+<td data-page-node-id="O1o2dSsrxPJ7do2TlUhfAj"><!--pnid:8AjxjZB3WCXuUxwDKR7ATB-->写满/触发 alarm</td>
+<td data-page-node-id="B81PaF0hfBbEiOhURYPmov"><!--pnid:lvMUAIQihf6Hpgw1GlFP8Q-->运维按 B3 流程在 RTO 内恢复</td>
+<td data-page-node-id="77dEXeLDjd4CMGRkOPrEAA"><!--pnid:S73kSY8Ujg90bfqthRweVu-->恢复流程有效性</td>
+</tr>
+<tr data-page-node-id="KMc9wwzfLCICrYFzB2A8Hg">
+<td data-page-node-id="Qb9MGj6YpZ57Z636Xfjtxj"><!--pnid:5laohNHohkIZl0OTg4UyU0-->etcd 恢复演练</td>
+<td data-page-node-id="Cu26Okc2BYPDnivqkUsPaa"><!--pnid:67Y9urZOe2NGpz6W1eQPkY-->用快照 restore 到隔离环境</td>
+<td data-page-node-id="xQqG7EsVZnM1vK5YzGhvYX"><!--pnid:27Hw2DPtIqeYHCL9JmKoyl-->数据一致，时间点符合 RPO</td>
+<td data-page-node-id="aVKgftgNRGWDS24jnwuYdI"><!--pnid:hcsVjOmg3tf8A00b1SYgI4-->RPO/RTO</td>
+</tr>
+<tr data-page-node-id="0qnlbI0I0TvZJspR4h5Kfa">
+<td data-page-node-id="f67Dly212xDVkxWsYYlUEX"><!--pnid:XR7AQbfkj1ap7i6eMBGSiT-->证书到期</td>
+<td data-page-node-id="1kHpmlAsMqAIxVTRaXna8J"><!--pnid:mfZ5wOFqg96E4K30TguIec-->临时替换短有效期证书</td>
+<td data-page-node-id="MjEXAqnbEf3h2fdTPhDWjw"><!--pnid:a4CSsJGSPh9PUvRNgm3PoT-->告警提前触发且轮换流程可用</td>
+<td data-page-node-id="o86g7Ur9Vgvv8S7atOeB7s"><!--pnid:MaR9ZeZV4SV0PSuwBcOymZ-->证书治理</td>
+</tr>
+<tr data-page-node-id="6KXHIKC79ZCWW49WZkn8Wo">
+<td data-page-node-id="9Kgj7X7gpmZXzPWttLcv6Q"><!--pnid:EoT72P3CZAsFwyoXlsZ9zy-->Webhook Fail</td>
+<td data-page-node-id="jcdASMIIErFKCsIRsT5l59"><!--pnid:THX9eFRvgi84oIuJ5dAk4p-->故意停用 webhook 服务</td>
+<td data-page-node-id="B0W7LWlYPfTkiSflKFyUPy"><!--pnid:nVqjqMAPvLhqpSqahxLfN8-->因为 scope 限制，核心 ns 不受影响</td>
+<td data-page-node-id="BjAkdTPHFisb4D3GqmFpC1"><!--pnid:8bVYs3srzgaS74IjuuUCQB-->变更可用性</td>
+</tr>
+<tr data-page-node-id="R6CXpJFSJBzh9O8Uc982ee">
+<td data-page-node-id="JZJqiNNWxyFnA7l54DLVjD"><!--pnid:UE0p6UUBLMU4xPIGukZtP0-->吵闹邻居</td>
+<td data-page-node-id="taInE8WB3LIgsP8atjqCLI"><!--pnid:pfmtmvXu2HAcrrdsPn9q8P-->起一个疯狂 list 的 Pod</td>
+<td data-page-node-id="9zRmkaKW7h98VpCXVWHPKX"><!--pnid:8DzMN12lDInnFJCbbiLVzJ-->APF 保住 kubelet/scheduler 配额</td>
+<td data-page-node-id="pxQxFkyrip9YMuE3eqDF7M"><!--pnid:vTFHoOFhvfE2at58yiXlJV-->APF 有效性</td>
+</tr>
+<tr data-page-node-id="z0hs9ztbixVgme3NXAiggf">
+<td data-page-node-id="NSM1Xi6PfqeMUGBLGy3dE9"><!--pnid:06sZtiIUrd9GwNezIH9ocb-->kube-proxy 挂</td>
+<td data-page-node-id="scWWL9OrDjyte6Mj4r2cvH"><!--pnid:fRh7n6Ok2pyOU4IoJDEcvp-->停 DaemonSet Pod</td>
+<td data-page-node-id="Ikxw1zlqL1F0YD3yUbQ3wc"><!--pnid:eDX7XFqkfEy3mM53ueNYjG-->已有通信不断，变更不同步；能被发现</td>
+<td data-page-node-id="mjE6vHjpeiv1LTjfDoQ2CN"><!--pnid:GUjJvG4ypRQ4FwOHg65kYK-->数据面可观测</td>
+</tr>
+<tr data-page-node-id="RqznaTYj1X67qWyS76Z745">
+<td data-page-node-id="VCCvlQBV2XYCm2nHJBWXFS"><!--pnid:KSGwN4SKtSo2y0hy6b8GtU-->控制面网络分区</td>
+<td data-page-node-id="CPgRddvCFhqRpxHm4NSxAi"><!--pnid:lbqwEWA9fZCsHRMdcuEhCO-->模拟 apiserver 与 etcd 不通</td>
+<td data-page-node-id="CCvOUfsB439YVxUJl87bSd"><!--pnid:pdItlGpnqWUl88vJ3gfnkl-->快速定位，有明确告警</td>
+<td data-page-node-id="eHnB39uAloY9KKDDT64bTO"><!--pnid:2XDqccnCsJmoj5y6lGRsDu-->MTTR</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="7zSeEp049K07Ez5L4JA00X">
+<h1 data-page-node-id="9jiahFut6mjeGOSJz5PGVd" id="part-i-10"><!--pnid:mtyMVOEFrMZU5hxMeGPwPV-->Part I · 10 张面试速记卡（临阵磨枪）</h1>
+<ol data-page-node-id="kSW0SoJbiS3xrNn9ZXrsD7">
+<li data-page-node-id="tdsl10PY2IkeZXuN8GOUT9"><strong data-page-node-id="L5Vpnfb8vnFnTdgLF9xp2g"><!--pnid:eHOltATNiAPK9grLLmJDYo-->唯一入口</strong><!--pnid:RDpIUw8p8pQzFTtzcdONH5-->：apiserver 是<strong data-page-node-id="yJGDF8s4RvDyQ32NJ2Q5E5"><!--pnid:kZlu3Z1UpO3EHHmWj7wmbS-->唯一</strong><!--pnid:lZdc4QbRExYqur9u96yaNL-->与 etcd 交互的组件，本身<strong data-page-node-id="oEMQPbUWLey6JYDfNt9LpZ"><!--pnid:wQqTmBqvkFytzg15N5Pmz0-->无状态</strong><!--pnid:KEQl25hGfcEW6P7UtUBTzW-->，可水平扩容；真正的瓶颈永远在 <strong data-page-node-id="ehEBNNMb8RXQGkya4LbpJw"><!--pnid:5rgqHemFQ1JMEAQ8k9pZ3O-->etcd 磁盘</strong><!--pnid:a19xOxqT8N3BfIuPlFeiFs-->。</li>
+<li data-page-node-id="KvIpEe1H9tD0MFznmV3siK"><strong data-page-node-id="OQh7HmM3QEABIHeWR2v1g0"><!--pnid:PkbwCXbyFsKfpHv6kRHeY2-->请求主线</strong><!--pnid:Yoxz6yvf9CrE8l0GeXnPNs-->：认证 → 审计 →（模拟）→ 授权 → 准入 → 校验 → 存储；<strong data-page-node-id="31b1Mhabte2SskToDT6KP2"><!--pnid:d80jhvfdNf3zij8d0rYLH6-->审计在授权之前</strong><!--pnid:2h467XRJMI7zBxeMGUYIbc-->，所以被拒绝的请求也会被记录。</li>
+<li data-page-node-id="K7VIXmbQ1uqLqu5MbQObXP"><strong data-page-node-id="NUEJ8ONUlAD1YBCKUpOTHF"><!--pnid:OYxCKIJIPzJdFZPSbi0slW-->APF</strong><!--pnid:ibXWQMVw9kFN4mwccpwU0P-->：用 FlowSchema + PriorityLevel 给关键组件留额度，替代"总量限流饿死邻居"的老做法。</li>
+<li data-page-node-id="L1FBENzuky5gJDZ0FjB0z3"><strong data-page-node-id="KS3hOxeqqDfVlALc8OUkTS"><!--pnid:AWne0JVzyiCEq7KMLCmad6-->resourceVersion 就是 etcd revision</strong><!--pnid:KEbo01FlrTDFlyi4dt6Z0x-->：更新必须带 RV，冲突 ⇒ <strong data-page-node-id="WaIpPTWJ3Efkc9rX5v8HxY"><!--pnid:LVBzXWvpJAtClVLiJG3oEX-->409</strong><!--pnid:80wIkxfCg8cyp8xzZYwbhF-->；watch RV 太老 ⇒ <strong data-page-node-id="C2Siv14vRiw7NBIMrE1ufB"><!--pnid:cFwIQf9KQT6xNd8wvPm5UW-->410 Gone</strong><!--pnid:xIqz1legOgCLJRtxH2Fyrk-->，必须 relist。</li>
+<li data-page-node-id="ksQ5xgwB8L6HcJVwp0Tc0V"><strong data-page-node-id="eOhgHHr2SEhM621tU3p5M2"><!--pnid:hZGJYC1IfSn4RkMC4cywCU-->list 一致性</strong><!--pnid:agEgUFfaR5LhkK8aUY4dyV-->：不带 RV = quorum read（强一致、贵）；<code data-page-node-id="fyzFQl9majr1TnaGbIYTMS" data-pnid-children="0keSse9jOtgATqQSmiJ3rY">resourceVersion=0</code><!--pnid:9qEaNPbsDNnmuqdUdGAPej--> = 读 apiserver watch cache（快、可能略旧）。</li>
+<li data-page-node-id="RHBnShnHqyC4qUlitwMHHQ"><strong data-page-node-id="qDhzDtOTuJAXrrPe1OoMDw"><!--pnid:NWFWeeP53nje6olV6geieV-->etcd 三条命</strong><!--pnid:4fc6Xb5RBVw9V6MjwnjzE9-->：WAL fsync P99（&lt;10ms）、quota 用量（&lt;80%）、leader 变更（要极少）。NOSPACE = 全集群只读。</li>
+<li data-page-node-id="zjRIkQowND4cN2Ac8dJHrI"><strong data-page-node-id="CEj8GcierorY7kCkaxRAaO"><!--pnid:uAT9UiC3tA90QfDcQFeQJI-->etcd 操作铁律</strong><!--pnid:gjqIhfOgwDsMF2dmek92kv-->：一次改一个成员；每次变更前先快照；<strong data-page-node-id="BTow7E9gWP3HxuqaNIEM2m"><!--pnid:yB8o3N5EnQR1yw9CDH2vcx-->版本回退基本不可行</strong><!--pnid:QRy0bw7iQepHlhCjyiw3cm-->。</li>
+<li data-page-node-id="6fE9zkKqRpUvOekjjVkzUc"><strong data-page-node-id="yIcA3J6WQPHIHmSxqCwi78"><!--pnid:NTM9upZ3VeGoXLzSFbxpPU-->控制器范式</strong><!--pnid:XTLJQ70p1f3wYxqeJrZkRS-->：informer + workqueue + <strong data-page-node-id="AcncnzVyTpZ1WmMfEcJV4H"><!--pnid:9cKMWyRswvJQYYa0VYF6Td-->幂等 reconcile（level-triggered）</strong><!--pnid:fa3OXIgpoCFrN0aEJWDvc4--> + 退避重排 + resync 兜底。</li>
+<li data-page-node-id="bCOY076rxyBsp2GkUxt9Pk"><strong data-page-node-id="PUxbrxywRuZT0RKj5cza2S"><!--pnid:pfDBQcbiRt2xiGJALwqXCg-->节点故障时间账</strong><!--pnid:VjhyVm8L4EIOwrXA9YWG52-->：lease 10s → grace 50s → NotReady taint → Pod 默认容忍 300s ⇒ <strong data-page-node-id="fmeaypco8MC6fwzT2dnvoN"><!--pnid:iYBJCRzmWjqnC3g3eEuWcY-->约 5~6 分钟</strong><!--pnid:9YMqOYeCPebC6WAtNlefH9-->才重调度。</li>
+<li data-page-node-id="XpEOvIS1rMVWg0SnifXVmx"><strong data-page-node-id="fsNff1MeYwJak4CeVeCsKU"><!--pnid:YckFlsW43RIS5VUqPVhHWw-->kube-proxy 不转发包</strong><!--pnid:9yBZozvvmM0KSUCtCli3WL-->，它只下规则（iptables/IPVS/nftables/eBPF）；挂了<strong data-page-node-id="uDw1u6z5vwOhr0HZHte4b2"><!--pnid:Yby8PJIvGH9eeEe2qvAIbe-->已有规则还在</strong><!--pnid:6vXVMgV7MecZMx0RV3o0Xr-->，只是不再同步变更。</li>
+</ol>
+<hr data-page-node-id="Nzn10rcXAJAav28M9PDKdt">
+<h2 data-page-node-id="9HvRUy0kIFesjSQLSp1dlR" id="_1"><!--pnid:Isc0jpN5IZVELbWLHiKEKl-->附：文档自查清单</h2>
+<ul data-page-node-id="rN4LH0OpRwabfOSwqiNTr9">
+<li data-page-node-id="ao5ZrV2MH7I0mQNSCER9ta"><!--pnid:dOtOjFa8tG5QqlitKMkXo2-->[x] 每个组件都给了可直接套用的 YAML / flags / PromQL / etcdctl 命令</li>
+<li data-page-node-id="YySISMTYlPcGzBdb2tOmoz"><!--pnid:in2g4UcFqbxkmeP3JBWpPY-->[x] 所有默认值（50s grace、300s toleration、10249/10256、quota 2GiB 等）标注"以版本核对"</li>
+<li data-page-node-id="Zrt0VUblHES1uIqIQNTE6G"><!--pnid:9n5xz4j6ugCqUhboTOu19E-->[x] 未提供任何未经实测的性能数字，均给出<strong data-page-node-id="CBzdBRNx8xjOziZBPpRNXc"><!--pnid:54lcyUb3HQbx7NxExxCyHG-->测量方法</strong></li>
+<li data-page-node-id="BsWsjGCzSZ8EEFEQghlAAF"><!--pnid:sXLOwiCsLAf6jZ8IIuLrlY-->[x] 反模式清单含：证据 / 等级 / 修复 / 验证</li>
+<li data-page-node-id="IdbLwW9LXuiVuFlxETpSvF"><!--pnid:0yOkUPd5QM0WYRFwTR15GL-->[x] SLO 标为建议初值 + burn rate 口径 + RPO/RTO</li>
+<li data-page-node-id="UIIWoBm0wnte5vB9egRkyq"><!--pnid:v2ylsQ6HPhTXTsuqTm1YDx-->[x] 变更（尤其是 etcd）给出执行顺序、一次一个成员、先备份、不可回退的风险提示</li>
+</ul></div></body></html>

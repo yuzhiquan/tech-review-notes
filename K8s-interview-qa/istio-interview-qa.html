@@ -1,0 +1,1869 @@
+<!DOCTYPE html><html data-page-node-id="czELDbzYJfow0SQ3BN3Rik" lang="zh-CN"><head data-page-node-id="7ki3SQl8du1D7U23SH0WTB">
+<script data-page-node-id="jNo4liOKUpeyuWFBA165dO" src="/page/page_comm/inject.js"></script><meta data-page-node-id="xKXBpPbcETRubYWES90mwD" charset="utf-8"><meta data-page-node-id="3KTQCuccrtJitnbUUbaEUq" content="width=device-width, initial-scale=1" name="viewport"><title data-page-node-id="CFEmYIMNQTr6ukXoX7j4iX" data-pnid-children="4HBp74JCUIpyYo66TaUuq3">Istio 面试题全解析</title><style data-page-node-id="pXBPIeowXjKzaJoeBIv8PO" data-pnid-children="CSYbbuPPlqfGQpOM0zqVYP">
+:root{--bg:#0f1115;--fg:#d7dae0;--muted:#8b93a1;--accent:#4aa3ff;--card:#161a21;--line:#242b36;--code:#1c222c;}
+@media (prefers-color-scheme: light){
+ :root{--bg:#f7f8fa;--fg:#1f2329;--muted:#5b6470;--card:#ffffff;--line:#e3e7ec;--code:#f2f4f7;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+.wrap{max-width:980px;margin:0 auto;padding:48px 24px 96px;}
+h1{font-size:30px;line-height:1.4;border-bottom:2px solid var(--accent);padding-bottom:14px;margin:0 0 8px;}
+h2{font-size:23px;margin:52px 0 16px;padding-left:12px;border-left:4px solid var(--accent);}
+h3{font-size:18px;margin:32px 0 12px;color:var(--accent);}
+p,li{margin:8px 0;}
+blockquote{margin:16px 0;padding:12px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;}
+blockquote p{margin:4px 0;}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px;display:block;overflow-x:auto;}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+th{background:var(--code);font-weight:600;white-space:nowrap;}
+tr:nth-child(even) td{background:rgba(127,127,127,.05);}
+code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+pre{background:var(--code);padding:16px 18px;border-radius:10px;overflow-x:auto;border:1px solid var(--line);}
+pre code{background:none;padding:0;font-size:13.5px;line-height:1.6;}
+hr{border:0;border-top:1px solid var(--line);margin:44px 0;}
+a{color:var(--accent);}
+strong{color:#ffffff;font-weight:600;}
+@media (prefers-color-scheme: light){strong{color:#0b2c52;}}
+</style></head><body data-page-node-id="rXVKkIevlWw6ykjMj2RZRN"><div data-page-node-id="Tm5SC3js1VP9snq83Yyk8K" class="wrap"><h1 data-page-node-id="T6RfuBLJ4AQi79zOO1vJjm" id="istio"><!--pnid:5fnm80jkkB1PPbk2cIwpr3-->Istio 面试题全解析：原理篇 × 方案模式篇 × 大规模优化篇</h1>
+<blockquote data-page-node-id="xtkI4v0pyqQV7pRqSQWHK6">
+<p data-page-node-id="QY3NZSroXPcO08WSKJO7wi"><!--pnid:olsJjGYS3ndOtEAMsl2gkQ-->适用角色：SRE / 云原生平台 / 服务网格负责人面试（社招 3 年起 + 偏高阶）
+姊妹篇：《Scheduler》《Kubelet》《网络 / CNI》《控制面》《存储 / CSI》《Linux / 容器底层》《GPU / 大模型》《排障实战 60 例》
+版本约定：以 <strong data-page-node-id="9rbCXpvVScl4b7zkYcboTT"><!--pnid:u3JbHTR4ZcmAJboIW04xq4-->Istio 1.20 ~ 1.24 时代</strong><!--pnid:SQPCHEYVnyPaQRMFjMyKAC-->为背景（istiod 单控制面 + Envoy 数据面 + 可选 Ambient）。<strong data-page-node-id="XONZkn47LxGKR9tepBIBSP"><!--pnid:fWpUw79ISyQ5fVspV5Vwom-->版本号、feature 阶段（alpha/beta/GA）、默认值变化很快</strong><!--pnid:sqf3VBXsMmDCq88QReARWD-->，凡涉及版本的地方均标注"以所用版本的 Release Notes / 官方文档为准"。</p>
+</blockquote>
+<hr data-page-node-id="UlWtqNrYxcynZ753edDyuI">
+<h2 data-page-node-id="A3PQPkPgIw7AmTIWVgc8wn" id="0"><!--pnid:v5lavsVXMaBw94TY7Jx83v-->0. 使用说明</h2>
+<h3 data-page-node-id="5FIMV04jTkkneN4BrXvWsW" id="01-istio"><!--pnid:BnG0AmZk7eYunmz6fdWCby-->0.1 Istio 面试的考察层次</h3>
+<table data-page-node-id="VTyH2JFvhijxVpR49YXoAp">
+<thead data-page-node-id="ne48WOWzBroVYqaC94M64B">
+<tr data-page-node-id="b0uc1SqflvoZaeYaTn0Yuw">
+<th data-page-node-id="eilzdZk8p2CP974rQ8CGBJ"><!--pnid:yEUPM6D3TYbBmu1UJnmZxC-->层级</th>
+<th data-page-node-id="mu3yOIHJb1ELK4k7skIyfe"><!--pnid:9Hf6sa9NviHdm9LkKykNrI-->考点</th>
+<th data-page-node-id="4kQi7fLoQt5lDH5ZGrlmPG"><!--pnid:ws5tvtcItx2UoTXAZ5jVpC-->表现</th>
+</tr>
+</thead>
+<tbody data-page-node-id="Vq3xnTCbhLUYhbXVvFQX4l">
+<tr data-page-node-id="4uVdaWvvKhPwniq3RoheAz">
+<td data-page-node-id="yqal9zodMabstuh54wvWdD"><!--pnid:Av4sun2hWTxCmonUTRbSOt-->L1 会用</td>
+<td data-page-node-id="z6IhTu6S07UyJbRMFJewji"><!--pnid:skEScGZsPEx6Q2UM2lzoGt-->会写 VirtualService / DestinationRule / Gateway</td>
+<td data-page-node-id="A3RBG0DDorZY91k5xtj1wP"><!--pnid:yamoQo1FOkyyng9Vct2Dpg-->只会抄 YAML</td>
+</tr>
+<tr data-page-node-id="rMIh6fUyECVTg4Taxb7RwO">
+<td data-page-node-id="Ab5P8MqFRe5RzvDQ55bPxU"><!--pnid:iPRJp0oqQ26G6M1LKyONET-->L2 懂原理</td>
+<td data-page-node-id="ouHMDDgMQ7k7MhTtTllNmU"><!--pnid:XTonNuM6CUAbWILAX1KqYa-->说得清 istiod、xDS、Envoy 拦截、mTLS 身份、证书下发</td>
+<td data-page-node-id="PgmGUSdYzHSu6QUOFgWG7O"><!--pnid:1z1Z14EJ666a9zbU1jPefc-->能画架构与流量路径</td>
+</tr>
+<tr data-page-node-id="GV43Y9MdK1qFS0kHaebN5Y">
+<td data-page-node-id="oW3P8qqM8M6MJWaivbsMLj"><!--pnid:rEpR9NB2OuxTkgjMJ12BmO-->L3 懂落地</td>
+<td data-page-node-id="Vyc8gL1leGGZtjZgjTh1fW"><!--pnid:oKwhwkYzOAtl7OOiM2CIFe-->会做金丝雀、mTLS 迁移、多集群、限流熔断、可观测</td>
+<td data-page-node-id="CpyVDahgnaCYKsGSeaSMdq"><!--pnid:iFVnC6Ed0Ls6Kf0Yv7lEIM-->有迁移步骤与灰度方案</td>
+</tr>
+<tr data-page-node-id="C8FVkt1fpaiKC6gBgdpf9C">
+<td data-page-node-id="xAFpcKyLmneR94qF9W2hP2"><!--pnid:URjgVp3HBjXjQwXTfcjisx-->L4 有规模与事故经验</td>
+<td data-page-node-id="MUAduSgIKbrivz8y2Pw2Qy"><!--pnid:xxGAeTgtKQy3nIkO35MdUp-->能讲"控制面推送风暴""指标基数爆炸""注入后启动变慢/探针失败""503 排查"</td>
+<td data-page-node-id="qc7A8ZPRFLtD3YfmSnjrNh"><!--pnid:VVx9P4lPgt50DrtZPQXhJ7-->有指标、有裁剪手段、有回滚</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="aNWbfMYdhqNtvgaMSIHU3a">
+<p data-page-node-id="IlVWIdmEVHh05FKweeljFT"><strong data-page-node-id="g7jpjqTeEPoH0JO6qH1rxR"><!--pnid:uZXlDBIIaVyMyxynGgxun3-->答题模板</strong><!--pnid:mBDftPhXiotefasCEPckHL-->：先说<strong data-page-node-id="YRCn3bjz42qGfzusk8wL5H"><!--pnid:mwepVqjAY0jkYsX0qPiK0a-->流量怎么走</strong><!--pnid:13aEjhbFgwGQLrXbCWarli-->（谁拦截 → 谁决策 → 谁转发），再说<strong data-page-node-id="3M3vWuMCHQAdXu20dX2yhX"><!--pnid:3cAECQo1ZCj7VC55B5D1PQ-->控制面怎么下发</strong><!--pnid:19ZhnGnSKllqLfKSCJFkbk-->（xDS 与身份），最后给<strong data-page-node-id="vTSMKKcWwA07uZw4QgOz2d"><!--pnid:BNI92JRuKNMemoAebcaTkq-->证据</strong><!--pnid:G4vTToOuIN1aYwSk0g0LJP-->（CR 字段 / Envoy 配置 / 指标名 / 诊断命令）。</p>
+</blockquote>
+<h3 data-page-node-id="0I4V89waUfdWQXroKtz05V" id="02"><!--pnid:7RSyN4QQWBXvHgYrNCLq9R-->0.2 术语速查</h3>
+<table data-page-node-id="JWhH9XPx8c1SvS2Ws1fqbm">
+<thead data-page-node-id="A7ZGj2WxiD4xYalSInr3NE">
+<tr data-page-node-id="9GleXJT3MH5S6WafoMNDJF">
+<th data-page-node-id="OM9SOUONY4rvIZ477RSMsg"><!--pnid:pNmrmP3GUsMOFumz23Hw4m-->缩写/名词</th>
+<th data-page-node-id="sCDwdBjmKFdCPPvfpK5PnY"><!--pnid:5ePT4uuvKX4oSmC23WTynO-->含义</th>
+</tr>
+</thead>
+<tbody data-page-node-id="LXFGJaSrOcEQ8tDveqEyEt">
+<tr data-page-node-id="5GQkIkGjGjXGEBnjEpWGp9">
+<td data-page-node-id="7meRQyx8PA0XzFPzuj8oap"><strong data-page-node-id="xB3UrYm9NePYIdA03bOUMu"><!--pnid:Z6q6xoxALGvGGfuMdL2gti-->istiod</strong></td>
+<td data-page-node-id="ihV4ENxO8raPFPMNcpwmPq"><!--pnid:gU1sNQQEmOuzAKRN5flF40-->合并后的控制面：Pilot（配置转换与 xDS 推送）+ CA（证书签发）</td>
+</tr>
+<tr data-page-node-id="O5p58JuCw8UJqOfpiBs24S">
+<td data-page-node-id="4Ct9Lp96YGIZhYbIQTsQzw"><strong data-page-node-id="lurp3Vrf16DQZsHCKzGdJB"><!--pnid:yzQyqLrE3vUYYNEGOlAH3c-->Envoy / istio-proxy</strong></td>
+<td data-page-node-id="b0gCU87H9xghHBtFp2VJzM"><!--pnid:lRTlMISfRhBhWJMe4dZ4NT-->数据面代理（sidecar 或 gateway 形态）</td>
+</tr>
+<tr data-page-node-id="2MApXGkaiJfbMBnbe75QOW">
+<td data-page-node-id="XjqsThg0y3VFYH7ifQRWtT"><strong data-page-node-id="rEiskwtsRfXzjwqcI19fju"><!--pnid:vfPSBovWX61a6Uwjxb079g-->pilot-agent</strong></td>
+<td data-page-node-id="AP1vmHPr4RrdbWvz5tdGqn"><!--pnid:cBZGRhtBOoBVv8SibumOKX-->sidecar 容器里管理 Envoy 生命周期与 bootstrap 的小进程</td>
+</tr>
+<tr data-page-node-id="6JA4EEvRYr5SbMwfeo3oUK">
+<td data-page-node-id="Aj8wtdAsPnmTK4pjrthhsZ"><strong data-page-node-id="IH9ZA2wOfdljwtrWyJ4Z4R"><!--pnid:3ZUznAjSZQzNVaafccXhyD-->xDS</strong></td>
+<td data-page-node-id="hZy5BrkUq3IEQhJnZMwmhG"><!--pnid:yoOOXk3k2ggzfJ1vrX1YL3-->Envoy 动态配置协议：LDS/RDS/CDS/EDS/SDS + ADS 聚合</td>
+</tr>
+<tr data-page-node-id="FhWixdwv2GeonkHCHnuFIx">
+<td data-page-node-id="BBalxcgsNxlFNQMlryvsVE"><strong data-page-node-id="mBKykHz3Ibuw8w9WC2TKqG"><!--pnid:yj2rVxTAQHRihnUxmkJyPy-->HBONE</strong></td>
+<td data-page-node-id="WtP5fnG6fz6JjlzdEXZn0L"><!--pnid:JfwRrXxYX8eSMFvdkwXo1g-->Ambient 模式下基于 HTTP/2 的隧道协议（默认端口 15008 相关）</td>
+</tr>
+<tr data-page-node-id="FRXBNie3PavQh1HJZULXWL">
+<td data-page-node-id="u2g2uaTytTqETHnkXXBFeQ"><strong data-page-node-id="d6uJfBilbZeN000OdVlSSr"><!--pnid:Ywe5pvIewoe5BlGZwRz4JS-->ztunnel / waypoint</strong></td>
+<td data-page-node-id="mxVPdyL4L9VA8kaCDd94A6"><!--pnid:gMFev3AfiYD2vtChsmB8VG-->Ambient 模式的节点级 L4 代理 / 按需 L7 代理</td>
+</tr>
+<tr data-page-node-id="J9EbbCbz2SADvGUeZ06vTG">
+<td data-page-node-id="tEqpOu7OHxoqI0tBMiAHv3"><strong data-page-node-id="9D7aUqsdDHRrtpOc4HvKr5"><!--pnid:KLVc0MxXI5KaIedeewSjPG-->PeerAuthentication</strong></td>
+<td data-page-node-id="tdp6ydsvFCEfC87fnantgY"><!--pnid:saY34neBiw0IpCoSXjzOHi-->mTLS 模式（STRICT / PERMISSIVE / DISABLE）</td>
+</tr>
+<tr data-page-node-id="Wsna2Cle70dVG9YZHRhlXQ">
+<td data-page-node-id="lslTTd8nN3LnHQ3AO94tYu"><strong data-page-node-id="3pGQpe1ehDvHh815CBkfSA"><!--pnid:CKGEUGOUOJxWq5VPci4fWB-->AuthorizationPolicy</strong></td>
+<td data-page-node-id="Y4aDeipYuaNsLO7XABy0Bi"><!--pnid:EK3tycjY6kE9FjypROuHDd-->L7 授权（ALLOW / DENY / CUSTOM）</td>
+</tr>
+<tr data-page-node-id="jo8NvxXK75SDvx0IbxFUvs">
+<td data-page-node-id="HaGCTsnGcySHsSK5ypqUwD"><strong data-page-node-id="wgY0olPCYF9Rxsx0zclpCi"><!--pnid:BJn5ViwWR74e8bWyecIhoh-->SPIFFE</strong></td>
+<td data-page-node-id="NwziJiEPjWmJWZWwBtLc08"><!--pnid:RFMNCVI17cyvdUtgLukd1E-->工作负载身份格式：<code data-page-node-id="Ps7q72RI9JHZskmN5QZfvN" data-pnid-children="HyQZOoUgmkMv0pduhON2HQ">spiffe://&lt;trust-domain&gt;/ns/&lt;ns&gt;/sa/&lt;sa&gt;</code></td>
+</tr>
+<tr data-page-node-id="XWear4FsJRf9jDPK6FH3GD">
+<td data-page-node-id="QAHfHczzoiKHDKzmnpkIS9"><strong data-page-node-id="WEad5vOl4Jjgz4NbH9hlzN"><!--pnid:4XTVGnYaAdofPCmM2HZzf2-->ServiceEntry / WorkloadEntry</strong></td>
+<td data-page-node-id="OzLMqZL8a455BjwRenxLAZ"><!--pnid:u2u0wUKLPBnfGVpTNsvC9C-->把网格外服务或非 K8s 负载纳入网格</td>
+</tr>
+<tr data-page-node-id="fJQCagIq3jkGdhPaTKXQXA">
+<td data-page-node-id="8PYceHEuXsrQisJr3Pp8WZ"><strong data-page-node-id="8CjFvgBq7hpxwN5AQnDGDT"><!--pnid:uYkjSn3uPEvTZmmqfM23Kx-->Telemetry API</strong></td>
+<td data-page-node-id="uaWZd7d4rvqJQdUNrO9JR6"><!--pnid:KsgW98Y8jwuVyOvXMZNt0i-->声明式配置指标/日志/追踪（取代大量 EnvoyFilter 用法）</td>
+</tr>
+</tbody>
+</table>
+<h3 data-page-node-id="1zQx9ltQbPS2YqXOumMegp" id="03"><!--pnid:HM11ubk9VGdn52wB2cXiZ8-->0.3 一张"包路径"总览（先建立画面）</h3>
+<pre data-page-node-id="V4eopGalRRUpXVUotDUhLh"><code data-page-node-id="mtmGnStY2ehTnJb7yPb5DI" data-pnid-children="C8kZ8GOutwqcSW2Ju6KXxQ">① 入站：Client → LB → Ingress Gateway(Envoy) → [HBONE/mTLS] → Sidecar(Envoy inbound) → App
+② 出站：App → Sidecar 拦截(iptables/TPROXY) → 策略/路由 → [mTLS] → 对端 Sidecar → 对端 App
+③ 控制面：istiod 监听 K8s/CRD → 生成 Envoy 配置 → 通过 xDS(ADS, 15012) 推送给所有 proxy
+④ 身份：istiod CA 签发证书 → 通过 SDS 下发 → 双向 mTLS 建立，身份 = SPIFFE ID
+</code></pre>
+<hr data-page-node-id="qHjJtnGIXtPzZfOcrZuOuE">
+<h1 data-page-node-id="at7o0koHTcr99u2v8Ig5Mt" id="part-a-26"><!--pnid:nXbKmFXyOnlVmMewUO1JIk-->Part A · 原理篇（26 题）</h1>
+<h2 data-page-node-id="QP2fhVEziDHeHLXCo3VOBc" id="a1-istio"><!--pnid:lJrdxV6lXVW39Dfml6Syrw-->A1. 服务网格到底解决什么问题？Istio 不做哪些事？</h2>
+<p data-page-node-id="FMsC535nFvI0U4RJTdBnt1"><strong data-page-node-id="ouYEnYOEk5SPR5RqyAjuTY"><!--pnid:PZQ0ZunOcq1vBBxgIhb3B8-->解决</strong><!--pnid:syaBx16y8mupfvCchPnGXC-->（把"服务治理"从业务代码里下沉到基础设施）：</p>
+<table data-page-node-id="prpeW2r9ehwPFfCSx43yOZ">
+<thead data-page-node-id="6fI1mOoiG6mUCr3LDXYl32">
+<tr data-page-node-id="77FxdJv0FYNIrfe9IXuC8H">
+<th data-page-node-id="PDZ3NCfIYa8QJZq7kt2ng0"><!--pnid:kR7mH3ZMTYXrl1NfTxvojw-->能力</th>
+<th data-page-node-id="31rL18ycKY7SjyXuSHxSX9"><!--pnid:cwUNT0hyF3tGLlIe8hu12q-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ThBCVmwrheSzp3om5PjvDr">
+<tr data-page-node-id="LX3g5BrMOpl4bd7PMnH2eB">
+<td data-page-node-id="a503L19ZY5XClesXvMjDKQ"><strong data-page-node-id="PxG81u7aweDTmUHV13XePH"><!--pnid:eF4OYtkgJD0hBNmr1K2dde-->流量治理</strong></td>
+<td data-page-node-id="iX2mqa7eYyJgeuVT0heUBm"><!--pnid:3UjH4zdeE37HILWqUTq8Nx-->路由、分流、灰度、镜像、故障注入、重试/超时、熔断</td>
+</tr>
+<tr data-page-node-id="875vUs7v1vK1SUdEDSdRIt">
+<td data-page-node-id="YgJ67N9j2J8ajg5bxI8Ny4"><strong data-page-node-id="zd9EJjJnxzlxHXYeXU7wPB"><!--pnid:JvT08ahhtvIHlOwe02W6e2-->安全</strong></td>
+<td data-page-node-id="vdMOpfDxGeBT9dnCX899vW"><!--pnid:ZrCSoq3079DBOWZD4IQm31-->工作负载身份（SPIFFE）、<strong data-page-node-id="oDQypxdIEESeyBf4czsM0k"><!--pnid:YBUAO4KWtRk4VzwdSVWkOS-->mTLS 透明加密</strong><!--pnid:2LyhbiZrBbbTk8BpM52g0V-->、L7 授权（JWT/属性）</td>
+</tr>
+<tr data-page-node-id="1akFJIVNbpvCgsZ5zbtsNR">
+<td data-page-node-id="TUnxYOId8XsfGrd6RxbRZ1"><strong data-page-node-id="apl9qT6p1dkhK3zgCO1EXQ"><!--pnid:AR5MZjvwTOnyjovCfvBV4V-->可观测</strong></td>
+<td data-page-node-id="KAn4N9h97KXbL0vY8LOyTP"><!--pnid:HGt1Wpl54Bg4v0yotNIpOi-->统一的 RED 指标、访问日志、链路追踪（含 mTLS/响应标志等上下文）</td>
+</tr>
+<tr data-page-node-id="rpR6LZl60GRCLfqJwn0zcZ">
+<td data-page-node-id="0ZbethUoXOYyZ1G0F6PMKL"><strong data-page-node-id="1yWH71vFNztKDmkMVx5fy4"><!--pnid:Op8soNV84PElrAEE1IABex-->出口/边界治理</strong></td>
+<td data-page-node-id="ivbqNMQzboJJa45at8oqM6"><!--pnid:vgtZPyTFZo2ofYLl4v4qvI-->Egress 统一出口、审计与策略</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ULNKU23pigCZV3612WMEq3"><strong data-page-node-id="7Hk9TyVrZV5gZ7qTsfmRkj"><!--pnid:ovH1crMfel10o5nmJyxnKO-->不做（高频送分点）</strong><!--pnid:e8EjwZh85NdKVM0UgaP140-->：
+- 不负责 <strong data-page-node-id="7HDt2ZukMSbiJ77dMMpyw7"><!--pnid:pw2tVcD6iUJIGs8Z3xprp7-->Pod 之间的连通性</strong><!--pnid:Kev4PMZwc7pTp79Iiu7Q5F-->（那是 CNI 的事，见《网络篇》）；
+- 不负责 <strong data-page-node-id="yeZ3InW4Ga1ZdsyJcoXSqs"><!--pnid:EeiKuohHpU2XQJOpHrFpHI-->服务发现本身</strong><!--pnid:ySFQA46XaznEriiNweps22-->（它消费 K8s Service/EndpointSlice，或用 ServiceEntry 扩展）；
+- 不实现 <strong data-page-node-id="ESNuGgwFmdC5utMnyRCa7c"><!--pnid:yzhE3dtN5kzb2o8i5CQR8k-->NetworkPolicy</strong><!--pnid:dXHNPXHTZwQqhePywNeoqV-->（L3/4 网络策略仍由 CNI 执行，两者互补）；
+- 不是 <strong data-page-node-id="x6Mia6NQ8ab1ZDvxiF0vBS"><!--pnid:wXpP2XpzdncMQmhS5XVJop-->API 网关的全部</strong><!--pnid:Fq1UliVx6CfIglrZc9pj53-->（Gateway API / Ingress 仍负责南北向，网格管东西向 + 部分南北向）；
+- 也不替代 <strong data-page-node-id="mf3TrOcovJe0RsGj6PyWWO"><!--pnid:jgibGRgcKX7ZUUlKxygikF-->业务层的幂等/事务</strong><!--pnid:eRb8QiCtmjNEslAcicpk6Q-->（重试只能治理瞬时故障）。</p>
+<p data-page-node-id="t0M3QoROLUUuuSW9AywodS"><strong data-page-node-id="2z23d8h8FTfz3F8DUzRcel"><!--pnid:o6c5zNNhJJb7HOd8DGz9c8-->一句话定位</strong><!--pnid:TCTwtWD2fx9feK5S6tlnUa-->：<strong data-page-node-id="x0IRv8Tj0AqZWfT8bZ2qab"><!--pnid:xZdrw5By40yQ8cGtz4fMdp-->Istio = 以身份为中心的东西向流量与策略平面</strong><!--pnid:TZTZfKhCpnp295xjyQWk6y-->。</p>
+<h2 data-page-node-id="r95NQ0YrvhHXDLqPjb6oqj" id="a2-istio"><!--pnid:vz3UqYYiCt0dX3voSirWTb-->A2. Istio 架构怎么演进到现在这样？</h2>
+<table data-page-node-id="CDTFiiErNabQ2PJcaxyF49">
+<thead data-page-node-id="vPBVfpeS6Qwyekadvsf0Mq">
+<tr data-page-node-id="5r78VHgHrj6pgX9RZFqesU">
+<th data-page-node-id="RdbcgmkOn48QwltjFwnPfb"><!--pnid:UiZGmfUiJFOK5GJefhFTM9-->阶段</th>
+<th data-page-node-id="u7yeoTn7Z9vNE5tLzn8dFi"><!--pnid:Xqv0Ew6LT6BxKzVWoTvQ89-->形态</th>
+</tr>
+</thead>
+<tbody data-page-node-id="Ar1tzMs2Jg3UjSTmfDzr0C">
+<tr data-page-node-id="uv6ZLJ5dn50wl8kxLCUBf7">
+<td data-page-node-id="YPyAIHus6sBPHqpnMXUkvK"><!--pnid:xDnpenr4PvfggCvhC3O4Mu-->早期 1.0~1.4</td>
+<td data-page-node-id="Scyr4JUWYxTFjGEOMQJDrY"><strong data-page-node-id="UrCbYaGzusSR3QuCBu93GT"><!--pnid:Gi5RDSsTHUFcKmlrRIxfHK-->微服务化控制面</strong><!--pnid:0FnZ554IP4cWDIGC982EWj-->：Pilot（流量）、Mixer（策略与遥测、<strong data-page-node-id="GZLHiQiYq9pwN5a9OIhqCJ"><!--pnid:JYNFJoLFgjwq9VhcKLMiPo-->性能瓶颈</strong><!--pnid:AQgS3h3hRZnT72s9w6OcJd-->）、Citadel（CA）、Galley（配置校验）多进程</td>
+</tr>
+<tr data-page-node-id="vv8WxFGQEm4zLcqoAqkT9Y">
+<td data-page-node-id="YKGBmEZQt6iU8AN3D6rpkG"><!--pnid:RbzQ5aIY3csrujKu9NxjVq-->1.5 起</td>
+<td data-page-node-id="K64HEuzIqdVoZAm0XeBOxd"><strong data-page-node-id="6aT1pJhx8HqPMZQDbXx3VA"><!--pnid:AqpddJEIk1nF6L3RxcspGa-->合并为单体 istiod</strong><!--pnid:pWpRTKadcvIiWAs3NnKZP2-->：Mixer 逻辑外置（遥测交给 Envoy 原生统计 + Telemetry API），控制面大幅简化</td>
+</tr>
+<tr data-page-node-id="fdDkRbebnE6lz3zCCHK6oz">
+<td data-page-node-id="G4377I2jyb7XXa6Y19qNLx"><!--pnid:FaVHoQj10d0Urwdf1xhVgm-->1.6~1.19</td>
+<td data-page-node-id="oe268T5v9nxRabCYPS9Nx6"><!--pnid:Up7Pe4yrQGG9zhbQB7e1wY-->持续强化：VM 支持、多集群、Telemetry API、Gateway API 支持等</td>
+</tr>
+<tr data-page-node-id="ojVmx0bxGk07PBLgAiJg1G">
+<td data-page-node-id="XnRgiDks2HuJhwYcuk2gUM"><!--pnid:IbS82zRYmw6R7A6QUTGGUV-->近版本</td>
+<td data-page-node-id="MsfqVBaZyGpltcidFVHqwn"><!--pnid:M9jeHuaXqXxik66RdkJ4Bd-->引入 <strong data-page-node-id="n8tzagWGQH6ryaR8dWSOCv"><!--pnid:VVZ9HlTtyQlwB92NPWo6I5-->Ambient Mesh（sidecarless）</strong><!--pnid:oX1LKAeTRSVdci3FeZUQeq-->：ztunnel + waypoint；同时 <strong data-page-node-id="sxeNRXDBYBc1ce172LyRoF"><!--pnid:nFye9vwu3UE9teDpo1kpoV-->Kubernetes Gateway API</strong><!--pnid:v8hSEQ0Ht55lzrhWZhHFlb--> 成为推荐的入口配置方式（<strong data-page-node-id="VXjVl9GqDSQq63Zdd0k96e"><!--pnid:fbARoyIMjdVMFasoivA3ZP-->具体 GA 状态以版本为准</strong><!--pnid:QtdMwRz6GQFnLSFTqVcH9e-->）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="rhTzulk2NNGQK3CbCOVzrI"><strong data-page-node-id="HCTyvlHuvcTu166d7S66jU"><!--pnid:MkJLlNRG1rUF0EaKSDXm2u-->必答的"为什么"</strong><!--pnid:1ejgHdgHu7oHjU3OeMXiks-->：Mixer 被移除是因为它是<strong data-page-node-id="ME2pyqWzJGitKmkMtJVvhy"><!--pnid:QQIxY35WaLQr9j4uAL7Zq5-->每次调用都要打点上报的中心化组件</strong><!--pnid:9BdyMBHlMSmmlbLVwO6c82-->，造成延迟与可用性耦合——现在遥测主要由 <strong data-page-node-id="jtQLSVQT1zgDQlaOkDZ9cg"><!--pnid:SMDibEzg9040cp3YregdJu-->Envoy 侧统计 + Telemetry API 配置</strong><!--pnid:cOGtVJYrmwCAD70g5T0NCD-->完成。</p>
+<h2 data-page-node-id="X41Fauw6YtTa9WXaSb8Yak" id="a3-envoy"><!--pnid:HgMdVbYm6tHbCfOnKPdd5O-->A3. Envoy 数据面：关键对象与进程模型</h2>
+<table data-page-node-id="zzqEUgHbfmjfwVsSEfMZ3U">
+<thead data-page-node-id="HBB2mEVlbRDDRvmPUA7ebT">
+<tr data-page-node-id="c9YgoPAm8L6AD913RhkPVb">
+<th data-page-node-id="8gCYJvV1TcRQcJVbUEU5PG"><!--pnid:bsq5spFjqf1ZZLQdTX479x-->Envoy 概念</th>
+<th data-page-node-id="0LHDkXLKLlr283Wsv0KOWh"><!--pnid:yiIqdzJGZ8beYYoRMtJU9V-->作用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="DuiGb4a60nB1c3eEWMDUJ5">
+<tr data-page-node-id="czyLox1Pg4JiYWXkHEyjUd">
+<td data-page-node-id="9PEd3IyLMyV0sJjoJ4plww"><strong data-page-node-id="DiSlNHo74WKdI98xzaWyKW"><!--pnid:YKHmk7ZOHRGEnkzM5TZpFx-->Listener</strong></td>
+<td data-page-node-id="OFpmXjjnr0GUYprbFnAvCK"><!--pnid:9lrglutR4n7isdFNx94gAy-->监听端口；<strong data-page-node-id="qZTCIoOo3lSC6PimtQVCoI"><!--pnid:99mLHTklcHdg5SxKhEzi2b-->filter chain</strong><!--pnid:TQwxy91BXFpgBCW10Hr2q2--> 决定怎么处理（HTTP 连接管理器、TCP 代理等）</td>
+</tr>
+<tr data-page-node-id="1rCJj2KgN0EcZhyGRuek6N">
+<td data-page-node-id="ULLNmt7FOG9jIAB4rHGZcN"><strong data-page-node-id="w7j1unrgnC0SfF7Ga8CZrk"><!--pnid:MURlC7SOqxdtxOqA1XXDZS-->Route（RDS）</strong></td>
+<td data-page-node-id="VUZZq79Dkk1P40iIio37cE"><!--pnid:Szx7nDvmt1vSSxb33F0orm-->域名/路径匹配 → 目标 cluster</td>
+</tr>
+<tr data-page-node-id="GdhTZmu8QNCKXvTG0HAFUW">
+<td data-page-node-id="TBB1RqxDnUMPNIvSAo8pPn"><strong data-page-node-id="ztgpIGRB2JdtRrBbcKNLuD"><!--pnid:cGM8rNzB9IjY81alCL3inv-->Cluster（CDS）</strong></td>
+<td data-page-node-id="61E96Kj9mXUKASyGQAg0J9"><!--pnid:ZRhBnDbXnWBaTLPQm7Knzz-->逻辑上游（对应 K8s Service 或 subset）</td>
+</tr>
+<tr data-page-node-id="XJsIJKcqtk9irvNLrCPzMt">
+<td data-page-node-id="c8fYqZy31XkQp9MFPnIUfU"><strong data-page-node-id="8QKv8IDnCuyo8kcQZDqUip"><!--pnid:YgIIy14N5zvnXtt1QYJTgl-->Endpoint（EDS）</strong></td>
+<td data-page-node-id="cNKoTJ2sMZU7o5yaypQpkH"><!--pnid:Grwr0yRmLhpWti3YdP5wpf-->cluster 的真实后端地址（来自 EndpointSlice 或 ServiceEntry）</td>
+</tr>
+<tr data-page-node-id="3d9TgHAgVxTxcGVVTJfkxQ">
+<td data-page-node-id="ptaQyCYhfcri5Z30yWBeAG"><strong data-page-node-id="FksZXm3yNoEOvHmOV4AS0y"><!--pnid:1tYwdHiViwVGj6YvY2od7G-->Secret（SDS）</strong></td>
+<td data-page-node-id="AsSSZEYFlXDovlY97WnM1D"><!--pnid:dm51u9YWwnDqw12t708xkg-->证书与密钥（<strong data-page-node-id="e84Axdrl2Emlf7rnr6zLfc"><!--pnid:upwg5Ur52eu5rtkQoLVawR-->按需下发，不落盘</strong><!--pnid:bgkwOofS9oaDx4d4xn9ixy-->）</td>
+</tr>
+<tr data-page-node-id="saskyeFUuXfVWF7X0zpUe4">
+<td data-page-node-id="BRsedrthIvqGP3OwEpfg0Z"><strong data-page-node-id="P3Yn3hkuy3CXJG9O9CbQqa"><!--pnid:izuRiyuRXqAwlbfi1PorhY-->Filter</strong></td>
+<td data-page-node-id="QzGfIYWonAV9HpSGebxKw1"><!--pnid:Qg3oSzBlYXzU9beYWPfUFG-->处理管道（HTTP filter：路由、认证、限流、遥测）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="JaFLAH3FEKHosboZsOgBdy"><strong data-page-node-id="3RMCswaTUiB1oAdF9FAER1"><!--pnid:4axTgkNS288lUpijOUKRma-->进程模型</strong><!--pnid:uV303O78g7Vgmz9oYd5vyx-->：Envoy 是<strong data-page-node-id="XNTqJdAv9scXaYdrn64Re1"><!--pnid:QkiuHLfmNstS0LTExTdclW-->多线程 + 事件驱动</strong><!--pnid:I5zZYpdobBxcr4AGrR95Zr-->，主线程负责配置与管理，worker 线程处理连接；通过 <strong data-page-node-id="MLi9NxAcEKm53J2lWmfEAf"><!--pnid:l97qKHPnnAkgMKpzhvDCEq-->热重启（hot restart）</strong><!--pnid:oBn95Mq6zK1t95LGqQKk2g--> 与 <strong data-page-node-id="16fzXUJ2JbzRO4Kk9ezJKa"><!--pnid:jXOPsM14DlViB4lba5Bcpz-->--drain-time</strong><!--pnid:cDwDp1nQgipqrLpOUumZXd--> 实现无损重启。</p>
+<p data-page-node-id="LRbUXnkzqkDLXKMIG27TvD"><strong data-page-node-id="bAkpIPIFwYaVsUOj6rWnWR"><!--pnid:Y3RDLIsJJnQpx9b2qmd29C-->sidecar 容器里其实有两个进程</strong><!--pnid:G1PerZAwEg8hBrp3fkNauq-->：
+- <code data-page-node-id="N9bYIApMJ24GIq4XwYaMTY" data-pnid-children="3VgL8WVYERIzW7iKKrbSpO">pilot-agent</code><!--pnid:JoO1K99ZiYgz5eKQpQpSc9-->：引导与管理 Envoy（生成 bootstrap、健康探测 15021、metrics 聚合 15020）；
+- <code data-page-node-id="aJB7kxhAsYbu0wRwQo8lXl" data-pnid-children="wkUzV8CEBY96InbPHHnPnB">envoy</code><!--pnid:wQmlgZjTRfLEtgWANbwnrI-->：真正的数据面。</p>
+<pre data-page-node-id="BKz94I3s6SlBAOyLc2avku"><code data-page-node-id="U0Bo2ROV0CCaoc4L1cbBTR" data-pnid-children="BUyyamAhTOYtfWCAkBje2M" class="language-bash"># 排障常用
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/config_dump | less
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/clusters
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/listeners
+kubectl exec &lt;pod&gt; -c istio-proxy -- pilot-agent request GET /debug/config_dump
+</code></pre>
+<p data-page-node-id="LbNEpa8vRtYreFZ4g1hVbO"><strong data-page-node-id="sAAb6miF8HC6NbQxv41JHQ"><!--pnid:bR0FCA3a4838AoTH5G9DC9-->常用端口（请与所用版本核对）</strong><!--pnid:SO9kf5zq98yBllxjUEdpdR-->：</p>
+<table data-page-node-id="REUwncvWqhPRMQlU8xs6r5">
+<thead data-page-node-id="ZICJQ3OhnO30FsdtgfTTMt">
+<tr data-page-node-id="JcbhV5bgDDLk2jSLGwm65D">
+<th data-page-node-id="qFE9KIbvKsiZaQaYo1m28a"><!--pnid:qrXKy1dQadGaMf3qJerSPG-->端口</th>
+<th data-page-node-id="P4ubc6yFvUNDFxgZdr1rfN"><!--pnid:n9jXdIYGHH7HaFFWZbvnUF-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="MHdny5byxdbjF2aaTdX2D0">
+<tr data-page-node-id="O7xzglIMsrJxAlpeW3MXIB">
+<td data-page-node-id="4i7qig9G0EcLREiZnbmb2B"><!--pnid:eBBkRxg2a8VQG0l3GIuAWD-->15001</td>
+<td data-page-node-id="G7H0KWhoAN3hwaipLjl3nX"><!--pnid:u5rUPVQHdmH8lOwipekgh5-->Envoy <strong data-page-node-id="9gWOFGbu6Q5t7Tl5r08ql2"><!--pnid:qMT73ZgL7G7lrFS7AoR9r9-->出站</strong><!--pnid:gbMSEmJvYyLSo43V8xAtug-->重定向监听</td>
+</tr>
+<tr data-page-node-id="O2Nw4yrNZZXavnWA7t6b7b">
+<td data-page-node-id="a8qxYh3Mh8N70Gpk7UKDnC"><!--pnid:ATBw9hswXDU1e8BSps8X9K-->15006</td>
+<td data-page-node-id="uTIWqanTr5AeCnB9vKylRW"><!--pnid:ijhhIDjWogAUDuN7SWkNdM-->Envoy <strong data-page-node-id="vzus02O4lTsoWjBdoSRKl2"><!--pnid:z9XJNO7J0geepRocEKMpOO-->入站</strong><!--pnid:nSkTr7YEtYkkxD7I5Y6m2H-->重定向监听</td>
+</tr>
+<tr data-page-node-id="PT9SU31slmEqdtwRGbOBNk">
+<td data-page-node-id="5OflbVnQzB65hxStYH1Zd0"><!--pnid:qEYBVwUbJ52lmVwTiEfFmN-->15000</td>
+<td data-page-node-id="Zbb4JJ0sUKGxODYtC677gv"><!--pnid:nU7p5cAgDpwPzjn3JKHx41-->Envoy admin 接口（config_dump、stats、日志级别）</td>
+</tr>
+<tr data-page-node-id="msEswzumteq8vOHzARsFZ7">
+<td data-page-node-id="t1YIhJ8YsVazDwC5T3jDDh"><!--pnid:uOgBQKgycFBY8dRgChj3hD-->15020</td>
+<td data-page-node-id="LJFI6qe394uHbVkJoQ1wvv"><!--pnid:asfyftZX2QwnePhALCrNCq-->pilot-agent 的聚合监控端口（merged metrics）</td>
+</tr>
+<tr data-page-node-id="oKlTnyiiWoLMEROImVD43j">
+<td data-page-node-id="bpZhGVlkGOxPPQatXFY3kP"><!--pnid:ypUhF0Cnh3UX5jvW7eX1zB-->15021</td>
+<td data-page-node-id="euYf6Xl8rHkun8ceGqgxkb"><!--pnid:0c0ggl3QpJLR2WJc6UIks4-->sidecar 就绪健康 <code data-page-node-id="y4LQOehVQhz8497CLOtMBL" data-pnid-children="WKIZmYAYF6Q8OSUxOLnxu7">/healthz/ready</code></td>
+</tr>
+<tr data-page-node-id="CMdvnpgBGIqOMZL91v5xZ4">
+<td data-page-node-id="Ls3gALrlLdYPL5l022xtwJ"><!--pnid:rxiW0t7w02hU1X0eZfadQ2-->15010 / 15012</td>
+<td data-page-node-id="GK0zF0h2DCejTJT9pYln8o"><!--pnid:YnRx4iCy6PwpvURCe9uAHV-->istiod 的 xDS（明文 / mTLS）</td>
+</tr>
+<tr data-page-node-id="zInVUGdwC0db3EAhU4OS3d">
+<td data-page-node-id="32FpgMlH5RJHpqm6USPsXB"><!--pnid:MmduPLSNCaJc10DNOVnoAl-->15014</td>
+<td data-page-node-id="KvGTV58wuEJOSVWtuOvbeH"><!--pnid:5n895SE91jRck1V6MjNuKo-->istiod 自身的监控端口</td>
+</tr>
+<tr data-page-node-id="YhqizBMAwEHYddRgSCSlmV">
+<td data-page-node-id="vlUyNFTwdiki33z0x81UPy"><!--pnid:NrezuzAXG3hVp5xCwZTTv0-->15008</td>
+<td data-page-node-id="Xu7LZ0MKH4fOmuQLmkr8hg"><!--pnid:aqCRsXdWUeyYNupvZdlG6Y-->Ambient（HBONE 隧道）相关端口</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="Yyeje5Rokh7OoIiDrXzRH5" id="a4-xds"><!--pnid:ife9NUXVrPjIQNAvOdle1y-->A4. xDS 与控制面推送模型（必考）</h2>
+<pre data-page-node-id="LFYuj0XpoMLR0Q3zDKcvdr"><code data-page-node-id="elsSYNIYXNay86J3xgp37y" data-pnid-children="tvwSaV6s2cGymXsIGAEFSK">istiod 监听：Service / EndpointSlice / VirtualService / DestinationRule / Gateway / AuthZ ...
+   → 组装成 Envoy 配置的&quot;模型&quot;
+   → 通过 ADS（gRPC 双向流，通常 15012 端口）推送给每个 proxy
+   → proxy 应用配置并 ACK/NACK
+</code></pre>
+<p data-page-node-id="hchCFPcOArnMJfkaje7jX7"><strong data-page-node-id="sxpTQPy00oDkHyCQYRXOj6"><!--pnid:4Cu1QtFfPQnA9y2Np09eGw-->要点</strong><!--pnid:661xYgZMoEo0SSTwfgK7ro-->：
+- <strong data-page-node-id="6TLL76TUVY2Hno6DtbQ3Jd"><!--pnid:jfe7vbq5sQGN0nwv8RhfEB-->ADS</strong><!--pnid:8o9rZEc1aqc17YE6LA3iL6-->：把各类 xDS 聚合在一条流上，保证<strong data-page-node-id="YbRXy3t6QPInqvcjbpUsI1"><!--pnid:Iaffpg38UlRVtPiSpYoXwS-->更新顺序一致</strong><!--pnid:sHqG8lO6hsgrqmzKgvl5DF-->（避免"路由指向了还没就绪的 cluster"这种中间态）；
+- <strong data-page-node-id="nMJhCHutM51LxTkkK6ftdP"><!--pnid:ibqUGzSd4DW41WJb0ucyoH-->增量推送</strong><!--pnid:GmRuOUipNRej4P1bt5ABVw-->：配置变化只推送受影响的部分，但<strong data-page-node-id="FkD9cvBbeAbYvpvhTxvfXD"><!--pnid:Ik9b1zaRh8PHIFvX5JcoNm-->影响面分析做得不好就会变成"推送风暴"</strong><!--pnid:hZFqGjkG4drtIF5Ux9GTbn-->（见 C1）；
+- <strong data-page-node-id="v63Ywxmz3AqtVkNFWLuHSn"><!--pnid:qHI8Zcua4m7GroWlMv3gjS-->NACK</strong><!--pnid:ntabrys0nK46GBGDCi0vrJ-->：proxy 拒绝错误配置 ⇒ 会保留旧配置，但<strong data-page-node-id="l1ljEbYRzYsUFYv1Ty0bsH"><!--pnid:GZaqryAvba74nGVbHZyX0V-->istiod 侧要能看到 NACK 并告警</strong><!--pnid:FRR16xx7js9WEV2xiwzgAW-->；
+- <strong data-page-node-id="90XkNGIERPKnk4AUsJN9Lt"><!--pnid:Hd1MRT0SJd56cGZ1kHYGPd-->debounce / 节流</strong><!--pnid:rzGasMNv0Puc9mqQd2uW4b-->：Endpoint 抖动会被合并，避免频繁推送（相关环境变量/参数以版本为准）。</p>
+<pre data-page-node-id="M7QnH2hpNyyVIDzV0mN26k"><code data-page-node-id="XLvsv3Xlw8L3HM7a337r1m" data-pnid-children="CegvBlmyXXTfVD1Frw6DoF" class="language-promql"># istiod 侧推送与连接（指标名以版本为准）
+pilot_xds_pushes
+pilot_xds_push_errors
+pilot_xds_eds_instances    # EDS 规模
+pilot_proxy_convergence_time_bucket
+# NACK 往往是&quot;配置错误&quot;的第一信号
+pilot_xds_cds_reject / pilot_xds_lds_reject 之类（以实际指标名为准）
+</code></pre>
+<h2 data-page-node-id="Qax4I9CEGLNvF6sTvAk35P" id="a5-sidecar"><!--pnid:QNKnnrLJDr7a8diX49l7h7-->A5. sidecar 是怎么被注入的？</h2>
+<pre data-page-node-id="1HbyTRHeyQVIqyylW4GtCW"><code data-page-node-id="57oMF11ESnLCPRA625iwNo" data-pnid-children="Lx2ukqdg1OAPupIuuayN1t">① 给 namespace 打 label：istio-injection=enabled  （或为 Pod 打 sidecar.istio.io/inject=true）
+② 创建 Pod 时，API Server 回调 istiod 的 mutating webhook（sidecar-injector）
+③ webhook 把 istio-init（或 CNI 模式）与 istio-proxy 两个容器注入 Pod spec
+④ istio-init：写 iptables 规则把流量重定向到 15001/15006（**需要 NET_ADMIN**）
+   或用 istio-cni 插件：由节点 CNI 链路完成重定向（**免 NET_ADMIN**，更安全）
+⑤ istio-proxy 启动、连 istiod、拉配置、就绪（15021）后应用容器才被认为可服务
+</code></pre>
+<p data-page-node-id="pOCJXYqyDWwWe8BIq0MxeO"><strong data-page-node-id="pFfuQjIIuElZesE4UYUa37"><!--pnid:8b6XYrQGpy5Z1VoOnxsZ5d-->关键注解（高频）</strong><!--pnid:OwkeCeWPlGxCJ5hpLw9LXe-->：</p>
+<pre data-page-node-id="XDAIzC9KlWVuH7EqxFRSjI"><code data-page-node-id="iW1PaswUJlg3auQWlR0nkA" data-pnid-children="rFfRWO5ksE9oHOdy5Em5Vi" class="language-yaml">metadata:
+  annotations:
+    sidecar.istio.io/inject: &quot;true&quot;
+    traffic.sidecar.istio.io/excludeOutboundPorts: &quot;3306&quot;     # 出站不走代理
+    traffic.sidecar.istio.io/excludeInboundPorts: &quot;22&quot;
+    traffic.sidecar.istio.io/includeInboundPorts: &quot;8080&quot;
+    proxy.istio.io/config: '{&quot;holdApplicationUntilProxyStarts&quot;: true}'
+    sidecar.istio.io/proxyCPU: &quot;500m&quot;
+    sidecar.istio.io/proxyMemoryLimit: &quot;512Mi&quot;
+</code></pre>
+<p data-page-node-id="zDR9YuI2C9jZC5Gn2gLG8F"><strong data-page-node-id="sadBQVvO0SghfKolTwdJKi"><!--pnid:lzqewmhMCN13Tfnk9B36YY-->必答的两条</strong><!--pnid:bVNskpzWXXCHllGiUFcuAV-->：
+1. <strong data-page-node-id="YqdZQW8vL77TGhO4JStYmP"><code data-page-node-id="XJV449CtAbflQcaNABy1K2" data-pnid-children="DYItkpDrfIqzBz65A78HWk">holdApplicationUntilProxyStarts</code></strong><!--pnid:IMJJAyi1dS7zpuXZieAUWT--> 解决"应用比 sidecar 先起来 ⇒ 早期请求丢失/探针失败"；
+2. <strong data-page-node-id="3ejWOOBPZ1eRZY0F7Hh7sL"><!--pnid:1N1k3ykHetpnvXUq84tpG7-->istio-cni</strong><!--pnid:dRQbZlOC4nc6PYrD9P3g9d--> 的价值是<strong data-page-node-id="Y6M8mDYF6RvH6y2yweoamE"><!--pnid:hkkRq9uOB76MyX34lBxSO4-->去掉 NET_ADMIN 特权</strong><!--pnid:GRIkgSPLXx9wptFM0zujGG-->，符合安全基线（代价是节点多一个 CNI 插件依赖）。</p>
+<h2 data-page-node-id="G3NpSfZENwQM6DuUAyL5LQ" id="a6-iptables"><!--pnid:oSGsDHJbyIh8ZMTlZIlowz-->A6. 流量拦截：iptables 是怎么"偷走"流量的？</h2>
+<ul data-page-node-id="s8dSiFeCgzNiCX4JYmWGb4">
+<li data-page-node-id="5hEqYnYoyxJ5T1nvsYezmw"><!--pnid:8KrQ1L0HZdIeEakL6TA4lD-->出站：Pod 内所有到其它服务的 TCP 被 <strong data-page-node-id="IC41ty2DzJowdtT2pvCs4o"><!--pnid:unsIHUoSZ1S3ntyF7igET1-->REDIRECT/TPROXY</strong><!--pnid:k02t06rZR7iafaiE5g1nyb--> 到 <strong data-page-node-id="pUvNo8U2FlDYYTmK4wq7vg"><!--pnid:zS7YD8WS8ZWKi2fTWiTphF-->15001</strong><!--pnid:NbfDcPCqR34Br1e9CbO9Tr-->；Envoy 根据原始目的（通过 SO_ORIGINAL_DST / TPROXY）决定路由；</li>
+<li data-page-node-id="RiSys11SIA8FiNHSY2avQd"><!--pnid:74JQOlAo7ePG36rlRsS5B5-->入站：到业务端口的流量被重定向到 <strong data-page-node-id="0cLQuIxF7J7vetTfNpMBSA"><!--pnid:5nCO4pneiisDYksfRrPtwb-->15006</strong><!--pnid:tXejftnmgdjMwBmS9TSQV1-->；Envoy 处理后转发给本机应用端口；</li>
+<li data-page-node-id="4EQByGhYAcaMs6lYddrjBE"><!--pnid:tKWEVLwd3ddvua6vfyanPw-->排除：自身 Envoy 的流量、健康检查、以及 excludePorts 配置。</li>
+</ul>
+<p data-page-node-id="A8zb02SJyorU9fA3xNgwcW"><strong data-page-node-id="PQujMwBOdY2SErV60jYwbo"><!--pnid:fBoxNDdGBc4F1KyWzFzIDu-->常见坑（必答）</strong><!--pnid:M9BJJqOekyy7oAHwwWZ75t-->：
+- 应用<strong data-page-node-id="d4q3VTghmJ4PrDB8l0OEuh"><!--pnid:0rX1AU1sRTn2e2BEBSVP1r-->需要拿到客户端真实 IP</strong><!--pnid:if20CH9EXaA3JuIrAROfui--> ⇒ 需要正确传递（Envoy 会写入 <code data-page-node-id="pfo2r9ryeNKekb5GAcI2ei" data-pnid-children="nIrsc3acF3kJ3SQFrZrh63">X-Forwarded-For</code><!--pnid:4H5wdq5yxBTbGXprAT8SO6-->、<code data-page-node-id="vG4HjECM9gwaVISS1A9JiZ" data-pnid-children="l8RZspLlI2hucDZUSTOvqE">X-Envoy-External-Address</code><!--pnid:I4NHflu38MQ3tlALDV8RP4-->）；
+- <strong data-page-node-id="ow7fYwR4D3i8ujha0JPBZi"><!--pnid:ujvveWrDPEK6Q0bGBhSrSH-->非 TCP 协议/特殊端口</strong><!--pnid:bCFEhXlBSUxk24EQwBpLM6-->（如某些数据库协议）拦截后可能出问题 ⇒ 用 excludePorts；
+- <strong data-page-node-id="jrVehYHbkNOCz8KCyl05Xn"><!--pnid:wxtFgWBSVMYKiSOpRmskj5-->hostNetwork: true 的 Pod</strong><!--pnid:Nj75VZMnVt2cqUPnzVKosi--> 注入通常不适用（流量不进 Pod netns）；
+- 与 CNI 插件的兼容性（链式 CNI 顺序、istio-cni 与 Calico/Cilium 的协作要验证）。</p>
+<h2 data-page-node-id="dYNNcpb7pyE6Myz2CDcdNN" id="a7"><!--pnid:1NoCbJMZZmGLXKibuLIpeh-->A7. 为什么默认"全量下发"在大规模集群会炸？怎么收敛？</h2>
+<p data-page-node-id="AaMbyy1tFuWUPahG0OtLf6"><!--pnid:vkTBP37MEYv1waTU7M2O2A-->istiod 默认把<strong data-page-node-id="BNXCnEYKlZEbI1vKCLcwv9"><!--pnid:EXoQW22hw6l0R9rK4TTOfY-->集群内所有服务与配置</strong><!--pnid:qARteDZvXEnLPAAQGPYRen-->下发给每个 sidecar（这样任何服务都能被解析与路由）。结果是：<strong data-page-node-id="NBNN2aa7KRfbqE2EuQM5Mu"><!--pnid:NyXeVuETKX725CuIGRyKTx-->配置体积随服务数线性增长</strong><!--pnid:M2zRPOTrpT41lSHzLbw1QJ-->，服务上千后 Envoy 内存与 istiod 推送成本都会失控。</p>
+<p data-page-node-id="xFi92GuiArNfkwwiaGVo5T"><strong data-page-node-id="lKzpBNPaduK9oUMesh7h3X"><!--pnid:HI30VfT0U8BXcCDuLej7OE-->收敛三件套（必答，且是大规模第一优化）</strong><!--pnid:tVuHhFBysqeLjavF1CKuPL-->：</p>
+<pre data-page-node-id="euVkxM70qVm6mwZeyv7Kec"><code data-page-node-id="krXo9JMqv6uMDtAUQxXk5Z" data-pnid-children="RjQ46ix8Hkwrt5in9fwi10" class="language-yaml"># ① Sidecar CR：限制该命名空间内 sidecar 的可见范围
+apiVersion: networking.istio.io/v1
+kind: Sidecar
+metadata:
+  name: default
+  namespace: prod
+spec:
+  egress:
+    - hosts:
+        - &quot;./*&quot;                 # 本命名空间
+        - &quot;istio-system/*&quot;      # 控制面
+        - &quot;infra/*&quot;             # 依赖的基础设施命名空间
+</code></pre>
+<pre data-page-node-id="oNdKy2Ckl1IE7Te57HFPPc"><code data-page-node-id="rF1x4tenaln4JLokH2L79d" data-pnid-children="qockJ9yRl1FlT9IdexKpEs" class="language-yaml"># ② istiod 的 discoverySelectors：只发现指定命名空间（MeshConfig 侧，版本相关）
+meshConfig:
+  discoverySelectors:
+    - matchLabels:
+        istio-discovery: enabled
+</code></pre>
+<pre data-page-node-id="BkhCCt3tGHVdlyGFg9aE2Y"><code data-page-node-id="9zyf4uvvQTAALvLEw8DiMw" data-pnid-children="TuuJ8HJQMqD3zysxSQW8Zg" class="language-yaml"># ③ 给 CR 用 exportTo 限制可见范围
+spec:
+  exportTo: [&quot;.&quot;]     # 只在本命名空间可见
+</code></pre>
+<blockquote data-page-node-id="W5u0hfHxndyTb05JCpONbR">
+<p data-page-node-id="7BgYHVCCJxbK32VIkvO3tf"><!--pnid:aoHxh4UGEH1AaGo02kl8jZ-->面试时说出"<strong data-page-node-id="reWAeONeJl0P7AM1VeK4bt"><!--pnid:7leBApUVFGqIFLveDrCBdF-->默认全量下发是 Istio 在大规模下的头号成本来源，收敛靠 Sidecar CR + discoverySelectors + exportTo</strong><!--pnid:flGuj4LlHoqgo3VTNYH3sk-->"就是标准答案。</p>
+</blockquote>
+<h2 data-page-node-id="znob8Y1a8lXgCCafzcUD40" id="a8-api"><!--pnid:0plxR2dweC8O9A6Ta26lkS-->A8. 流量管理 API 各自管什么？（最容易混的一组）</h2>
+<table data-page-node-id="lIhtfgPYDgABF9SPFOHCWj">
+<thead data-page-node-id="SPSxp6mljHsdK2DF36g3iT">
+<tr data-page-node-id="IcIjxnSKGPwai6u7xRLQTy">
+<th data-page-node-id="l5diTxHowgP3dqdxyRWnck"><!--pnid:9Kxg0SuLtVfi32zjBaed6o-->CRD</th>
+<th data-page-node-id="M4h4oSWuoDxlTd4uN9dNlx"><!--pnid:rc02OENRpAt5aKvMbnAUeQ-->作用</th>
+<th data-page-node-id="lflTioPHuHKM8gIgTE2jDp"><!--pnid:MUvYTuO3NYkCaRTWh6rQhP-->常见坑</th>
+</tr>
+</thead>
+<tbody data-page-node-id="SsTyAu7ELZf29CIcJyBCDo">
+<tr data-page-node-id="LMPzwVOxOaXxNd35yfzxyp">
+<td data-page-node-id="hqVfmUITcbqcS2dhufMWmA"><strong data-page-node-id="XeH85169gZVVKs47f4IhEp"><!--pnid:okjJoMfafHm1Xgyd0JGPxV-->Gateway</strong></td>
+<td data-page-node-id="KtaHswaDJROoYIIz03DK8a"><!--pnid:lAgfrMtEr62vSgzKWCWwsF-->定义<strong data-page-node-id="bq1dA0fgMEizlRoCyzURzZ"><!--pnid:qpRdny7hKNf2PTNVA8TlUH-->网格边缘</strong><!--pnid:PdpS992GqnmtufEtv9vTgx-->（Ingress/Egress）的监听：端口、协议、TLS、hosts</td>
+<td data-page-node-id="1M8PtJ6KNQGjj0iPwpNnbP"><!--pnid:QyE8zg9AhaDcMdJJaWowdq-->它不是路由；只负责"开门"</td>
+</tr>
+<tr data-page-node-id="8k37LiAZCDY9OYOaORq46G">
+<td data-page-node-id="IXW8uuNaLsa5SWEhA8WXtR"><strong data-page-node-id="ggr1Kq7xeWIvu1RHgX1dyS"><!--pnid:KBFNQMX3Q4ATEMSE5Z4ojI-->VirtualService</strong></td>
+<td data-page-node-id="6B0LiR7nWWXJwok8nY3FEp"><strong data-page-node-id="Kudnjkgz4L7e9yKFiPVb8u"><!--pnid:w7auSdFW61dFuWcOOPOieB-->路由规则</strong><!--pnid:hSgdnJeUb1xJzNciTOMhPy-->：把请求匹配后指向某个 destination（可加权/匹配/重写/重试）</td>
+<td data-page-node-id="3D3TuKffVnowhOgmJGBzIM"><!--pnid:ASWfCpeWisdREb4cVS4vMa-->匹配有<strong data-page-node-id="TevBv99VAKsY0mDM4Repar"><!--pnid:CCyhg6p43lD4RUWis1NpBe-->优先级顺序</strong><!--pnid:hYvf2i4Ptq7ESGLUMKTOrY-->；多 VS 对同一 host 会合并，行为易混乱</td>
+</tr>
+<tr data-page-node-id="r823ZkYXYsmA9nsg5zyfYv">
+<td data-page-node-id="VLvgcby5imrBxM0I56k55n"><strong data-page-node-id="4T4Hf48mn8L35D7PkmsE3L"><!--pnid:KgrBRDovs8wRc19snoyAGB-->DestinationRule</strong></td>
+<td data-page-node-id="dtNjJhKHaLEzsboTijbXGF"><strong data-page-node-id="lAZkhvtPzGmn4OHUAUWff3"><!--pnid:PEzxWHAapafhw2O7xuE02p-->目标策略</strong><!--pnid:6Pny39BPj3mRXvQEqdVSn5-->：subset 定义、负载均衡、连接池、异常点检测、TLS 设置</td>
+<td data-page-node-id="wk2K4QrPD3IFxmiD3RCqXW"><!--pnid:ggVCMl7HQtdInRjKbzs2qL-->没有 DR 就没有 subset；TLS 设置与 PeerAuthentication 冲突会 503</td>
+</tr>
+<tr data-page-node-id="FfmBDIo5KrNpfIUMEx0xKm">
+<td data-page-node-id="UgSazcdVzPjIJd6BMHSBwW"><strong data-page-node-id="GzehZWjNzcLN1euUmY0Yvr"><!--pnid:S2qWXwojEUpUvby4kXhNwf-->ServiceEntry</strong></td>
+<td data-page-node-id="pEEeyyXqMKn1S7WdYTmZ7M"><!--pnid:oBzfLb9mP3QCTOzLK7eOxG-->把<strong data-page-node-id="5jVO8zIwnQHPOc0o5FxEFb"><!--pnid:43smG6C66LsOZrTiXuqa5y-->网格外</strong><!--pnid:PtB12P5y5JePQ4hNwxmXt3-->服务加入服务发现（外部 API、VM 服务）</td>
+<td data-page-node-id="pMyQad3mNjEkgiaRxo0Czc"><!--pnid:SmZAj5SvZInHfvjSrAZsFK-->没注册则访问被拦或走 Passthrough，策略不生效</td>
+</tr>
+<tr data-page-node-id="Pajm4fORUhyfUV39g0fl1k">
+<td data-page-node-id="JEl1cfOH9OV04nZjNgKus7"><strong data-page-node-id="hCBiGWCJpiC52ETPaLTFm4"><!--pnid:ed1pXsR5kqEaGCae91xoBE-->WorkloadEntry / WorkloadGroup</strong></td>
+<td data-page-node-id="nSQ3MKt1W8gEOReb7V13O2"><!--pnid:NvIFxuM1pD5SjNL9qXGgNr-->非 K8s 工作负载（VM）注册与分组</td>
+<td data-page-node-id="RRooBgWstBA4CvLbBR6T4Z"><!--pnid:4OkiYOrDjRhKbx60HgoGnH-->需要配合 ServiceEntry 使用</td>
+</tr>
+<tr data-page-node-id="qwOy6B4MizSrpNAItwPAUQ">
+<td data-page-node-id="8tvAh8pUfhZaD6nZZCvvvF"><strong data-page-node-id="G6tdRyqWoYffDVTHJ62vBd"><!--pnid:qXWU2igfM4JUwe9aSB68Ho-->Sidecar</strong><!--pnid:DQAqBxOFluM3hiGBLv7SUS-->（资源）</td>
+<td data-page-node-id="2pKmZFU5BxxdfrvLYfsgbf"><!--pnid:19EhY99SEMibqhE71Q2Vo5-->收敛 sidecar 可见性（见 A7）</td>
+<td data-page-node-id="0BYqSTFFrme8BViBwnXYGj"><!--pnid:nvrfrKB2Nzqzf66RXrAept-->名字与其它概念同名，容易混</td>
+</tr>
+<tr data-page-node-id="hFe52p2d9V3X298xXgTXxx">
+<td data-page-node-id="7TdM1jQ3pgeeWE5UUi1djr"><strong data-page-node-id="NfGZwYEXrvnQHYFg62jpOR"><!--pnid:CisFFJR8IpODMtk08H5gUe-->EnvoyFilter</strong></td>
+<td data-page-node-id="xw1dwp12b94Do4GMqO0jK7"><!--pnid:Tb1N3xpHoFC5ZOqFXerlaP-->直接改 Envoy 配置</td>
+<td data-page-node-id="RCrGRt4Pwz6kNqleY2Cjsa"><strong data-page-node-id="lYPRE5VnqjmTDZlPSJYaik"><!--pnid:w1K0vYyTXLMg5mLkGLECNz-->最后手段</strong><!--pnid:OIRscpZ8Qiu7EEIGPPl1ok-->，升级易碎，优先用 Telemetry API / WasmPlugin</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="qxg9kbpTDUfcvbBgM9umTB"><strong data-page-node-id="myTFDQE4F64BXAzYZMDjSZ"><!--pnid:N9pamFg8u9DYOaApXnQCKE-->必答的"host 匹配"坑</strong><!--pnid:JxIp7ySWHF6kiIPBm1Zwkf-->：
+- VS 的 <code data-page-node-id="Uvp6eOmphJq9WOFh8DEkWx" data-pnid-children="Jpe7KmmszjLg8WXCTPZONT">hosts</code><!--pnid:6lXrMfg3WVp71nJQ5RzFrk--> 要写<strong data-page-node-id="t9t3EGEvL47D7s2s73a3AN"><!--pnid:2WHj2CxZALHoo3kKoOogTG-->服务在网格内的名字</strong><!--pnid:19NIZgHepxe0l2RvE0ho5s-->（K8s Service 名或 FQDN），写错不会报错但路由不生效；
+- gateway 场景要写外部域名，且 <code data-page-node-id="vreOQzrpujNnJrTLy3WGKf" data-pnid-children="34LPnGJ5ksMzwwU0WNaHXn">gateways</code><!--pnid:0abMzpdd0fqZxwmEyEOX3A--> 字段要指定 gateway 名；
+- 短名与 FQDN 的解析差异，是"为什么本地能通、从网关进不来"的常见原因。</p>
+<h2 data-page-node-id="UNCKroctM8AsOIntd74pI0" id="a9"><!--pnid:gm6igq27GgKvVDfRzRLUed-->A9. 路由匹配的优先级规则（必考细节）</h2>
+<pre data-page-node-id="OFpZ0h5bRzCOfsnVamre6E"><code data-page-node-id="VpnIete1OqLNVlxXJ3Xwi5" data-pnid-children="yJXzyDWrHYjBJEPsoRetHL">按以下顺序，先匹配者胜：
+  1. 更具体的 URI（精确 &gt; 前缀 &gt; 正则）
+  2. 更具体的 method / headers / queryParams 等匹配条件
+  3. 最后落到默认的 route（无 match 的规则）
+</code></pre>
+<p data-page-node-id="320uU96iotwYL5cgCurJwA"><strong data-page-node-id="n6S7ujXouraSRtEgZAv2vx"><!--pnid:dA0oEuroGJbbhlY2MluDCR-->坑</strong><!--pnid:o6OYvyanRbsYMqYEGb2HVZ-->：把"兜底路由"写在最前面 ⇒ 后面所有规则失效。<strong data-page-node-id="QjXsEt9JZwZrCY3ICnnHPs"><!--pnid:9fLyEfSfBo3Gpde07fSYik-->建议总是把最具体的规则放前面，兜底放最后</strong><!--pnid:CiL1O4vvEinXHX02LofkgU-->，并用 <code data-page-node-id="w16TdWaMgV2v0AxacmuQQS" data-pnid-children="7mSwUumG1UMuch3CmIBY5A">delegate</code><!--pnid:hgM2XDqVvLANimispcXhjc--> 拆分大型路由表。</p>
+<pre data-page-node-id="t04TC4F0uUVWhOLcu1zaZi"><code data-page-node-id="CnZz0mgbZmQpmsd9TQIicq" data-pnid-children="8sV6tJk5FHOQz122IlHK12" class="language-yaml">apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts: [reviews]
+  http:
+    - match:
+        - headers:
+            end-user: {exact: jason}     # ① 更具体
+      route:
+        - destination: {host: reviews, subset: v2}
+    - route:                              # ② 兜底放最后
+        - destination: {host: reviews, subset: v1}
+</code></pre>
+<h2 data-page-node-id="t8qdEQ9kPVHe8WOojFm2ga" id="a10-destinationrulesubset"><!--pnid:MaMlQpC2A2YRpORP0KhuP4-->A10. DestinationRule：subset 从哪来？负载均衡与熔断怎么配？</h2>
+<pre data-page-node-id="ZtnBkHsuyDSA4gez0nE4k1"><code data-page-node-id="V3959cveZb6DorJhcqFPGj" data-pnid-children="d4E33bubreI5OXnRLEdHpo" class="language-yaml">apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_REQUEST              # ROUND_ROBIN/LEAST_CONN/LEAST_REQUEST/RANDOM
+      # 一致性哈希（会话保持）：
+      # consistentHash: {httpHeaderName: x-user}
+    connectionPool:
+      tcp: {maxConnections: 100, connectTimeout: 5s}
+      http: {h2UpgradePolicy: UPGRADE, http2MaxRequests: 1000, maxRequestsPerConnection: 100}
+    outlierDetection:
+      consecutive5xxErrors: 5            # 连续 5 次 5xx ⇒ 摘除
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+    - name: v1
+      labels: {version: v1}
+    - name: v2
+      labels: {version: v2}
+</code></pre>
+<p data-page-node-id="qqTm4kRHBgF2MwxjYTgKqV"><strong data-page-node-id="ca9xiDYuxO84hE0qgktyKs"><!--pnid:LZyWcvE8qcFdxSkGiz0cr7-->必答</strong><!--pnid:xT08E4N0zrrOz3LCzjQ1Vj-->：
+- <strong data-page-node-id="fHeEuzXRZ4vrr1VnGPKnPW"><!--pnid:0TMUW1ZCDbt44tkWgpfrRc-->subset 的 labels 匹配的是 endpoint 的标签</strong><!--pnid:sivIsSTXmE55neZKYuALCk-->（来自 Pod labels），不是 Service selector；
+- <code data-page-node-id="tc9TO7qbxiWIQEOVaF9xzy" data-pnid-children="pYyvTl3QayM246Jx2TwXkL">outlierDetection</code><!--pnid:9j0SLG2scQLWHNfpbk8omP--> 是<strong data-page-node-id="UPGZ9bYJKT78bgHiJ7YahJ"><!--pnid:pneFmpvRIptCMe0UQyO0cR-->被动健康检查</strong><!--pnid:bADyjkB8rLUSQzrXwXKfTS-->（Envoy 侧，基于实际请求结果），与 K8s 的 readiness 互补；
+- 熔断是<strong data-page-node-id="oz1Zbay7ZJtvv6kNTM187d"><!--pnid:wCX9PZktOTkVCQGqFdqY81-->每个上游（cluster）维度</strong><!--pnid:tKBMQzhDecJ0BjIEfebrR3-->的，不是全局的；
+- <code data-page-node-id="9MnOUiN6fWtFnmLzqyossJ" data-pnid-children="H5Ych317XWqVoc1duiAnqH">trafficPolicy.tls</code><!--pnid:VdPZFnmofDZx94DGBFzlRF--> 与 <code data-page-node-id="51p8O8b44fYPZUJ9AwDsVU" data-pnid-children="xM2dJt4WapP5clsjz4zM5H">PeerAuthentication</code><!--pnid:TRktGLSrkCvc2ZO6wvwUOT--> 不一致是 <strong data-page-node-id="Ky7IMfFbKf2Mq3V9ZSsT76"><!--pnid:MyPTWA2addeyKVgCftug26-->503 的高频原因</strong><!--pnid:RHKcQqU539Rw1q7mrNwfFQ-->（见 B8）。</p>
+<h2 data-page-node-id="6EvPLtmtDmRlc0wNiVCpdJ" id="a11"><!--pnid:dY10ZqeNOnjfwpzB5910ff-->A11. 弹性四件套：超时、重试、熔断、故障注入</h2>
+<pre data-page-node-id="3ltZ60agUJFxNi2msOrs76"><code data-page-node-id="0fYwKx7BdywWvOv3B2DWhy" data-pnid-children="YCyjgZ0s16gkiGC8FcpELm" class="language-yaml">http:
+  - route:
+      - destination: {host: ratings}
+    timeout: 3s
+    retries:
+      attempts: 3
+      perTryTimeout: 1s
+      retryOn: 5xx,connect-failure,refused-stream,retriable-4xx
+      retryBudget:                 # 限制重试占比，防重试风暴
+        percent: 20
+        minRetryConcurrency: 10
+</code></pre>
+<table data-page-node-id="kdYnpzOILjJnRwLXPQpTJA">
+<thead data-page-node-id="8SF9Bl9Drc0kUnrfFRRFBo">
+<tr data-page-node-id="ozl9infLceHXRei5Da5G9G">
+<th data-page-node-id="72OttqsjWxSyqVQycEyb4n"><!--pnid:3XLCrjSM3gk8ZlYqdmcEWF-->能力</th>
+<th data-page-node-id="OLOhjrb1puLV4UrdI331Mf"><!--pnid:rFwNxO4kqGCOpZ4aZlhyUJ-->注意</th>
+</tr>
+</thead>
+<tbody data-page-node-id="4aUPUHVk554JZXhn8c6rui">
+<tr data-page-node-id="aTHe7KKJkROLC4ZBubYiQU">
+<td data-page-node-id="vz97N1kWBdd3J51I7DuRbM"><strong data-page-node-id="URBpywNz7ak0cJPRNtB6np"><!--pnid:y5HTM2gwfboPr3Ov3LcYGJ-->超时</strong></td>
+<td data-page-node-id="5zsyW6mhexJyEd93r0tgZT"><!--pnid:RhHDZl0YBhnLFysPwAGZWO-->Envoy 默认无超时，必须显式配（<strong data-page-node-id="qrwJkN8dkThTNoKNWzHgn9"><!--pnid:MfRDQ0RbW4Nvbtrk7FaHOV-->这是很多人不知道的默认值</strong><!--pnid:n4XPCwM0U2hMzVvjRV7MOO-->）</td>
+</tr>
+<tr data-page-node-id="okKfehxX0t93esDo2LaWhg">
+<td data-page-node-id="3Xt2zi7v34YTV6VQ9He8Td"><strong data-page-node-id="pt1TKGExrQLfKXkMgHujKu"><!--pnid:VluIKZIw7D7Rs0ABf6GlTW-->重试</strong></td>
+<td data-page-node-id="w9nbUdBBk2WbbvAA3Iu6KB"><!--pnid:Ghvy956HPXnsBoMNkir54b-->只对幂等操作使用；<strong data-page-node-id="23v3FFHZlusWRKZ4mGb09t"><!--pnid:PpTHA5SaVkcTuA9W1vw5eY-->必须配 retryBudget</strong><!--pnid:vr8zPJgJis83LugKMoHQLh-->，否则雪崩放大；POST 慎用</td>
+</tr>
+<tr data-page-node-id="5LWuAzxQBr73I94f7EQh52">
+<td data-page-node-id="eIVYB27de4Ww37gRt9HF9q"><strong data-page-node-id="I2UbzsXVk3QL3HFqeGIptm"><!--pnid:kskEeik4QjaWiFzO32BiBE-->熔断/异常点检测</strong></td>
+<td data-page-node-id="3q6oxIyMPjjDv2WIWSRXps"><!--pnid:zDIHdT6S6MkR8XMwhsTlpw-->见 A10</td>
+</tr>
+<tr data-page-node-id="NKRIsvH67uJH7vD7sVJ9hv">
+<td data-page-node-id="zSVvw7oVCDVI563gvcIxN8"><strong data-page-node-id="pLiKEjkkpkzTnOw23HoOem"><!--pnid:bZdLSwTdzCkMUkHh1JLjmp-->故障注入</strong></td>
+<td data-page-node-id="Z7xoK50CKVdeFU1yhaJrQz"><code data-page-node-id="sSHOaL2UlWArRCUZ7CUvVr" data-pnid-children="xK9dJXd1RFDap8t8sPiIot">fault.delay/abort</code><!--pnid:dxvupdafV6EuSyu0p2SAks-->，只用于测试环境</td>
+</tr>
+<tr data-page-node-id="F6Fsx96Syl0Yutssk3yijT">
+<td data-page-node-id="TjkfXd9GWZdU45yKwKJ80f"><strong data-page-node-id="y4RUtHJt0UmmA9Y9Ota52r"><!--pnid:UPMdr4H3wISET2hHAksqSw-->流量镜像</strong></td>
+<td data-page-node-id="JQ4PYAhpJPLkcl7kxzAaA5"><code data-page-node-id="Sa7J4RbKo4dspXZonpoF1f" data-pnid-children="lKq9UciClNn41eIOjBtxzH">mirror</code><!--pnid:Dv0YEVDjgYnI15v7NnyNj3--> + <code data-page-node-id="yHeceF0wZrgd80VYFs49mj" data-pnid-children="BRhDH6LuJnyg8i5bmSSdMT">mirrorPercentage</code><!--pnid:rVxTljfApK9KeT4luzEEQ8-->，请求发给影子服务且<strong data-page-node-id="zriCa5aHruWv7HtBY9hMhZ"><!--pnid:BVofm00hZ0RIR0WqeRgtCz-->忽略响应</strong><!--pnid:0I7UBSNdgEP92uaz0JQY77-->，用于上线前验证</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="4mxM7hcJ7Eavt2Zr08yYMS" id="a12-mtls-istio"><!--pnid:ubDCigzU10XxPIySmlHCCm-->A12. mTLS 与身份：Istio 安全的三块基石</h2>
+<pre data-page-node-id="1oVahD22OIYKlPZqWVgwCc"><code data-page-node-id="V7qPEFq7MjBuKAof5ay195" data-pnid-children="qPVf9AifECHf3ElmyirXF1">① 身份：每个工作负载有 SPIFFE ID = spiffe://&lt;trust-domain&gt;/ns/&lt;ns&gt;/sa/&lt;sa&gt;
+        （来自 Pod 的 ServiceAccount，由 istiod CA 签发证书）
+② 传输：mTLS（PeerAuthentication 控制模式）
+③ 授权：AuthorizationPolicy 基于身份/属性做 ALLOW/DENY
+</code></pre>
+<pre data-page-node-id="dpo9xJLoPMWXNfT7WkUfig"><code data-page-node-id="3IR5ua8zThnqPyT2r5tMX9" data-pnid-children="x5QSC7dAy6h8Yo7p2YnjDm" class="language-yaml"># 网格级：宽松模式（迁移期）→ 严格模式
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system          # 网格级
+spec:
+  mtls:
+    mode: STRICT                   # STRICT | PERMISSIVE | DISABLE
+</code></pre>
+<pre data-page-node-id="y8cEJuaatB0iqgTeAz4fJ7"><code data-page-node-id="Uu7yuFzj1PdR5dD7eN0ua5" data-pnid-children="ka50v6LFD1vLr7sHMQEJpc" class="language-yaml"># 授权：只允许特定 SA 访问
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-web-to-api
+  namespace: prod
+spec:
+  selector:
+    matchLabels: {app: api}
+  action: ALLOW
+  rules:
+    - from:
+        - source: {principals: [&quot;cluster.local/ns/prod/sa/web&quot;]}
+      to:
+        - operation: {methods: [&quot;GET&quot;, &quot;POST&quot;], ports: [&quot;8080&quot;]}
+</code></pre>
+<pre data-page-node-id="0YMB9As4NVbPCt2kwzkyUF"><code data-page-node-id="w2zjWGDWDtnjd6HvQ0uCIx" data-pnid-children="StO3gsT3mUwoSPg7XzkX9j" class="language-yaml"># JWT 认证（RequestAuthentication + 授权要求）
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata:
+  name: jwt
+  namespace: prod
+spec:
+  selector: {matchLabels: {app: api}}
+  jwtRules:
+    - issuer: &quot;https://issuer.example.com&quot;
+      jwksUri: &quot;https://issuer.example.com/.well-known/jwks.json&quot;
+      audiences: [&quot;my-api&quot;]
+</code></pre>
+<p data-page-node-id="LQP28iqaChvobzbykjBWAO"><strong data-page-node-id="RumsuUv9OpNjYx5UZSZOeb"><!--pnid:rgMMD2LiPY8UDNmAzj1ApG-->必答坑</strong><!--pnid:qZipSMgs1n2YGr4FHu6qbV-->：
+- <code data-page-node-id="BqSR6Bq5zm5zTfn3ZamX35" data-pnid-children="rDGn8CVQEEbNDf9jEXqFIx">RequestAuthentication</code> <strong data-page-node-id="AtBnLW5zfIoWjeasUIdlE4"><!--pnid:IBOEPWfGQYY8x6bE4l9CXY-->只验证 JWT，不强制要求</strong><!--pnid:iXhWIkuEI08osTPxnEz5xN-->；要拒绝无 token 请求必须再配 <code data-page-node-id="M0PLE2RzqqaicHA135fSV4" data-pnid-children="l75PXSfQKT16NDOtsjeYCP">AuthorizationPolicy</code><!--pnid:r8vIfVcwZSMcdNPDIKeAhj--> 要求 <code data-page-node-id="r0e50qULh4m7qCjbRYF5Vx" data-pnid-children="2yqcBvFQdC6uYla1Mxb2OI">requestPrincipals</code><!--pnid:V80Cf2Xa1bpFk8jsj7Wfaa-->；
+- <code data-page-node-id="dMrnXJBsQgKePWq19Jjj01" data-pnid-children="9fDtjP0RCdd7pbANB1dh6b">AuthorizationPolicy</code><!--pnid:lVneqQcwJZNIkqmt3VVnS3--> 的 <code data-page-node-id="fjoI0jWZQOXgK1p4iqwwVO" data-pnid-children="h2VCbyqQS8M2kyUMSWc8Jq">DENY</code><!--pnid:ZFcklmmflGswNgiC6Ffbv8--> 优先于 <code data-page-node-id="i7ysixJiY9kc4ENxqsetv7" data-pnid-children="i1OydNcP88vZV1qlLh42J1">ALLOW</code><!--pnid:uVg6j9Lb4q4CniKWVdDVdA-->；没有匹配任何 ALLOW 时<strong data-page-node-id="ZiLFThmDJkuAOWEGKv9mkB"><!--pnid:kz1KElkbhTIOZCWuNGCmrF-->默认是拒绝还是允许</strong><!--pnid:620sqoXx5lIMGwgb936V4g-->取决于是否存在该 selector 的 ALLOW 策略（<strong data-page-node-id="DOjjxZRx09aSzz7Dm7UvMQ"><!--pnid:vZ64eWTeR3YwFquwPkL5K1-->这是最容易答错的地方：一旦有 ALLOW 策略选中该工作负载，未匹配的请求即被拒绝</strong><!--pnid:rba7KX1pdpsjoquZ1a1NKQ-->）；
+- mTLS 模式冲突（服务端 STRICT、客户端 DISABLE）⇒ <strong data-page-node-id="t4OeflWdM1TERpwaNwb9Er"><!--pnid:bjqhlALmBpK6bFn9n9bMDk-->503 upstream connect error</strong><!--pnid:Udo20Z0wvfHjW9jAVi9GAm-->。</p>
+<h2 data-page-node-id="bO6M0TWThbMZD5awnBbBGp" id="a13"><!--pnid:oIhVauLPo4NDSrT6PdSDYw-->A13. 证书是怎么签发和轮换的？</h2>
+<pre data-page-node-id="hvzXPX0nhGpmTqxZrHcV58"><code data-page-node-id="rgK3YjxJl2IuqBR8S3pSOD" data-pnid-children="wC52gx5gkDhsXwjAgaAnbW">proxy 启动 → 通过 SDS 向 istiod 请求证书（带 SA token 做身份认证）
+   → istiod CA（或插件 CA：cert-manager/Vault/SPIRE/自定义 root）签发
+   → 证书短期有效（默认 TTL 以版本为准，常见为 24 小时量级）
+   → 到期前自动轮换（无需重启 Pod）
+</code></pre>
+<p data-page-node-id="1sP5zB10CScmOfyQN54WIn"><strong data-page-node-id="8Bzq0FvFPv4GiJleTolf8N"><!--pnid:l8BcVC0eDNijPWCrHABtxy-->必答</strong><!--pnid:6bdabBPuFlFalpiMx87wNQ-->：
+- 短期证书 + 自动轮换是设计核心（<strong data-page-node-id="acLW24DKZKfCnZPg8QyhJn"><!--pnid:wFaUphitz44a15AiJyADCX-->泄露风险窗口小</strong><!--pnid:OvXHDTBDwEIiPMYURJ1jub-->）；
+- 生产上通常用<strong data-page-node-id="rQ3UlgpQatxXlFQrPpTnql"><!--pnid:Y74Rx5JTmE45yEeIgKJhy9-->自定义根 CA / 外部 CA 插件</strong><!--pnid:me8qa7qOZyzZDbqAMOLKQy-->以满足合规（<strong data-page-node-id="pDOxaHgt00VY9XKB5wRpdL"><!--pnid:Cmz3EolKfNg4MFy8sDdPsj-->插拔方式以版本文档为准</strong><!--pnid:pc5RmGIVPTkHF2nK64yPKR-->）；
+- <strong data-page-node-id="tOrSGGjRVYWgblOJSrD897"><!--pnid:9NcyN2HIe55yhQtC1WA6nq-->控制面不可用时</strong><!--pnid:LZiC9mnNn2cXMXO2Tihimi-->，已有 sidecar 仍能用现有证书通信，但<strong data-page-node-id="W4IFIRMeapl9O7rZsVgk8I"><!--pnid:R5CHDREs3kFpdUiF29OLJn-->新 Pod 拿不到证书 ⇒ 起不来</strong><!--pnid:4WuFu7J13qtUqnMjqmA2wU--> ⇒ istiod 必须 HA（见 C11）。</p>
+<h2 data-page-node-id="MX4xHAelYc085PpSlRMNFM" id="a14-gateway-ingress-egress"><!--pnid:p9SWu2g3Z12AoBOtV2DNJN-->A14. 入口与出口：Gateway / Ingress / Egress 的关系</h2>
+<table data-page-node-id="BYvBzPJFox3YAwd0GxnQEY">
+<thead data-page-node-id="Gyau7KWxyI4gSA41yWEp2X">
+<tr data-page-node-id="SM39d4a8n93zXZjDc81E20">
+<th data-page-node-id="tojo5GqZZrEcLesMRxOAe9"><!--pnid:A3sl7GO3ievXitClrCE7vf-->组件</th>
+<th data-page-node-id="xs8WWoLv5BT4thgT37ft64"><!--pnid:CfzN8H65j5p1ScAhxf108q-->角色</th>
+</tr>
+</thead>
+<tbody data-page-node-id="nDQFAouOEaugngrxabpGkq">
+<tr data-page-node-id="x2x2f290gegUjPXAr2wS8w">
+<td data-page-node-id="LriiK7eUuk7RbRofKwzOqZ"><strong data-page-node-id="8bNEKys4ypSekeR4zHjECi"><!--pnid:bL6UzRrcCzlbrO0AMTBalV-->Ingress Gateway</strong></td>
+<td data-page-node-id="B54YwvF7RtMlGN1PR8dtHs"><!--pnid:sR9SuIMaNL9cBIcKchr82y-->南北向入口（Deployment + Envoy，通常配 LB Service），由 <code data-page-node-id="hGjbDbtD6hnovBRjT4nSHF" data-pnid-children="hkvCxZixsttBSpyfnN2Wgq">Gateway</code><!--pnid:uLEBVwmFpqIXpdcpXPrqQ9--> + <code data-page-node-id="1zi2kD8IflvwqdqQVMwq52" data-pnid-children="yfSSgwdR6ErrHlrb9RYWNw">VirtualService</code><!--pnid:UUdEcKxxLYgYpQVQl831hW--> 配置</td>
+</tr>
+<tr data-page-node-id="oAj6Uswt6UOOXLGdH3E8kY">
+<td data-page-node-id="8CRue2aM5rNxOn8iCRCI4r"><strong data-page-node-id="Bkh5r7ki2l0M3A7jKuC5wj"><!--pnid:sPINYpCCWaSqOwulUmcgk0-->Kubernetes Ingress</strong></td>
+<td data-page-node-id="EUIJigVfeZx3zBL986SHHM"><!--pnid:RRoaMy3iPKYqIjE2grAer0-->也能被 Istio 支持（通过 IngressClass），但<strong data-page-node-id="B0O3nNSBIxJG0aH6MVJLlD"><!--pnid:uPE4SAojG4KNpFA4d84HJb-->社区更推荐 Gateway API / Istio Gateway</strong></td>
+</tr>
+<tr data-page-node-id="qthurLM8ipje3ManwPi5jD">
+<td data-page-node-id="4X6DWDhzFKeuJxpGJ8XWdY"><strong data-page-node-id="O5wdlx8kkHijJDJDf7wKh8"><!--pnid:2GE9wWvps3KkQD6eqUKMfS-->Egress Gateway</strong></td>
+<td data-page-node-id="NVOzy7XXO2MYHybYJjs6m8"><!--pnid:EweTo91hQjDCA4aBDUjYCk-->统一出口：<strong data-page-node-id="RN9AoyufWoEB7WVIyxRYIJ"><!--pnid:637RDb3bOftxEGyXrynAc2-->固定出口 IP + 集中审计/策略 + TLS 发起</strong><!--pnid:CRjZgZmDd2g36mg5iR0TFr-->，用于合规场景</td>
+</tr>
+<tr data-page-node-id="O44bp6PLnvWpIFdHgPp6Sh">
+<td data-page-node-id="8AFOy5WrvXCABnC8svSZVs"><strong data-page-node-id="cn1z2Pwy9laxZQR0LzTXnS"><!--pnid:wTBHmpXM4qUUFjkUknTqts-->East-West Gateway</strong></td>
+<td data-page-node-id="yEluEIWs9DLMnLbMmxNQzs"><!--pnid:pZE9ouVTmgl7YcblBmjrMo-->多集群之间的跨集群流量入口（见 A18）</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="xQkJFuUiLrOo16PPo0fReT"><code data-page-node-id="XUO9t8yMlnzXepRRA0DDpd" data-pnid-children="H6poM7YyaOqyrifVCJf2Nj" class="language-yaml">apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: web-gw
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port: {number: 80, name: http, protocol: HTTP}
+      hosts: [&quot;*.example.com&quot;]
+    - port: {number: 443, name: https, protocol: HTTPS}
+      hosts: [&quot;*.example.com&quot;]
+      tls: {mode: SIMPLE, credentialName: example-tls}   # 引用 K8s Secret（SDS）
+</code></pre>
+<p data-page-node-id="BjDBZknavXpUrAyGtweC6T"><strong data-page-node-id="4bEFoCxtOarQtpjdSqpDQ4"><!--pnid:8cQWCb8ffFOJcde5BIe3y9-->必答</strong><!--pnid:skIC8XiAbd53kSvQADtRNz-->：<code data-page-node-id="gC3YQxFGEQGpjwhcY15P8z" data-pnid-children="Isvk9Mr7jYPYkhmSQ4uECy">credentialName</code><!--pnid:WeuHkm0M2caBe0yWXqfWYm--> 让 gateway 通过 SDS 动态取证书，<strong data-page-node-id="E8U0956ImQ1Yz7XPGCmIMa"><!--pnid:0wwyUvvtV28pZDuuFl3Nh9-->无需挂载 Secret 卷、无需重启</strong><!--pnid:xo450cKvjKo9tLf9Wqw5Kg-->（这是常见加分点）。</p>
+<h2 data-page-node-id="63fYsWOYAQe1jJA28OrNQF" id="a15-ambient-mesh"><!--pnid:X72dLPcBJQFdqv5o5ns0L0-->A15. Ambient Mesh 是什么？为什么它被视为下一代形态？</h2>
+<table data-page-node-id="ZYpoI9rYq6wkre0H1kISXP">
+<thead data-page-node-id="vEQ0a92th0Soc3Ij2ay4o4">
+<tr data-page-node-id="QHaYZM4eDrdYUxEu5aNnSC">
+<th data-page-node-id="Rb52OmwtGwjDAB6xKnSxgD"><!--pnid:TGUzF5aXzTnvskMgDH9DW2-->组成</th>
+<th data-page-node-id="jzDUCKqLSs8w58f4OoGDpk"><!--pnid:XXFjugaWJXP27r7i1pbhAw-->位置</th>
+<th data-page-node-id="NSfXBJUU9xKSpWM8kpVYzq"><!--pnid:rqk47rY5bjtJ0JW9c8vnoy-->职责</th>
+</tr>
+</thead>
+<tbody data-page-node-id="9dDE1MC8VtRMl2SbxcoqLT">
+<tr data-page-node-id="GkDH9IWlDk8fFoCoGnDn5x">
+<td data-page-node-id="NGPIQqNMysBFymWHBddjDb"><strong data-page-node-id="Tjzo6NmDgVDOQjCwku8rzu"><!--pnid:WldSfNJs1bGuFrg77THFLF-->ztunnel</strong></td>
+<td data-page-node-id="nOlSJvQPISpOa927dcds52"><!--pnid:mCaN9kyScNslgC302a3Uzk-->每个节点一个（DaemonSet）</td>
+<td data-page-node-id="NpvA4iKHLMQXeqtrrbgDlg"><strong data-page-node-id="Ch51zMRViSRFXIkhqsjdWZ"><!--pnid:TORL5IeJazUgim03xxkeq2-->L4</strong><!--pnid:5Ek2BSrV2Vt267uKQXm5oS-->：mTLS、认证、L4 授权、遥测（不含 L7 解析）</td>
+</tr>
+<tr data-page-node-id="ubrDtuMNdTiC815mZJnPxr">
+<td data-page-node-id="XhCk9WHL4VEnFtmb7LiRLV"><strong data-page-node-id="mSWM7Tg7BUW5tes384EOJF"><!--pnid:SJ1xWzpnt4Tf5hJ9xLNTyZ-->waypoint</strong></td>
+<td data-page-node-id="7YxbCPh2nINS8uGm4K46zd"><!--pnid:Q9mCT8BMipPBKPFOoCLMMU-->按需，通常按服务账号部署</td>
+<td data-page-node-id="yvCPYyTU6tLHhNQnSNMVEg"><strong data-page-node-id="6tUYBHxMIzs2lMt4043RJ3"><!--pnid:ohMlPdF6qdIVXMjNfuiH3X-->L7</strong><!--pnid:MsDL176bRDqS2AlYuIgYQb-->：HTTP 路由、鉴权、L7 遥测与策略</td>
+</tr>
+<tr data-page-node-id="SEeugV0B7ePWudmW2tTiS3">
+<td data-page-node-id="xH8cqAuruY1XOHhudbmmaX"><strong data-page-node-id="RiB2feGCKH03Wfl4IS0jWz"><!--pnid:aAbgtfwuD261cLu4wTlizr-->HBONE</strong></td>
+<td data-page-node-id="8XnSE1cyw0mRyAVTmR1DrC"><!--pnid:2CTpww3NAuJcM5j5LuOHXT-->隧道</td>
+<td data-page-node-id="JlndwY1TMsDEv5OQ3YI1ap"><!--pnid:B41BU2ED1k6Y0PngVxCMAq-->基于 HTTP/2 的封装（默认端口 15008 相关），承载 mTLS 与元数据</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="W2SA9sFlAZCnQq6m294Zkk"><strong data-page-node-id="HCye3rMFx8UG3kF8JyqVb3"><!--pnid:hsl1ZATlTZFVNE1YdIP8zb-->价值（必答）</strong><!--pnid:yOE1SZVDIMq3zk2ISwpsuf-->：
+1. <strong data-page-node-id="9WK8KTf4YA3LWRaTSXVY6I"><!--pnid:S3dSqjoI2Oy0z0SjCbIWVn-->不再给每个 Pod 注入 sidecar</strong><!--pnid:2mCZSzeqDqGyowezkYexjb--> ⇒ 省内存/CPU、Pod 启动更快、<strong data-page-node-id="PGynPny1dj0B3IgGpLX3ml"><!--pnid:c07mowjQOKR6D0PpSjyhZv-->应用与代理解耦</strong><!--pnid:gaOnXWYvct9U7JU8RMxtiD-->（升级网格不需要重启业务 Pod）；
+2. <strong data-page-node-id="8ATDFqnr83K0yfIZTcxHIz"><!--pnid:WYbw6SGTxOuaFg3EewYNIV-->渐进采用</strong><!--pnid:NSnhgvDvsfX7mqykGbavsg-->：无 sidecar 的 Pod 与有 sidecar 的 Pod 可以互通，可按需给服务打开 waypoint 拿 L7 能力；
+3. 更适合"只想拿 mTLS 与可观测、不需要复杂 L7 策略"的场景。</p>
+<p data-page-node-id="rPLkNOWT41QDtzCkDLYPJV"><strong data-page-node-id="J9BO9EAue85Xr2K1meUJiI"><!--pnid:zzJqLTR3JJWX7V9VKDDoki-->限制与风险（必须说）</strong><!--pnid:EiwbpSvYtI47w7mCefPvuK-->：
+- 功能覆盖与 sidecar 模式不完全等价（<strong data-page-node-id="9oQH64qQ9faPGeOOgaRSBS"><!--pnid:H8yzR32oARsc6ZlHBNLXkT-->具体差异以所用版本官方矩阵为准</strong><!--pnid:IxPYpJXJWYFg2AIwcdQUIB-->）；
+- hostNetwork、某些 CNI/内核依赖、以及部分高级特性需要逐项验证；
+- 排障工具链从"进 sidecar 看 config_dump"变成"看 ztunnel/waypoint"，团队技能要更新。</p>
+<h2 data-page-node-id="w89n0nnGVv47hGvLKT6lD7" id="a16-sidecar-vs-ambient-vs"><!--pnid:3KbxtPoJqg8cYJGPhVHSTm-->A16. Sidecar vs Ambient vs "不用网格"怎么选？</h2>
+<table data-page-node-id="3cFuubAwO4vBjyvOWbLD52">
+<thead data-page-node-id="4t5WaguIxGdQbMNmo5UJNV">
+<tr data-page-node-id="lc1B7lwRszDdwFRR6rQICY">
+<th data-page-node-id="70JBP2aS1Wit4dYuskosjr"><!--pnid:6OehE8ewlD8N4JL4nTBTOF-->维度</th>
+<th data-page-node-id="Zuw6SEQBdtXgheQ6N1IkpV"><!--pnid:cgXr8UCnsjXkyWPtoXI1IT-->Sidecar</th>
+<th data-page-node-id="U6Kv6IRaklBJMnf7D3BzNO"><strong data-page-node-id="nE4HD9mBnGHpg4M2IFpbdt"><!--pnid:q7D50GHxuoKqAVOFRETVhI-->Ambient</strong></th>
+<th data-page-node-id="zCXa6xZVvbpoVi2whNWOMA"><!--pnid:vG2sJzzMwRY89WuxwGs3dy-->无网格（只用 CNI + 库）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="lUUUSSqoj25ToxiVOCgs5u">
+<tr data-page-node-id="39amQkkEkc9qh50ryza2fv">
+<td data-page-node-id="Y4pHENyUC2vzOZWzl4c9g7"><!--pnid:tjjfnAf3SprpBAWz2VrOCj-->每 Pod 开销</td>
+<td data-page-node-id="i9ViKvm8geCoirICcr3IF6"><!--pnid:zstDGPXipB5cJZqVLGGyw4-->一个 Envoy（内存/CPU 随配置增长）</td>
+<td data-page-node-id="LdlTdei2nlekqC7AbjUPMs"><!--pnid:2rFcYidbl9AB9UOyohpZDn-->无（节点级共享）</td>
+<td data-page-node-id="ccoPW01qKyqRrkf3oZK624"><!--pnid:RXERr3w3aHCh6Fr8TQnQVg-->无</td>
+</tr>
+<tr data-page-node-id="UJC6C313HmMi6QFsHUfIRG">
+<td data-page-node-id="G30Ig5SjRG8U3p3TwK4SzT"><!--pnid:3V96S7ohgijHDquWWWOf2x-->升级网格</td>
+<td data-page-node-id="FSTyeS4sZ2Syn6WRK9z5Oy"><!--pnid:xMMABMFAlzxxfsrcep5ZLe-->需滚动重启业务 Pod</td>
+<td data-page-node-id="ZdhORI3QNFXr7gYkv6XnGJ"><strong data-page-node-id="3QDTr4YBYMET9ku0e9e17M"><!--pnid:mZlnbFYecbMui5HZLn6Xsx-->通常不需要重启业务</strong></td>
+<td data-page-node-id="r1Sy1IbEYLq9rbbj84t80B"><!--pnid:h1gOAkQK23gJkW9IdO7e85-->—</td>
+</tr>
+<tr data-page-node-id="71bK1UkdDq3Jse1rzDIIxi">
+<td data-page-node-id="Bg07pCSH3wrbQf21Wdb5vn"><!--pnid:sa8cTWvdeAZcH6MV3bWrky-->L7 能力</td>
+<td data-page-node-id="4KPtp6TutODOtEnryUk4rb"><!--pnid:AHt4rkxkshBeeVcIl1jKqr-->全</td>
+<td data-page-node-id="HTan5x2oqDDSOMPEH235Vp"><!--pnid:lZdX1R0CBHntd88oB52HK1-->按需（waypoint）</td>
+<td data-page-node-id="lnsmmAoQ6vwmCd76zLUYsB"><!--pnid:lr8TaPtW5UGnodHQwCmGOI-->靠 SDK</td>
+</tr>
+<tr data-page-node-id="ELBvJWB9fvN7UtK079QCXy">
+<td data-page-node-id="1qcDfTOuDgVztxt5Juvovu"><!--pnid:MA41NT2Zn0XsoDPK4o2vaU-->隔离性</td>
+<td data-page-node-id="FdZLjRvxVTrjDdomirBoXa"><!--pnid:g0aK8egYKUoqfEWEcv1X5k-->强（每 Pod 独立代理）</td>
+<td data-page-node-id="qu89COUm9p0vLVuKsYuzLd"><!--pnid:uOe0bOalKsBLgFFKBlm4dm-->节点级共享（多租户需评估）</td>
+<td data-page-node-id="ww1VWI8wl4BEdaac7hstUq"><!--pnid:DzEJIPKwnIwhHxPARupIqr-->应用内</td>
+</tr>
+<tr data-page-node-id="GxC9bfAwdwciD62D2zMoMB">
+<td data-page-node-id="V93h1xKtOnHw2gGqxjES4I"><!--pnid:840aHmJxDXbRezZLMHzQnF-->成熟度</td>
+<td data-page-node-id="Qdhb4cDVIRq4SgMQH99F3f"><!--pnid:MdloLg20r1jWccWJJgnTrq-->最成熟</td>
+<td data-page-node-id="dCPOg5ax13zEZS5fwkXRUx"><!--pnid:OwhwjAKaxngcO1mnnaBp70-->较新（<strong data-page-node-id="oOvkIVVU2NWxW8qNZNwJYi"><!--pnid:7ni9EBQcXdDlGNe3DE9qT6-->版本相关</strong><!--pnid:OiC167Lsm4V8s06W6mb2Q8-->）</td>
+<td data-page-node-id="i4pxkMZWYOG4QdoY12Ptu6"><!--pnid:CEnA3YRuzxTCqusfPh3TV2-->—</td>
+</tr>
+<tr data-page-node-id="6JXz3UiS3i8EvtsoBAALYh">
+<td data-page-node-id="qdObnYGUUs0bDNjfJY9x18"><!--pnid:csHNbbMTFdvxvhj5FgvbJ4-->适用</td>
+<td data-page-node-id="Zu3MtsYEJOwZOKaToe0YOK"><!--pnid:gNbovPGnZwI3K1vJJP0Sy6-->需要完整 L7 策略/可观测的核心服务</td>
+<td data-page-node-id="YGwLHfR4dLW1N24EwC3Tql"><!--pnid:7n0rhtOzYtO06BBBPteLZ1-->想先拿 mTLS 与基础遥测、追求低开销</td>
+<td data-page-node-id="dpGcdyATkxMg8bs4WA0KkD"><!--pnid:jdC1q1LIaTRz0rViVhG5kZ-->简单场景</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="DFWlWJeeYatDVEa7TW4PwG"><strong data-page-node-id="eW6fEXUlC26fRQFheCaUeA"><!--pnid:WanKdORBT4EovZK0cO27qD-->标准答法</strong><!--pnid:2hAFObkWuzH00h21VhLRTV-->：</p>
+<blockquote data-page-node-id="RxA2uT8yYVJsahS2jKQYsj">
+<p data-page-node-id="IlXk5xeHztOmZWm8ltMntu"><!--pnid:HsU1gNaCTF7tBXIdOvAS8F-->"不要为了上网格而上网格。如果诉求只是 mTLS + 基础可观测，Ambient 的性价比明显更高；如果需要复杂的 L7 路由/鉴权/限流，sidecar（或带 waypoint）更稳。<strong data-page-node-id="zycWfVWI29kmZSIfjEbnsp"><!--pnid:e0UeGj4pwwaJU0Tp7kEZq9-->两者可以在同一网格共存</strong><!--pnid:OxvUSxdHZkLbWkqNgKNKIL-->，这就是渐进迁移的路径。"</p>
+</blockquote>
+<h2 data-page-node-id="y2G8St8Hy1Bt2w6cGyfwQY" id="a17-dns-vip-istio-dns"><!--pnid:1hpYg7L21hwIDhHj6kqhvq-->A17. DNS 与无 VIP 服务：为什么 Istio 需要 DNS 代理？</h2>
+<p data-page-node-id="OXmHANNW2PBTxDHZIksbzr"><strong data-page-node-id="itOXRuDMBfwEUMisl0Qs0y"><!--pnid:IxqOivoYbQWbaCc8BC68vu-->问题</strong><!--pnid:KejKlTvxrgSnTmNJiPWRgg-->：K8s 的 <strong data-page-node-id="aAHSC61R9xtinxMV9fcTFS"><!--pnid:1XnF8iPUKQBeywNYbV4MuO-->Headless Service</strong><!--pnid:Z4bPf5ET5X1RqEEk55xthy-->（ClusterIP=None）没有 VIP，返回的是 Pod IP 列表。Envoy 若只按 VIP 转发，就处理不了这类服务；此外<strong data-page-node-id="qgX9e4W7ga6gk9S9Dq6ZKk"><!--pnid:HMMnbkNGcw5UKuMJ1Ok47q-->外部服务（ServiceEntry）也没有 VIP</strong><!--pnid:bTOGWNXda56g6rRCOxuopN-->。</p>
+<p data-page-node-id="8PebPfGbkUpS9T54vB01dF"><strong data-page-node-id="HeU7sypBULGIjH8ZhhDs93"><!--pnid:F7JB9vlq2Sm8a3K8F5aqEk-->解法</strong><!--pnid:ZkHMyUx00LSjv4xH1YQkCO-->：Envoy 开启 <strong data-page-node-id="wQV1jPaMQ9KwQ30rwlLcKr"><!--pnid:NdO9mJAxw7oF1sexIKefyZ-->DNS 代理/捕获</strong><!--pnid:7Sxa3SoY9lKCUtV1lu7GrP-->，sidecar 自己解析 DNS 并把解析结果纳入路由与负载均衡。</p>
+<p data-page-node-id="CPw5gdbTa5L6f7qnqTfTDe"><strong data-page-node-id="WQVkScxcZLlgIQdPnSNOL5"><!--pnid:z6mQslXMSC2WJT7peGDRkc-->相关坑（必答）</strong><!--pnid:Puxc8KgKCZ3VP3bEzoFWMh-->：
+- StatefulSet + Headless 的服务必须确认 DNS 捕获生效，否则访问失败或负载不均；
+- 与 <code data-page-node-id="tUJbQHVCt7z3AfiBjfNkzR" data-pnid-children="V4nLwsd1bg0qcMhbM0p2qs">ndots</code><!--pnid:UijW9Chd63vDZEveCfufUG-->/search 域的组合会放大 DNS 查询（与《网络篇》A7 同源）；
+- 解析失败的排障：看 Envoy 的 <code data-page-node-id="TOBXVIw3giM13UPKusk8pX" data-pnid-children="RighKDBqZeDts5NCC3WTc7">dns</code><!--pnid:mwFzeVyQv7fHwRA2SLrK8s--> 相关统计与 <code data-page-node-id="PhTK9P22VIdndUKQiHMSTu" data-pnid-children="C2jhDkKkNnrEHbqOlfvWkC">upstream</code><!--pnid:h4N4UKxhHfikPtpKQzx8hk--> 状态。</p>
+<h2 data-page-node-id="0IeNnDu4CFB6ePPp3gOXYP" id="a18"><!--pnid:k0rKfJFsfVn8km8DNiTMe8-->A18. 多集群的三种拓扑（与"为什么复杂"）</h2>
+<table data-page-node-id="efYpSAocBwXeU2QF3cFNro">
+<thead data-page-node-id="q216Yfi9JCYHXzBQfM6m19">
+<tr data-page-node-id="cprLnHjs2TaCxRNNTg28i4">
+<th data-page-node-id="Ip15te2PLT9ghzoJbCUjv6"><!--pnid:c12oMnxWxglcXIj22lxjWG-->拓扑</th>
+<th data-page-node-id="MPbKJkhU1CZzCnQVJKT2Aq"><!--pnid:t5bGh6mXBGrgnQ98zQz1Wt-->说明</th>
+<th data-page-node-id="2zVjelqYi2CXk0TmpbfnPn"><!--pnid:cRPsPgXX9gbadV5gywo4Px-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="24Kktpd32OUvDKlpYCuhoD">
+<tr data-page-node-id="5GJgQrZSfT2FaTNRY0D9T2">
+<td data-page-node-id="tYeZaWXyWN4vjP6yBjn0WL"><strong data-page-node-id="fL7liYw5t6y8P9Pavnay4q"><!--pnid:9FnhVgY1xq9pWrNo975oSk-->Multi-primary（多主）</strong></td>
+<td data-page-node-id="FP5IvruZtmt2mtblCvlloR"><!--pnid:tu4FKNluSt9BTLtTq9KNfx-->每个集群有自己的 istiod，都连接所有集群的 API Server</td>
+<td data-page-node-id="9ZIjv0zaXe1YnDMD8ve1w0"><!--pnid:vcHZMOuq6C2rUkmaWmdZso-->高可用最好，运维最复杂</td>
+</tr>
+<tr data-page-node-id="oQ5CpVHfSnNSmWPyAluCGr">
+<td data-page-node-id="hvc7rrhkTmoowVu5uOHdsd"><strong data-page-node-id="IjVsuMefexawwGbDQ53cxj"><!--pnid:omNSe4tzPZ2WyYfkT9qTOi-->Primary-remote（主-远）</strong></td>
+<td data-page-node-id="PgHGa21NeclcIkH1m692m2"><!--pnid:ehBladkexM3wuYbH1jo5jC-->一个主集群的 istiod 管理远端集群的数据面</td>
+<td data-page-node-id="RIzJxYYd5VY38VT6QYWr3F"><!--pnid:zC0vjuCFCMwVoS84IjI8cS-->常见、简化控制面</td>
+</tr>
+<tr data-page-node-id="8Jgup9klYcSM5sVG44YS0O">
+<td data-page-node-id="NGkYYNfHk8V5Rcz9c3YCdN"><strong data-page-node-id="8wlDmtNyaKrvencATTUg4x"><!--pnid:lokjhaI3i7tOHSR2sUJkOR-->External control plane</strong></td>
+<td data-page-node-id="zjZVpC9jIpw0LHS5eIa5ED"><!--pnid:yI9DJwqtI8E7DJ7dSJFrOm-->控制面在专用集群（甚至托管）</td>
+<td data-page-node-id="MOIe5Ag0HNydiZugk7XvM2"><!--pnid:o7x6Zi4B5yDJJe5Agn9cUo-->厂商/托管场景</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="TUcjRUicrxcWu95PEXcPfD"><strong data-page-node-id="kotuevRmoMLex21grcmR7j"><!--pnid:kZi59aRZR8CgI3bFUJ8l7P-->关键点</strong><!--pnid:QSUjA88wt5VGoNMocl7c6x-->：
+- <strong data-page-node-id="5Dq1ZnlUf5S94f6DexXpkA"><!--pnid:VjoyqO5JU2NjxRdQtrDDss-->东西向网关</strong><!--pnid:DDpS4OKpWJl3uCBT5T2sJf-->用于跨集群流量（网络不扁平时必须）；
+- <strong data-page-node-id="pQkFFAZP12yP8S5Ad7VJMM"><!--pnid:RNWQ3sUCUAnPBug9j2WpWY-->共享/独立信任域</strong><!--pnid:6YArKT9ksBuro3x25RvIjD-->：跨集群 mTLS 需要统一或联邦的信任配置；
+- <strong data-page-node-id="BSXYAQxtjUaobGFlQeTd92"><!--pnid:mUuuS8KwW6hXED6BW8QWSS-->网络要求</strong><!--pnid:K4jhsCa2LhMHbtGkgsCSYY-->：扁平网络（Pod IP 可直连）最简单；非扁平则依赖网关与隧道；
+- <strong data-page-node-id="t8dhwJwS7ueOTNW9tZoBbZ"><!--pnid:ua7k0eY2aarzLnL4XnfYkp-->服务发现</strong><!--pnid:2kYk4yZzEXWYWVWMOecGNb-->：远端集群的 Service 如何被发现（远端 secret/配置，<strong data-page-node-id="4spCcZiISJCk6OW380C32B"><!--pnid:VwwhwrEmltEp7wta3icZLb-->机制以版本为准</strong><!--pnid:EIodPiFau2gWe1epwZDgi5-->）。</p>
+<h2 data-page-node-id="A2DDiVUKibcZSNWw26TmlD" id="a19-vm-k8s"><!--pnid:dhHqMpD9sxh4HRWtRFzT9z-->A19. VM / 非 K8s 负载怎么接入网格？</h2>
+<ul data-page-node-id="uh0ovf8YRKVh35QSi6bHFM">
+<li data-page-node-id="EETRQr5jxKGIXGggCS3Qfu"><strong data-page-node-id="z3ybQBth8TAv7VlhCu5b5d"><!--pnid:uisJx9LvFLxawuN7WGhBi4-->WorkloadGroup</strong><!--pnid:Fr1vaezReVZgo4AHfA26mj-->：描述一组非 K8s 工作负载（模板）；</li>
+<li data-page-node-id="I2vqqaMtbMf3VO4rCQ34ts"><strong data-page-node-id="zJ8MAxv5KhKOoW7ZAUTUEe"><!--pnid:9CWYDCMwXYEe6XSB9y3PbG-->WorkloadEntry</strong><!--pnid:6nDChZ5otviiezOyPJPeMx-->：注册具体实例（IP/端口/labels），常与 <strong data-page-node-id="VLB4rxlCJEfPUyo5uPGTk6"><!--pnid:tbnCPxskhqcJx0mI3UE5ss-->ServiceEntry</strong><!--pnid:FzA7hQmb9Gh8UGLXMm2QfI--> 配合，让它们像网格内服务一样被发现与路由；</li>
+<li data-page-node-id="jxLSCbRlPmIlItCoTO1RlG"><!--pnid:LV1vq7LALHjzK9RMuFDFmU-->也有 <strong data-page-node-id="3UL83rpQibFlkQ149B2pd7"><!--pnid:EKtyvX5931y34ES4vNsTY1-->Workload Onboarding</strong><!--pnid:Ny9HDt5ZdaJpP8h21HxZyn--> 类方案用于自动化接入（<strong data-page-node-id="eIWaGZlhCUk3sLJ0DLOUi6"><!--pnid:hysopSCyqGsETTlGUwt1D7-->成熟度以版本为准</strong><!--pnid:mbpAk2E6amMrU6l2KwA5N7-->）。</li>
+</ul>
+<pre data-page-node-id="USVkTovG3wvm7BPgw3pRDj"><code data-page-node-id="eaQHHXoX8JJgiXLlCDqEHR" data-pnid-children="vm43ReAqjhglj3X0yiOEJX" class="language-yaml">apiVersion: networking.istio.io/v1
+kind: WorkloadEntry
+metadata:
+  name: vm-db-1
+  namespace: prod
+spec:
+  address: 10.10.1.5
+  labels: {app: db, version: v1}
+  serviceAccount: db
+</code></pre>
+<h2 data-page-node-id="VtBIwF2d1EJ6BR3UfneDfI" id="a20-istio"><!--pnid:4hary5Ko7weimXsI9XVn1g-->A20. 可观测性：Istio 提供什么？成本在哪？</h2>
+<table data-page-node-id="6spdBsCGcZoVJHrLHxekgd">
+<thead data-page-node-id="tvBkzUPCo5S6rBt2fcMp31">
+<tr data-page-node-id="IWRssSGje0hTwEDHsors3D">
+<th data-page-node-id="iutLWPtjoSsnNhw203yViN"><!--pnid:JNSABum8BHQiEqDj4E1U3c-->类型</th>
+<th data-page-node-id="ZxQ5PANFZc98pJhRSISuK5"><!--pnid:goATN7a7eNegrN7e3yxmYd-->内容</th>
+</tr>
+</thead>
+<tbody data-page-node-id="k1szyGscmF5lcVhWAdlujK">
+<tr data-page-node-id="lYAoNkIAVSedY3LP7tuqGH">
+<td data-page-node-id="6KIfRgrmrqlqqJHfq5sxgd"><strong data-page-node-id="OXAL4S19c9mfkMuoOQbPmF"><!--pnid:wpwHXTxxkkRGqnUESy6iGD-->指标</strong></td>
+<td data-page-node-id="nCNFG9UW6BaCEdQ1sjpt8P"><code data-page-node-id="mcVLfr1OrFa25iJPDcTZDd" data-pnid-children="bprbf3dX67ooG8UCb3QKF3">istio_requests_total</code><!--pnid:baIDr5SDejPI2EieCYZwGn-->、<code data-page-node-id="jjZeDurvrJ7N8oYNwyhx8Q" data-pnid-children="wB7KtSWevWt3PFqaY4xA00">istio_request_duration_milliseconds</code><!--pnid:3N6reE9DSfh6Q5a99i8BTm-->、<code data-page-node-id="hlZmXlkrlCngEUhOQ2Jkbb" data-pnid-children="cl2nOAMQPYnwFSOxLZwV22">istio_request_bytes</code><!--pnid:7yhCoKfK5Oqc8EU2pWwyRf-->、<code data-page-node-id="aVS6idkaOwv0LBQ4mnBhUt" data-pnid-children="cYdrkvfBquK1JWsZ5zNIlk">istio_tcp_*</code><!--pnid:EN9nkDzjiuKtJ0JMq58Gyh--> 等（由 Envoy 统计并通过 15020 暴露）</td>
+</tr>
+<tr data-page-node-id="LIshkNZgyrUCPlasyWzI3b">
+<td data-page-node-id="ZwY8I3heice0HvuD7lXrkZ"><strong data-page-node-id="DBcfuiAVEC2vli8pogTblF"><!--pnid:ixvtI1S3AX056Fk7SK5CM4-->访问日志</strong></td>
+<td data-page-node-id="IpIMYzjVLw3nPZjvdRRkVN"><!--pnid:98wwjNQVsQtpmHiBbJJG60-->默认可开启（文本或 JSON），含身份、响应标志、上游等上下文</td>
+</tr>
+<tr data-page-node-id="1iaqX903trmDK8J3djGo3E">
+<td data-page-node-id="H6SNjcLoaH9xvsqu4DR4eP"><strong data-page-node-id="IOiQqDsy7OrjKNwIzNOXbs"><!--pnid:Qk2NS1DrQfpLIWwU1R79p3-->追踪</strong></td>
+<td data-page-node-id="VsSxXKTIfQ72bLNTKiiG6x"><!--pnid:SIRLg7CGlCoMUdV8INkVsa-->传播 W3C <code data-page-node-id="jBLiegdaoXhWxnx2aPCofr" data-pnid-children="Q7FBz6JaNos5P2Y4AMUc3F">traceparent</code><!--pnid:z4BwPDEdlZZg9EzeO0ZApy--> / B3，采样率可配，导出到 OTel/Jaeger 等</td>
+</tr>
+<tr data-page-node-id="Nv8Sx0JK1csId6MuoqQ1qz">
+<td data-page-node-id="Mc7CdYdHEPuGleA39FA01t"><strong data-page-node-id="H4DSEt8xlevjYzdQHSh2WN"><!--pnid:pJhPwP8OV4S65rCUHX29TX-->拓扑/可视化</strong></td>
+<td data-page-node-id="klRqgh28SeYQ6VYB1vnz33"><!--pnid:rl2lHzRafftv2dAWNaQc2q-->Kiali 等</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="ZXslhlQMmqwt7GdcEK1jm4"><strong data-page-node-id="rNnaEbbYGoOcYrHkFeIqSp"><!--pnid:u4hQiGjUiuYmrQehgdxY9I-->成本（必答）</strong><!--pnid:hooBJncYqoBKh3FrRfgjOr-->：
+- <strong data-page-node-id="xNx16u5F2ADohzdYm1upbM"><!--pnid:Tqy3XKvQXHMYTnGO5YaZMw-->指标基数爆炸</strong><!--pnid:oCevCCRBYMFHIrfLmhCcNo-->：<code data-page-node-id="06qEmqQXTwhvJ88HOdZAdu" data-pnid-children="XATjZx9zJnVzr38WDfwZsj">istio_requests_total</code><!--pnid:IexDcmtvWOyg7OvW3ptrob--> 带 source/destination 的工作负载、命名空间、principal、响应码、响应标志等多个标签 ⇒ 服务数平方级增长的组合；
+- 访问日志全量写盘/采集很贵；
+- <strong data-page-node-id="gj0CN4S5JZGiQh9Ei2H9SX"><!--pnid:DfGdnRGmeelAFaVM1SMrkc-->解法</strong><!--pnid:Egvok54dHYg3nxFzuS1QEq-->：用 <strong data-page-node-id="9IKMRoC4wTHZPYX9xilCdR"><!--pnid:2CHXlkXhwsqYbIBGnOF0A0-->Telemetry API 裁剪维度</strong><!--pnid:tPJec5C32tDvKzB4wLl5Ek-->、调整采样、Prometheus 侧 relabel 丢弃高基数标签。</p>
+<pre data-page-node-id="eMcBKhM8xz3owqZgiiacEr"><code data-page-node-id="mIPpghTi5PNbHOVbgvhzKH" data-pnid-children="QbPZAok6p3iJuakAygQ9DN" class="language-yaml"># Telemetry API：去掉高基数维度（示意，字段以版本为准）
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: mesh-default
+  namespace: istio-system
+spec:
+  metrics:
+    - providers: [{name: prometheus}]
+      overrides:
+        - match: {metric: REQUEST_COUNT, mode: CLIENT_AND_SERVER}
+          tagOverrides:
+            request_host: {operation: REMOVE}
+            source_principal: {operation: REMOVE}
+</code></pre>
+<h2 data-page-node-id="7OIb6KnGsyOzjrM3FuCLPK" id="a21-k8s"><!--pnid:HNaIg5IOnWTIP2RPJcumkL-->A21. 与 K8s 原生能力如何分工？</h2>
+<table data-page-node-id="4iKUTI7aBzmxztQdvuDXDT">
+<thead data-page-node-id="Wbh0l1FJBglAN4Z1L3BSBK">
+<tr data-page-node-id="fbixhUrwQ7MCNmx1M8VVDB">
+<th data-page-node-id="8PfxiAE3jHdswnsYGnCaKM"><!--pnid:8uY1o9OuQ9nVELZInzxiPW-->能力</th>
+<th data-page-node-id="wdNTUh3hNMR5UXAvwWnnkD"><!--pnid:w1E3s0A66nytZpUqAZRX7n-->K8s 原生</th>
+<th data-page-node-id="Bj6P94GwCBLWtiHZsCkTwa"><!--pnid:bdcoF694SJYCpG8bwyUhXL-->Istio</th>
+</tr>
+</thead>
+<tbody data-page-node-id="gLrXlRFEuZ6fzj0u9NoT3c">
+<tr data-page-node-id="zsiXBGRfGd7zOfXUyRfxRp">
+<td data-page-node-id="E3uQDG2PIrGM9UHP6EyQlk"><!--pnid:kxNV4yls49PGdDKdTy43a7-->服务发现</td>
+<td data-page-node-id="cHpOJlrPFVfUnLjBhCPzAc"><!--pnid:UehVLC549HHMXozCQiL20N-->Service + EndpointSlice</td>
+<td data-page-node-id="VQb73DmEDmjNjqJITdvois"><!--pnid:JyTAfYeGooWByOCGjcagTn-->消费它，并可用 ServiceEntry 扩展</td>
+</tr>
+<tr data-page-node-id="skXMRqnD6DtmFFCl2hiPot">
+<td data-page-node-id="xsdIwPaQWg9A14qYzXTA2M"><!--pnid:kYCyqBXslKJTV7EY6qjlE9-->负载均衡</td>
+<td data-page-node-id="vqrQpdpOIn3r55Ms3g5TyL"><!--pnid:MV5LIddYbPDVxEoInHNUQ9-->kube-proxy（L4，per-connection）</td>
+<td data-page-node-id="QEdYGRpY5C99hSBQWua2Zq"><!--pnid:IgWQBYvUkVBbS9avImf4bA-->Envoy（L7，per-request，带重试/超时/异常点）</td>
+</tr>
+<tr data-page-node-id="TFLokyHORQKytIQURHp06k">
+<td data-page-node-id="T7ZZdnhoB5sqr9P53W7b7V"><!--pnid:mdWvErVoPUxVu4MbkncdOM-->入口</td>
+<td data-page-node-id="y7ZZN6nitHejmnxKq60VvA"><!--pnid:piRkTIeo7A7rjFs0NEpvjp-->Ingress / Gateway API</td>
+<td data-page-node-id="8Svr5ACMCSnGQ0ZnIE0BHP"><!--pnid:3Qm5KDa8LTQ0Q2QFGFpO5v-->Ingress Gateway（也支持 Gateway API）</td>
+</tr>
+<tr data-page-node-id="WcNM3N16BHdwuARYe376bm">
+<td data-page-node-id="HXfrkHhBIiKHBSwT1sIITy"><!--pnid:NGnie47MAAiNjw1LG3Aie2-->网络策略</td>
+<td data-page-node-id="B5Xn5sztIEcPt0pa5WOtdm"><strong data-page-node-id="sSzqBAN8R5aqvekJ5pNo3n"><!--pnid:Pl2Znw832m6upcRe4EVN7i-->NetworkPolicy（L3/4，CNI 实现）</strong></td>
+<td data-page-node-id="elY7dOumed7ysDPLMl1Ti2"><!--pnid:n3Ugf81XtyC6J83I9UiiQv-->AuthorizationPolicy（L7，身份与属性）</td>
+</tr>
+<tr data-page-node-id="4OcGxbt9j9cQIqzouGE2tx">
+<td data-page-node-id="zAQ08vJlUlQ6XT9G1LKlDN"><!--pnid:MPVv7bfH4PXVR08z3mB9GI-->mTLS</td>
+<td data-page-node-id="U2b9F0ILbxdEuu9iIJq6Y7"><!--pnid:cXinsZVARcIxd1ou1KxaLM-->无</td>
+<td data-page-node-id="ZP1rKTTpoFc43o2c7o0tFD"><!--pnid:SbGaSpkAZq8uLPymIA6ocQ-->有</td>
+</tr>
+<tr data-page-node-id="kw8nXvY8H9b6yKYVIeBngf">
+<td data-page-node-id="R7Ptkw5b9acdMMsOlUBmTA"><!--pnid:pz53BFJH4n98CKII7DmmDl-->可观测</td>
+<td data-page-node-id="l4q3QamjQ3dRjq8ZBA282J"><!--pnid:fTpSAhI9WYyYrMyaanTf6V-->需自行埋点</td>
+<td data-page-node-id="5mXZlJg91RxHhGgQwjzKGb"><!--pnid:TymjMJJU0AwegxwrEcONjr-->自动 RED 指标 + 追踪上下文</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="K72XCnKH4N7R9j3SDRZxGW"><strong data-page-node-id="sfSRjZrxti9iLRtvuMuAU0"><!--pnid:OGodvPluupVPy0trR3pYan-->必答</strong><!--pnid:wLUgvk8fkZCUYbLvmPU1wq-->：<strong data-page-node-id="sLsorVlMKcR7nIpnd3PU33"><!--pnid:rq8FYe1PxbbGFINwRN2f2x-->NetworkPolicy 与 AuthorizationPolicy 不冲突、应叠加</strong><!--pnid:bqhtX7my0e8wCIHMmxpP7O-->——前者管"能不能连到端口"，后者管"以什么身份、操作什么资源"。</p>
+<h2 data-page-node-id="LaqLvXHit6xgORdpNiU6Cr" id="a22-snitls-vs"><!--pnid:5iEbuZeBM8gLG8QpWHm6o7-->A22. 协议与 SNI：TLS 直通 vs 终止</h2>
+<table data-page-node-id="ye2TypP0fsIxyZA9ZeMdPb">
+<thead data-page-node-id="gT1R1iNJh3nvk8U2M5pkoU">
+<tr data-page-node-id="oNgkpKwhTQlGnifmWxgWMF">
+<th data-page-node-id="PPKT5IBoqNutMzvCAyLBjh"><!--pnid:OHLsIEgz0Kht8Z5353KiDd-->模式</th>
+<th data-page-node-id="s1yG8lP8B5QXWdgyWFCWuL"><!--pnid:cjGOhh8YxfIimhnuNB8PLj-->行为</th>
+<th data-page-node-id="1psjI7cxGG2vaiDVIfboKH"><!--pnid:faAkn5A7ULZ0zKWCNO8lVt-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="ECPu8KBbQ8rPipMH3xOtuX">
+<tr data-page-node-id="QXYzQG3bsUYGRUMzWDXpEU">
+<td data-page-node-id="S7tk5mfSL3UHYU2kB0iB6O"><strong data-page-node-id="pbS0tVMy2gxzlKfnF3v8nA"><!--pnid:Dib6ciD8mi03ZioU2NcFAM-->PASSTHROUGH</strong></td>
+<td data-page-node-id="CZG8DGpXemNtPsXg5Ad6mt"><!--pnid:cETdHz2F8a3ZYXCmfrylf6-->Envoy 不解密，按 SNI 转发</td>
+<td data-page-node-id="DsPNDclL7Zx3516EXLuk3A"><!--pnid:5FYusR0HMh0zarga4Ayuaw-->外部 HTTPS、客户端证书认证</td>
+</tr>
+<tr data-page-node-id="r3pcIvzf4synL9NcCBF4IG">
+<td data-page-node-id="iRlqeDV2pdefs6hQVobBIi"><strong data-page-node-id="wySHVJ2VruBM0ZxNdJ5ZDI"><!--pnid:GrPpczujeCSRAGrlsWkAHl-->SIMPLE / MUTUAL</strong></td>
+<td data-page-node-id="zEjQt0yCap9ETUkHJ2rbYQ"><!--pnid:O3t5yJV0tMqx1WrxF2XDhD-->在网关终止 TLS（可选再 mTLS 到后端）</td>
+<td data-page-node-id="ylmPl3dbxspj9uOcT1gJTe"><!--pnid:rytLmAu1t6aoShYHy2Iq9p-->常规 Web</td>
+</tr>
+<tr data-page-node-id="AmaHTRke6fmwZb6nM4bndD">
+<td data-page-node-id="NowXfLDSyyLYghZlUoSvc7"><strong data-page-node-id="vICnOkbyIqJVsBjXPKRSsB"><!--pnid:eniXerfjPC1LhGmO9vHXPh-->AUTO_PASSTHROUGH</strong></td>
+<td data-page-node-id="BViT9t2znWmNJNFh9reIqj"><!--pnid:Dh423W7OiMJfSK9dZ3lqvY-->多集群/跨网格场景</td>
+<td data-page-node-id="cSJnnXf5J4Pj36BsVftIqa"><!--pnid:RqoB9BuixCzKmBhOsfjoWW-->东西向</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="lG8OgNyV3LyyP2KlvTknDD"><strong data-page-node-id="m8BJzTewRVSLfQA71pObS1"><!--pnid:cwfOD9PpPHyDHfkO6hCnxy-->坑</strong><!--pnid:34svu53HwqlQFUzYlp1msi-->：
+- 不配置 SNI 的 TLS 流量在 PASSTHROUGH 下无法路由；
+- 端口协议识别错（HTTP 被当成 TCP）⇒ L7 能力全部失效（见 A23）。</p>
+<h2 data-page-node-id="Zzv5gDZLZJpCFICve3N38i" id="a23-l7"><!--pnid:l6leHvG57BP32XABhizHGx-->A23. 端口命名/协议识别：为什么"服务看起来通但 L7 规则不生效"？</h2>
+<p data-page-node-id="RHVHYGbsmoaspvREzksNJY"><!--pnid:c3vR7hHmHxJiRWw5XvzFuo-->Envoy 需要知道端口上的协议才能应用 HTTP 路由与策略。识别顺序大致是：</p>
+<pre data-page-node-id="eD9lM8pvwqo3ptCx4gUs2l"><code data-page-node-id="xxYY0Dho5n034ICtX2Kpig" data-pnid-children="AZ5PzibKW09ESxC29hj8qI">① 显式声明（Service port 的 name = http-&lt;suffix&gt; / grpc-... 或 appProtocol）
+② 否则做协议嗅探（有代价且不总是准）
+③ 仍无法识别 ⇒ 按 TCP 处理（只有 L4 能力）
+</code></pre>
+<p data-page-node-id="e0DfvUuhsmnoEAgGGqhYtI"><strong data-page-node-id="O5Log6O56vTloFkxrrmf86"><!--pnid:Dru115s01I6t8Vaq3gVAIG-->必答</strong><!--pnid:L5z3kMLLFx4jfg7rXJmqzy-->：
+- 现代写法推荐用 <strong data-page-node-id="rw2jGBAYb4JZWEqRta67TK"><code data-page-node-id="B1NHxs93VVRBolhWIJNWgh" data-pnid-children="n0d54nB6yOCwepaacNpr7d">appProtocol</code></strong><!--pnid:tKgheQCrqfhgHrTKjlEKMF-->（Service port 字段）显式声明；
+- 名字写错（如 <code data-page-node-id="A4oqwJQvzBLS4jXaSVDbgS" data-pnid-children="4qtAarvCilccsdMvwMwEp5">http2</code><!--pnid:qUE0o0k2Y3Mxkgw4FuO7Xh--> 写成 <code data-page-node-id="eZpWmgXiBl3K0NVL4q82Cr" data-pnid-children="qz9T9X7Wes0QOal4UVXnMU">http2-xxx</code><!--pnid:v6ptplT2UXoIEXqTybCODD--> 之外的形式）会导致协议识别失败；
+- TCP 服务（MySQL、Redis）不要强行按 HTTP 处理。</p>
+<h2 data-page-node-id="fbN8g3X0xUPDoNlN0hCD5I" id="a24-istiod"><!--pnid:uDBhDx03N6aS1DrzXa0ZBM-->A24. istiod 自身的高可用与依赖</h2>
+<ul data-page-node-id="reTsEzUoXuvbJcSERS8sae">
+<li data-page-node-id="664taYfyv8hzmfJyrETMt6"><!--pnid:di6Bk49A4z04SuEzjd09AL-->istiod 是<strong data-page-node-id="ktt4ZOr4yZCrv1qCL0XFe5"><!--pnid:Dpk5bXtlj6s1YoKoqNzmM3-->无状态化依赖</strong><!--pnid:SVqeMroeEVCfvPp3bm36u6-->（配置来自 K8s API）⇒ 可多副本；</li>
+<li data-page-node-id="dnR6OvxHUnEArbPvpZuCUz"><!--pnid:0GYPRCVdbY2fYo0azKwuHK-->但<strong data-page-node-id="I8dqHHnZMLIGTaqBtpV4nQ"><!--pnid:ex85qBnjkJunLje6tf8yGf-->证书签发/部分协调逻辑有选主</strong><!--pnid:sfEpcaOEHx88CXUHkqXkq1-->（以版本实现为准）⇒ 通常 2~3 副本；</li>
+<li data-page-node-id="qQBlG105ymVzn0xsXhpKIv"><strong data-page-node-id="eBPqSJbgaCi0VR5gJgDGsj"><!--pnid:U0wGb13I9vDF8ZEE6EVLU4-->istiod 挂了的影响</strong><!--pnid:AweROB7nXR2t5fDh1uWdUs-->：已有流量不受影响（数据面已持有配置与证书），但<strong data-page-node-id="p8sgWj6GktjV3qG1ZwNI6T"><!--pnid:nnLd3tiadtpX1VPS8U3WVL-->新 Pod 起不来、配置变更不生效</strong><!--pnid:95D5kQzqpZ1BjEAAmoTZBl--> ⇒ 必须 HA + PDB + 资源保障。</li>
+</ul>
+<h2 data-page-node-id="U6GB7RuFpeAeSRk2Z9EerT" id="a25"><!--pnid:RLRQcEFA8t1uY9wRB5swlt-->A25. 版本兼容与升级模型</h2>
+<ul data-page-node-id="mwcxJYjaVcorrLu1QtITx8">
+<li data-page-node-id="v5Ye2Mej7P6IcvGoTFqsNQ"><strong data-page-node-id="dc0Wr65FsNlc7y8FoHjEk3"><!--pnid:w3aMQm3kateD5TtwQzDqUh-->控制面与数据面版本差</strong><!--pnid:kBopysrGVnzv4KwaNnEmvV-->有官方支持范围（<strong data-page-node-id="qlNa580i9QcYOQ0MRXQOdK"><!--pnid:S5NSmsBhb7PPEvNK6UtdUW-->常见是相差不超过一个 minor 版本，请以所用版本官方支持矩阵核对</strong><!--pnid:LnyTwKnHaFxNpQIiOurRPx-->）；</li>
+<li data-page-node-id="ua57slsVdmLUZaX5kCzhc4"><strong data-page-node-id="uvI3EFteBizXMDFXR1OPAi"><!--pnid:rK56w88z0HYkCV6A7ScQqR-->金丝雀升级</strong><!--pnid:iCzLlvUVpJ6Uv2g1tJABN6-->：安装新版本控制面时带 <strong data-page-node-id="eJ76gDuy8CXceSLkdaOx8l"><!--pnid:99mLl5N6Rda3UQ1JKMS1YV-->revision</strong><!--pnid:Az2QBG7d4oFbJWswAKPJm9-->，通过 label/tag 让部分命名空间逐步切换数据面：</li>
+</ul>
+<pre data-page-node-id="McSbPBOw4KmDMZlUqr5I3D"><code data-page-node-id="N135l2cMaa4JtbehoBqOzy" data-pnid-children="awZgOSegZ97kSHjPVix5ZD" class="language-bash">istioctl install --revision=1-24-0
+istioctl tag set prod-canary --revision 1-24-0
+kubectl label ns prod istio.io/rev=prod-canary --overwrite
+kubectl rollout restart deploy -n prod        # 让 sidecar 换版本
+# 验证通过后，把默认 tag 指向新 revision，再逐命名空间滚动
+</code></pre>
+<p data-page-node-id="3N6o3a1mjNtVVjV2VhhHax"><strong data-page-node-id="r5N7XuvIczVgXfLSLJANTF"><!--pnid:uA3VnjSmeNxwdUiaW3RGAi-->必答</strong><!--pnid:gseOVzmnW2JLMgjKcPCG8m-->：升级后要验证：① istiod 无 NACK；② 关键服务流量与 mTLS 正常；③ 指标与追踪不丢。</p>
+<h2 data-page-node-id="kaEfENL2iOHk8tPLvhvdvq" id="a26"><!--pnid:49abiK9NjxvlYgtxYyBVUO-->A26. 网格里最常见的"服务不通"原因排序</h2>
+<table data-page-node-id="8LAz3N97TatOlx4iCdtkmf">
+<thead data-page-node-id="9LN23KrTQDouTkEi9bnM0j">
+<tr data-page-node-id="qk8oKayEZWxvrAA3Yo4q4H">
+<th data-page-node-id="kDxx0tdnNsQRJOUHDHa4gX"><!--pnid:Sx92TWfwo54xeLvDJREeNS-->排序</th>
+<th data-page-node-id="bucocy8aTuueq4H6uktr1R"><!--pnid:ghburt4eyDnmo3zSLLz7lY-->原因</th>
+<th data-page-node-id="kxVW2s8piIqXcgXfteJ5LJ"><!--pnid:TGzNZDDQdFTFBZkKnWZdDh-->快速验证</th>
+</tr>
+</thead>
+<tbody data-page-node-id="e9PFIMA8ygZDbjZ9iiOaH6">
+<tr data-page-node-id="2AX4f3P3THskVhsHBaBv78">
+<td data-page-node-id="vc0lqI9IarWdYcsOLf226m"><!--pnid:YWGkjdLZ97HaEKiLTj3jXH-->1</td>
+<td data-page-node-id="VUuEgvohuv2w21zV5UUqhI"><strong data-page-node-id="3kU5n2UNjc3oDQbNL0UfTj"><!--pnid:d3LKL5pf24I9smnRPLxFMx-->端口协议识别错</strong><!--pnid:tI9DqGclfwx4NHBoQbyD9H-->（当 TCP 处理）</td>
+<td data-page-node-id="1j0ZYDzTDHKVAKDGjMZfpD"><code data-page-node-id="EDr3IyxFqaDViApn3bc9HP" data-pnid-children="9FrViusNWvrSDbuUVuhxCM">config_dump</code><!--pnid:LnHq4xCYO337MSfxaHSQK0--> 看 listener 类型</td>
+</tr>
+<tr data-page-node-id="t0iSVcqv9FvGL4Tx5SCVEa">
+<td data-page-node-id="pfNagfjLkcl7Wb9WXl0bai"><!--pnid:vZWCIj5amwr30mMePcixhL-->2</td>
+<td data-page-node-id="R4y8YJKazOMoldlavoZFV9"><strong data-page-node-id="Am2NbPX8NBNXSSUcdINAX0"><!--pnid:Yjqm8ZOEO6T4yDaFYPbYKF-->mTLS 模式冲突</strong><!--pnid:mlqAL7kdIQ2r1yqQgzggNO-->（STRICT 侧收到明文）</td>
+<td data-page-node-id="pKfkoYVdd2tSdlowGYtXOo"><!--pnid:91A9cOB4ZWMkyMHdx05z5k-->日志 <code data-page-node-id="a9utz15YaeFxRhnnRT3q4f" data-pnid-children="XbCzujVUMXPr5sCTxUjkkt">upstream connect error / 503 UF,URX</code></td>
+</tr>
+<tr data-page-node-id="6Tnl4onLGJANVr4I2XRkql">
+<td data-page-node-id="ix5x7qP5y9dtCLuoLQrKv6"><!--pnid:irFQCmmSBkWSHA380EW8E1-->3</td>
+<td data-page-node-id="PArnv4GMcKFlwlZv4jP8XB"><strong data-page-node-id="cdsT1BI7KRxEkLjjYP8fW0"><!--pnid:LjmQ4aiK664sAnvRDdSEoR-->VirtualService host 写错</strong><!--pnid:UasLXH1rRtwHru9zeupwWb--> / 未绑定 Gateway</td>
+<td data-page-node-id="htcQJSs21DTIrLIAm2fBHY"><!--pnid:smT7sNBvuIp7WAI0POL7Tg-->看 Envoy route 是否包含目标</td>
+</tr>
+<tr data-page-node-id="KauosOMDezbI55xARPRF2l">
+<td data-page-node-id="98e7jzB25ViV8wTZ9GPdcg"><!--pnid:BwcidMYQfBDMY0O1bQIcES-->4</td>
+<td data-page-node-id="F53zZUSbAE0lQ5JN3FEZuB"><strong data-page-node-id="0FuuAcIjUCv7qHNOF1ByXW"><!--pnid:85Qv1aqdPDVkcpYbswUeaa-->外部服务未注册 ServiceEntry</strong></td>
+<td data-page-node-id="tQs4kcXWC3EkySXsGQMGmp"><!--pnid:Bk0iPUeZXcTBxdp8gBbjd3-->出站被拒或走 Passthrough</td>
+</tr>
+<tr data-page-node-id="6EOQFY374yjN8rOR3Kj3zS">
+<td data-page-node-id="PIoneihBVyCcLkOhmy0Dkb"><!--pnid:O8Cm042nbFwaQowzYNCm5H-->5</td>
+<td data-page-node-id="CekoapuaGviEEd8mLCEcg3"><strong data-page-node-id="KzL8ijfJ6KYh6YjURo5Qu3"><!--pnid:22FMx5zrf5xMu67hFyuIni-->Sidecar 未注入 / 注入失败</strong></td>
+<td data-page-node-id="WSwPQLgiLd5a4H1nKytb6w"><code data-page-node-id="VnfU764kSkYzAwfARQ3yY8" data-pnid-children="R4ajzv0MZJrctSuRw1Q7WC">kubectl get pod -o jsonpath</code><!--pnid:Z6ZxNHq7P92QZiXPJTZeNK--> 看容器数</td>
+</tr>
+<tr data-page-node-id="PmUnjNnljqr6p07HDoBVwc">
+<td data-page-node-id="aqp8UpeVXe6R52QhQ2q6KD"><!--pnid:YIzUTTIXuNcyh6kDuFoLZx-->6</td>
+<td data-page-node-id="TcbCf54XpO5Db7hKHo168L"><strong data-page-node-id="A2tJR0FUboKpe9T5rfSENW"><!--pnid:jrIygLy3iq3iGCWecVFJ6U-->AuthorizationPolicy 未放行</strong><!--pnid:bzdtlJ5rvF51DMSMsSi5O3-->（尤其新加 ALLOW 后默认拒绝）</td>
+<td data-page-node-id="cfU1B9QLqT2VC536aU4Mxy"><!--pnid:0MrPKSB0t16DmXOWoSL8o0-->临时改 action 或删策略验证</td>
+</tr>
+<tr data-page-node-id="n0vsnaXpWPp3EO8u1izEg1">
+<td data-page-node-id="zFEdVXAl9eiv24thgv2EtG"><!--pnid:yB0SNzjqEFJhTEjaNjYKYN-->7</td>
+<td data-page-node-id="PNTSOpo26q6lfnBPNojeLv"><strong data-page-node-id="ZNk8piUTz89Yp8na6bTk9R"><!--pnid:GWMO4koRZjD096hRuGG1Xd-->DNS/Headless 问题</strong></td>
+<td data-page-node-id="T9docMFWsHNNKJoduelHvA"><!--pnid:1Pnnmkkm1jmHW8P4NtaXKU-->看 DNS 统计与解析结果</td>
+</tr>
+<tr data-page-node-id="Ziakib9ZmQ4Jgy3opSRh9N">
+<td data-page-node-id="9LJmCp3wjEpfOYcPWaXL1n"><!--pnid:Pq00t5kOTD0wajh5PvA1BG-->8</td>
+<td data-page-node-id="k0JQbZ5lhXltq8F9mA7qip"><strong data-page-node-id="wPWEwWvAMexOi4e5SDCuq5"><!--pnid:gcBnw0dBQ22Palgg4UXOK8-->熔断/异常点把上游摘了</strong></td>
+<td data-page-node-id="AN6MgGr6CS5RmdRjcPxNFC"><!--pnid:L4jlJSgC0v5BzqxzpJvPO6-->看 outlier 统计与 <code data-page-node-id="Xd7uqyKs448tL8qj83GKka" data-pnid-children="epcwiGIeUHREeSg623he1a">outlier_detection</code><!--pnid:HKPcu684m64jdmyNc3Gsmf--> 状态</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="wSbECwbArl8qdckcq6TMJp"><code data-page-node-id="XTZHkZ486un1i123RIsW52" data-pnid-children="1e85nq2YORVztPDwVsfGB5" class="language-bash"># 万能三连：看 proxy 状态、看配置同步、看统计
+istioctl proxy-status
+istioctl analyze -n &lt;ns&gt;
+istioctl proxy-config route &lt;pod&gt; -o json
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/stats | grep -i &quot;upstream_rq\|outlier&quot;
+</code></pre>
+<h1 data-page-node-id="gJslWNfCV5b0znwxTTbLDm" id="part-b-14"><!--pnid:25UEnjSK5x9aA9TDGkA2ks-->Part B · 方案 / 模式专项篇（14 题）</h1>
+<h2 data-page-node-id="PTk6keOxFQbXt9rr18EbQO" id="b1"><!--pnid:SJmLyPAnR0NwO9kuQJkTGt-->B1. 注入方式对比：什么时候用哪种？</h2>
+<table data-page-node-id="PxMKX15iDM3ZORCSdI4eC5">
+<thead data-page-node-id="RsR0cgKKAmuGuRSlcrCtqu">
+<tr data-page-node-id="nNhLSIaJp6NoX1z3vAxZS0">
+<th data-page-node-id="MZWEyq3ohBBV68tUlNTiot"><!--pnid:tmzJS9ixEYbaqrzmb4kHPp-->方式</th>
+<th data-page-node-id="aNv44glL2E43lSMeNbMXQl"><!--pnid:e8uIGUbEZ8Or5S2JqqKbQm-->说明</th>
+<th data-page-node-id="GRHr8wGytxMx9kCiKO9mU1"><!--pnid:ixurui1ea8r3QgO98J0CuG-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="B1lijpNi6FSytpgyVSO5F8">
+<tr data-page-node-id="KSJfx6vCv2s0q9PrAdYumK">
+<td data-page-node-id="SBW4hwTKWDxHtdbu4j3F6V"><strong data-page-node-id="4OZCUmU27HLBzCcrBJwPos"><!--pnid:7cdflBj88i02KZD7X6tpdO-->namespace label 自动注入</strong></td>
+<td data-page-node-id="1uOwJXkKyBcOpP6YdSbcSh"><code data-page-node-id="yQBa4jjvnwZpDLz0kFa1af" data-pnid-children="h8WMyCNg4N5aFKBo6yVeW7">istio-injection=enabled</code></td>
+<td data-page-node-id="iUd4O6jsYPAWymlLRNhSw7"><!--pnid:sxFi5Dh9tErVv6gXHiG38m-->常规</td>
+</tr>
+<tr data-page-node-id="QE8AmYVxZ3FC0C7EwefNZB">
+<td data-page-node-id="Vz5Ff1Cnh0rDPPSZPMABYD"><strong data-page-node-id="b8GGRQ1uGW5HhvCChO9YyA"><!--pnid:cB1CDkpsfmiiCmfaZcQy8T-->Pod annotation 覆盖</strong></td>
+<td data-page-node-id="kBdnh04UaMWlu13rZ4miVf"><code data-page-node-id="Arurb6ue3yBRE6FTLnsNTg" data-pnid-children="UsVbEOVUPsTl89Y5JPDHuR">sidecar.istio.io/inject: "true"</code><!--pnid:Boyp3LXowxYEmpMXBXmdWR--> 覆盖 ns 设置</td>
+<td data-page-node-id="tGnkYLk5DsRmBlz3zWV6nv"><!--pnid:1oZEiNLXup4gwjQeGhuyQB-->例外场景/灰度</td>
+</tr>
+<tr data-page-node-id="QKWp0HJGYCgnNdsf5V0WYM">
+<td data-page-node-id="HIjsjYi19nZHhkl53NaOxd"><strong data-page-node-id="oj7mxNzaY4ebwTEXA6HvQ6"><!--pnid:Yq59q8w90VAu6gjAhv6rCw-->istio-cni</strong></td>
+<td data-page-node-id="PN1MRSdwqFXsiQigIs9qVr"><!--pnid:hGdB7kK3u4Ef0LqY6xHUCm-->由 CNI 链路做重定向（<strong data-page-node-id="Z0fIXjN2atQQHeXV5ZhTJ9"><!--pnid:E5rGMFHUx48WHa4Aa5T8ar-->免 NET_ADMIN</strong><!--pnid:LhgX774ulNbPIqJYyjOmeZ-->）</td>
+<td data-page-node-id="rf79H14WLaTjAWFllgk63t"><!--pnid:z4LKo6ZWQvabFJnmblI4Qu-->有安全基线要求（禁特权/禁 NET_ADMIN）</td>
+</tr>
+<tr data-page-node-id="9X403DK2NppQjGtcUQJ743">
+<td data-page-node-id="LGIzMzeSom7in7d4sgXj66"><strong data-page-node-id="RB31LyCQlN2wAk8gPJtESO"><!--pnid:muFsEs88nrRbGqdZ5A6FvA-->Ambient（无 sidecar）</strong></td>
+<td data-page-node-id="uJlqO5kM9Q42NhdvyjXXhU"><!--pnid:6wNTrV9GNYhXlugZsN7NQm-->namespace 打 ambient 标签 + 按需 waypoint</td>
+<td data-page-node-id="au5wKiptyNKQD3NQYFLMmM"><!--pnid:T75DMwKs2LyiTPIJiI4AqF-->想要低开销与免重启升级</td>
+</tr>
+<tr data-page-node-id="GXco3FufQWHpsOICwy4vgh">
+<td data-page-node-id="d1gf6DzK9Wk654McXkNOAp"><strong data-page-node-id="rtONyw7dJE8W0bXNH1x2vF"><!--pnid:PTlbzbK2xF0s5dVd7SaA55-->手动注入</strong></td>
+<td data-page-node-id="WZLyDwoac6sRfXobdUWFxt"><code data-page-node-id="grSoisw9XZGAvPLk3FyhG5" data-pnid-children="7CaqY0buPW2549fm0MkGvO">istioctl kube-inject</code></td>
+<td data-page-node-id="waK2FZy4JnSeajqMHoOC65"><!--pnid:pwQP5KtXTIb2jeLt152YnN-->调试/特殊控制器</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="6JCMZYuq6BKliHXCBXmUww"><code data-page-node-id="vwgBevGhFFJY2BnccRmBdw" data-pnid-children="HEZ6BuUO948qQTrKmqSZL0" class="language-bash"># 常用开关（顺序：ns label 是基础，pod annotation 优先）
+kubectl label ns prod istio-injection=enabled
+kubectl label ns legacy istio-injection=disabled
+# Ambient（标签名以版本为准）
+kubectl label ns prod istio.io/dataplane-mode=ambient
+</code></pre>
+<h2 data-page-node-id="9zGdc2J45Rp8og1b0oKzNk" id="b2"><!--pnid:Ami94Zw6iTzeLzaTtxhFcM-->B2. 金丝雀发布的三种做法？</h2>
+<pre data-page-node-id="RI3njEzamnpmor1bOd5SFX"><code data-page-node-id="QNsfmjE7VYBxqtEQDQJ52Q" data-pnid-children="teWJlvuQi2JbOOHZTHfR4S" class="language-yaml"># ① 原生 VirtualService 权重
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata: {name: reviews, namespace: prod}
+spec:
+  hosts: [reviews]
+  http:
+    - route:
+        - destination: {host: reviews, subset: v1}
+          weight: 90
+        - destination: {host: reviews, subset: v2}
+          weight: 10
+</code></pre>
+<table data-page-node-id="xGurQbwZYxeeQAdg1Ba1Go">
+<thead data-page-node-id="0svys59Bpqsik4ddJQwJZF">
+<tr data-page-node-id="g9uQRDR3szyIo2on37JzLy">
+<th data-page-node-id="bu65wgIyJYwvLQwqv0VZT4"><!--pnid:RlLa5x94x8LEdsJD42GlLq-->方式</th>
+<th data-page-node-id="gIUp4Gqlap1kGNw9E7XC5f"><!--pnid:oV5wEi7mrJ8IGXyO99CdYj-->特点</th>
+</tr>
+</thead>
+<tbody data-page-node-id="0eC0R2mr2bthwT1dEuWbKp">
+<tr data-page-node-id="PE0FTclBfG2W4PwCYoHk1C">
+<td data-page-node-id="c7JLCw8bCtkfO9q1T44lcb"><!--pnid:glUvhjpqbbTVhYZ2g5bcca-->手动改权重</td>
+<td data-page-node-id="fP2napVOOUk8jNR6LAACrG"><!--pnid:637D02Q18TtD3vVvk5dZYz-->简单，但没有自动化判断</td>
+</tr>
+<tr data-page-node-id="odUXWIHKrwZrlhrJzOYU5N">
+<td data-page-node-id="2r5W9FSPi764gtWV0aFev9"><strong data-page-node-id="ldtdmrbKIKVzxqSVbTve2f"><!--pnid:Huo4Dto5xUZu1kYwoxJql7-->Flagger / Argo Rollouts</strong></td>
+<td data-page-node-id="WXueUA5t6corMCF1n5Mmbu"><!--pnid:WZYbevQEFKz3XvYDChhdTv-->基于指标自动推进/回滚（<strong data-page-node-id="92OKmjQSN2nAZizJpwBzyF"><!--pnid:ewT5s8Nm4Kj2zgfmLd7kvo-->生产推荐</strong><!--pnid:McGLzKYK1bABTrLSE3JCXH-->）</td>
+</tr>
+<tr data-page-node-id="wDDPNcHy7jVCkv9o0O3XGJ">
+<td data-page-node-id="6iKUAyMOnj4cuso3O9Raa3"><!--pnid:SczQ8WigvQyu9GgQQb57s2-->基于请求头/用户</td>
+<td data-page-node-id="w8zsqVbf14rNIyCVgHiMlI"><!--pnid:oerOFWzrXrWjLEsLOyMC1Y-->用于"内部先试"（见 A9 示例）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="5yBfXxSz22gKjcL8uCgbis"><strong data-page-node-id="6iGMGT6nKaKxo0DbF969lh"><!--pnid:qbR6exQUBJU6qLyE0SUEII-->必答</strong><!--pnid:CcJr5I4EUVKT2Nk0MBZAr6-->：金丝雀要配<strong data-page-node-id="lzcrPPWde58iiIuYzzISEQ"><!--pnid:aiwC4Hk6cPXdGMWLlME5Ft-->一致哈希或会话保持</strong><!--pnid:lVECS1op64Cx1nIvUmoAh0-->（避免同一用户在 v1/v2 之间跳），并且要有<strong data-page-node-id="Qa1SAbH9BqOFfM16JBUFMB"><!--pnid:XEzXh1HbqCBUtLiPMMwRni-->自动回滚阈值</strong><!--pnid:OiKlwXf4WssGcYUmJ7xTz4-->。</p>
+<h2 data-page-node-id="5CfOcoH6gpgkXUSVn4w6ae" id="b3-shadow"><!--pnid:kX8poEdyv8g5e24tjkvstb-->B3. 流量镜像（Shadow）怎么用？</h2>
+<pre data-page-node-id="VMiH09Vn04Duy9LxLaUamu"><code data-page-node-id="0rdsQ1BilsFmAl4j0jStFW" data-pnid-children="m1ZVP6LGSBVtWFJBv0i2b7" class="language-yaml">http:
+  - route:
+      - destination: {host: reviews, subset: v1}
+    mirror:
+      host: reviews
+      subset: v2
+    mirrorPercentage: {value: 10.0}
+</code></pre>
+<p data-page-node-id="Fcpb6y57eC9hFtdx4mvnM9"><strong data-page-node-id="RltkHEH1cu0FnjAQmXoS9F"><!--pnid:0nsowpnmnuMqAl1fO9gL4K-->必答</strong><!--pnid:0xL9CLcltT8FmtgabB8MtT-->：镜像请求的<strong data-page-node-id="zOiJw7LyZQBWkuknU8ESwa"><!--pnid:md6p4tbx3Bmd1HJHpZFVoM-->响应被丢弃</strong><!--pnid:QeNxMo86SyJGhLJ3OW2Qxd-->，所以它适合验证新版本是否能处理真实流量；但<strong data-page-node-id="MiLiOmPBqMYBI5OBUdY21Q"><!--pnid:dOS8stxABzWjQS4xYd3NJp-->有写操作的服务要谨慎</strong><!--pnid:dUOvm4Dax4iumDOR0wzXPo-->（可能造成重复写入）⇒ 通常要求影子服务"只接受不落库"或使用独立存储。</p>
+<h2 data-page-node-id="7IRq9hzmcT43jBqoAgZyN7" id="b4"><!--pnid:BT0tYOUXTpXqCVawdfMcIO-->B4. 熔断与限流：为什么"本地限流"不精确？</h2>
+<table data-page-node-id="gVz1hzm12WHogLQp5gxbE4">
+<thead data-page-node-id="rivRHvx2SY49cMYtoAMRJc">
+<tr data-page-node-id="47Tu2KwWIUlM4oZKRPiKWL">
+<th data-page-node-id="o18niIegSYwNZJavSzTPwz"><!--pnid:UxzeaG9OQGDwLuolfOeJOS-->类型</th>
+<th data-page-node-id="WHtbMxZBLl00F6U6dVVnw1"><!--pnid:qXVwRNjBt4Hrel8rfXjQtD-->机制</th>
+<th data-page-node-id="7h65wvtTmqMeSZbQyet1r4"><!--pnid:UGphOtnVrHVJlfVMhfCPLK-->精度</th>
+</tr>
+</thead>
+<tbody data-page-node-id="NRDEi4G8q3py4PiyVNujHN">
+<tr data-page-node-id="h3rCkREW8Xnnwic0Z8zi0U">
+<td data-page-node-id="KpiuzYjWBYo6DPg4XPwBDy"><strong data-page-node-id="zXfBgacFTZLqpeIt4ePwuJ"><!--pnid:pSpOUJGHYOdOXWhbpqDHmD-->本地限流（Envoy local rate limit / token bucket）</strong></td>
+<td data-page-node-id="uZJJo7E9k5yYPd6lrRPP1l"><!--pnid:IlJT4pzG9VEKrys9sEcoF0-->每个 proxy 各自计数</td>
+<td data-page-node-id="uEJn4MxSw97yxn0wCysgpH"><!--pnid:8IUQQ0SgfupZkk2QD9kixG-->实际配额 ≈ 单实例配额 × 副本数，<strong data-page-node-id="iJUk6CuzR6ygWfXak4m5oJ"><!--pnid:i9RDfiPGI5ri8U3HfxqOdw-->不精确</strong></td>
+</tr>
+<tr data-page-node-id="uR5PqjJuq7soWE8ulEsOMY">
+<td data-page-node-id="u9GefI8ERjsJyM1u3yMi1G"><strong data-page-node-id="W4VH6HKc40xSAmgES8UeZ2"><!--pnid:OZOowLiQNsUZ9MUTi55lLr-->全局限流（Rate Limit Service）</strong></td>
+<td data-page-node-id="8cncPsyMPwcWjG3qOgXNA6"><!--pnid:QJ7ZcFOz9Rmz3B84JzSXSW-->外部 RLS + Redis 计数</td>
+<td data-page-node-id="tk5l5ebJQ53Jgsrm0vduRH"><!--pnid:XoMPIDVuSwRm6PGgnpY80t-->精确，但多一跳且是<strong data-page-node-id="F4jEdrtTKD4SoivXtssQ8T"><!--pnid:lP4PMpTB8oMNG2yYvaop5L-->新的依赖与故障点</strong></td>
+</tr>
+<tr data-page-node-id="c1HELWxxYodVKrwvcErTYO">
+<td data-page-node-id="u0OIIv0fhZ8v9510z6gqjg"><strong data-page-node-id="2jbYNwcpub0PYYzdillkqz"><!--pnid:X5c9FXIZ6ndCn8iwfrhCf5-->熔断（outlierDetection / 连接池）</strong></td>
+<td data-page-node-id="pMwLaM2rGxca9JpzRkEz32"><!--pnid:oz1w2qganZeXO1DoYvtOcz-->按上游健康度摘除</td>
+<td data-page-node-id="vizHzlYxFcPEugXoQNxMqk"><!--pnid:EeA19u8FAM6RqkXbVa1XXx-->保护调用方</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="pPH3moI97HZEQvPiKTBXbg"><strong data-page-node-id="Nb9UnWb4PLgDyHwLsOpzft"><!--pnid:3z1cjD6T3DWN4mxoxGhwnK-->实践建议</strong><!--pnid:XFsYdRQcHZ1UnN0FdV7xJi-->：本地限流用于"防打爆自己"的兜底；全局限流用于租户配额；<strong data-page-node-id="DZVPmMVv3PnnPcEsLNZpBL"><!--pnid:kQGCg0EYHg0crGJMkfsgwd-->两者都要有"限流生效"的可观测</strong><!--pnid:PQPrVjvP007aWSv76dP8dI-->（否则出问题不知道是被限流还是服务挂了）。</p>
+<h2 data-page-node-id="vAIOeu6hfMSIDNLBv2hUgY" id="b5-jwt"><!--pnid:88I2HBFZEox0GfO1MTHMlI-->B5. JWT + 授权的完整闭环（常见漏配）</h2>
+<pre data-page-node-id="IpXMWDfkgJDxJp9YJeCfXj"><code data-page-node-id="58Ev7t0wceAUFeRC51ADus" data-pnid-children="yg3sBQGQ98jAijcXtGijIJ" class="language-yaml"># ① 认证：验证 JWT（不强制要求）
+apiVersion: security.istio.io/v1
+kind: RequestAuthentication
+metadata: {name: jwt, namespace: prod}
+spec:
+  selector: {matchLabels: {app: api}}
+  jwtRules:
+    - issuer: &quot;https://issuer.example.com&quot;
+      jwksUri: &quot;https://issuer.example.com/.well-known/jwks.json&quot;
+---
+# ② 授权：强制必须带有效 JWT（关键！只配 ① 不会拒绝无 token 请求）
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: require-jwt, namespace: prod}
+spec:
+  selector: {matchLabels: {app: api}}
+  action: ALLOW
+  rules:
+    - from:
+        - source: {requestPrincipals: [&quot;https://issuer.example.com/*&quot;]}
+</code></pre>
+<h2 data-page-node-id="CcCYxaU3Xxmut3wEtmFUZ4" id="b6-mtls-permissive-strict"><!--pnid:CKcnHBSWnpAU0y5s2aF38G-->B6. mTLS 从 PERMISSIVE 迁移到 STRICT 的标准步骤（落地大题）</h2>
+<pre data-page-node-id="zBs60GlpgipdRf1dj6XyiV"><code data-page-node-id="ngLKXOHiMff0z0G6cj1i0c" data-pnid-children="PEJXxbwfzjgVqtv0Iz4xMG">① 全网格设 PERMISSIVE（同时接受明文与 mTLS）
+② 用指标确认&quot;明文流量已经消失&quot;：
+      istio_requests_total 的 connection_security_policy=&quot;mutual_tls&quot; 占比 → 100%
+③ 按命名空间逐个切 STRICT（先非关键、再核心）
+④ 每次切换后观察 503/失败率
+⑤ 全网格 STRICT + 保留&quot;例外&quot;（如需要明文健康检查的来源）
+</code></pre>
+<pre data-page-node-id="OjAXxMGLOCVLjKmknnGJxf"><code data-page-node-id="zaVqpL89BNSAxkVid7Dnh7" data-pnid-children="xYoRwsRlFHvSxhbJwXF36W" class="language-promql"># ② 的证据：非 mTLS 请求占比
+sum(rate(istio_requests_total{connection_security_policy!=&quot;mutual_tls&quot;}[5m]))
+  / clamp_min(sum(rate(istio_requests_total[5m])), 0.001)
+</code></pre>
+<p data-page-node-id="mxgzuEYcJZ2rsG6Pv08YRo"><strong data-page-node-id="RJSVT3Ruula4GDkkJ5rwd9"><!--pnid:enGsrB9SAJ0FwQOwftZ0yD-->必答的坑</strong><!--pnid:r1pgQPcxJvIuYG8BcxDUip-->：
+- 某些<strong data-page-node-id="nSc4gQE5wv1cRdI20ljlT3"><!--pnid:NzEblqzpaOUVA42Y3NlFW3-->外部健康检查/监控</strong><!--pnid:KIoQ005XPFEcet1PzrZbkR-->走明文 ⇒ 切 STRICT 后失败 ⇒ 需要 <code data-page-node-id="CuTSjas3sTcVmI1Mbg7BSR" data-pnid-children="u9NTphYWGWkKSnhZzNtdFB">PeerAuthentication</code><!--pnid:5ikjubti9h75QmmDcnSlBE--> 的 <code data-page-node-id="9QuN1naeBiagjahFaQDwDi" data-pnid-children="SSQ0Y74cGKPZynYKuBTmry">portLevelMtls</code><!--pnid:qrw8ao2Ne5LNWhrzIPjBKp--> 例外，或让探测端也进网格；
+- <strong data-page-node-id="AStzSNH3aNK8C3ZmzP1moT"><!--pnid:caonvKOx8ubIWDjDfA3jcr-->非网格客户端</strong><!--pnid:rld2Q6dDW51ekgxMb8kMVr-->（集群外直连 Pod IP）在 STRICT 下会被拒；
+- DR 的 <code data-page-node-id="v0DJTzVMsqbeG5fhSYq9oP" data-pnid-children="n8xrnOyRF8Begi2kl7maiN">trafficPolicy.tls.mode</code><!--pnid:FjAiubyBr8VlZuIV3CmCoW--> 与 PeerAuthentication 冲突时会 503。</p>
+<h2 data-page-node-id="ylDW4KS0efDu7kuc7d1Vyz" id="b7-egress"><!--pnid:FbJZoqLdhDafIp5mSCJdm6-->B7. Egress 治理：三种策略怎么选？</h2>
+<table data-page-node-id="7hRcNLR0wJimdf3HBkrRhG">
+<thead data-page-node-id="8DQeyT6NJbbQPSELrhsmAo">
+<tr data-page-node-id="1tQtZzBETueDINsw3tLvqj">
+<th data-page-node-id="fbGoImr1272fDYBTuQyvGa"><!--pnid:VcQdCJ4ZEMdXqhrRsLWcrO-->方案</th>
+<th data-page-node-id="M4nZAzP28kTb3W8Eyodd6p"><!--pnid:hvXfEySgrU4YKCxtOxHpST-->说明</th>
+</tr>
+</thead>
+<tbody data-page-node-id="2GYefkHJp8qXh58fD7nD7l">
+<tr data-page-node-id="QSqR6EmieFb37FEMmXzaBX">
+<td data-page-node-id="GpLabAGf5CLzWIbzOIJj4s"><strong data-page-node-id="VY0RjVR2iJGllXbVsXXQx7"><!--pnid:L91oJtxNN5mSva6kZ08QGr-->PASSTHROUGH（默认）</strong></td>
+<td data-page-node-id="KL8uNDxPIx0pTT1fHtu7rR"><!--pnid:uahxHTndlTl45JyGIfhneZ-->允许所有出站，但<strong data-page-node-id="yJq4nLYj1FVUDeraaEjXOV"><!--pnid:QOgm636GtrXdrBv4wScI7E-->无法审计与策略</strong></td>
+</tr>
+<tr data-page-node-id="U22NZrVEHHstH9Mg5llLWK">
+<td data-page-node-id="oi3HSkRiWA75vf1rUfMoQo"><strong data-page-node-id="lDjHWCdBtFZfD5ObWohXNz"><!--pnid:sRhX5Kfe3LyookWhzdPhhp-->ServiceEntry + 策略</strong></td>
+<td data-page-node-id="iWeXK9EsOoEroLqOhjHbOY"><!--pnid:b1GvXVk1PvwbiT1FJHjN25-->把外部服务纳入网格：可命名、可策略、可遥测</td>
+</tr>
+<tr data-page-node-id="RvF01NvEmaqy9hTRlE4ITN">
+<td data-page-node-id="IardthEAwMC3T6geDQwoUg"><strong data-page-node-id="K20Pd3zDckMhXdWR1gi8vO"><!--pnid:GurWBuotcepT7DGw8JINLM-->Egress Gateway</strong></td>
+<td data-page-node-id="mxvn6r4qA1Asp1OKqShaCg"><!--pnid:56c5aLymLN47zeXTe1Fu6d-->统一出口 IP、集中 TLS/审计/限流（合规场景必需）</td>
+</tr>
+</tbody>
+</table>
+<pre data-page-node-id="cTBI9piiCmIEs8f9a2oEJO"><code data-page-node-id="VAmQqx7wkw4IQPgOG2q3Sg" data-pnid-children="7SlxxYbXQ7r5v8OWLq9UlP" class="language-yaml">apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata: {name: external-api, namespace: prod}
+spec:
+  hosts: [&quot;api.external.com&quot;]
+  location: MESH_EXTERNAL
+  ports: [{number: 443, name: https, protocol: HTTPS}]
+  resolution: DNS
+</code></pre>
+<p data-page-node-id="fvUmPgSr2upLZNGUMfAIDM"><strong data-page-node-id="ERf7f3d4cobVhVhEWGvk6A"><!--pnid:ur43QO9YLfo63Oe6d1l8lI-->配套</strong><!--pnid:TPISG270wskKtixoXXeLCa-->：<code data-page-node-id="I6AWLuptt0HJOEeSooDQFa" data-pnid-children="qUnRmO2JiYapbq5egya75e">outboundTrafficPolicy.mode = REGISTRY_ONLY</code><!--pnid:QmEXllHtHS7aZk8JiM1JwI-->（只允许已注册服务出站）⇒ 防止"偷偷访问外部"，但需要先把所有合法外部依赖注册全（<strong data-page-node-id="w1iadUyrySdE0jiWdIgwsr"><!--pnid:MklWwkFALbOgAGJJLJsAMe-->这是最常踩的坑</strong><!--pnid:JKUZ5NB3Wv8t5nHrggvnSz-->）。</p>
+<h2 data-page-node-id="9kVcl7kK9hfJcpmTIPl2Sp" id="b8-gateway-api-vs-istio-api"><!--pnid:G5ML1gafg1pzxQQoK1BCal-->B8. Gateway API vs Istio API：未来怎么选？</h2>
+<table data-page-node-id="vpyDKaE7uXdqqc1U59B2xD">
+<thead data-page-node-id="R7HSjRmfR9DWpNr3MWK7xd">
+<tr data-page-node-id="uJhh3xMcMBE9DyxKaAQTS2">
+<th data-page-node-id="rbSniJYLNgVvbu1GPjZJdo"><!--pnid:j6VzeT18yCVi0jV9OWIXjA-->维度</th>
+<th data-page-node-id="7ww1jEGnGl3sWVrCgrcYrw"><!--pnid:36AoE7TdNFd9R80SQq8Wha-->Istio API（Gateway + VirtualService）</th>
+<th data-page-node-id="zreDmVtLbyvZnNyP0rP9VX"><strong data-page-node-id="0J4tbmTwjPMXe54xiyXnBs"><!--pnid:r2SoLu7wnU2Dzy2oVh0A2k-->Kubernetes Gateway API</strong><!--pnid:wXYevkHBMoVwlu5lm8Fl1R-->（Gateway + HTTPRoute）</th>
+</tr>
+</thead>
+<tbody data-page-node-id="F6gikBUE2NPsM4VvCk9qkF">
+<tr data-page-node-id="2i0EjegGIzSKIdsfu7FdUD">
+<td data-page-node-id="IvyUmFssL1ZxYVq60WQOLw"><!--pnid:InZMmZIazMVlwWsV5ANMrm-->定位</td>
+<td data-page-node-id="zhSDeMkZQGfwWOiIIT5HeL"><!--pnid:xE8CN9iKJFXwbTktX9G5Sh-->Istio 专有</td>
+<td data-page-node-id="xGTbKb13MaO7uhj00blWxW"><strong data-page-node-id="qIq5XOji7RB0drvXvd9Vha"><!--pnid:w04qNedL6CdWuEx7pu5PjE-->K8s 标准</strong><!--pnid:0Y6rUspZFKYETGwJrKr6Ab-->，跨实现可移植</td>
+</tr>
+<tr data-page-node-id="CdzToH4XFBbV2qYR8GMHvd">
+<td data-page-node-id="nCvjyB3vLPYMBGyAvA2Hxm"><!--pnid:mRcwzoKmBXDtUXnH2QY4OK-->表达能力</td>
+<td data-page-node-id="xXcvSkWbNeQrJhV9bQBnFD"><!--pnid:q5vJwGNnVmPRMVNgZBsT8N-->很强（含 subset、DestinationRule）</td>
+<td data-page-node-id="k9XUIj9y9nCymPlGrPv3mK"><!--pnid:u6GG0vz4mQXSsG7VEwEtiR-->标准化，部分高级能力靠实现扩展</td>
+</tr>
+<tr data-page-node-id="KP9shGEBLNyBJdpckWY5h9">
+<td data-page-node-id="3VSx9YI4naBe7BI3s5VYCb"><!--pnid:5Asu8DufsmQgTZSFH5kFsN-->团队分工</td>
+<td data-page-node-id="GxjL7WOpPUzIRdqZ2vWdH7"><!--pnid:wmnx8yc0S3tQy0TSs7kOgf-->单一团队</td>
+<td data-page-node-id="qeDgIftYSd3tXCrddTdgsc"><strong data-page-node-id="n3xaVWqYHjVHvcHNhh2s3m"><!--pnid:o3HefSysCLi4tvHRMjQCZA-->角色划分</strong><!--pnid:ssRwzqPDEW08mA7YFOF4mO-->（基础设施/集群运维/应用开发）</td>
+</tr>
+<tr data-page-node-id="GeSfdfEexzbD0xB9PbhKsg">
+<td data-page-node-id="YXnusdENJCEOVuJMh7z9It"><!--pnid:sIFD4DsOxlG88lXSryw0DF-->演进</td>
+<td data-page-node-id="SkLtwaoBYzLMrK07cIq5S8"><!--pnid:uRJinaLHFBldayG0d6BcxS-->仍支持</td>
+<td data-page-node-id="iv1IQf5WH0IjPvOOV0s4Os"><strong data-page-node-id="etHnZthMfH2HffQ50RJgJD"><!--pnid:JdpFc5v9luf59VcR0At2Ef-->社区推荐方向</strong><!--pnid:0yO5dzItFgz1FLMJoz2TVG-->（支持程度以版本为准）</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="GptH07ZkIlCpvSZXjA8mvG"><strong data-page-node-id="7JcKo0sL8eFWZGDMtXSCPN"><!--pnid:7gDGxgXSucLpX9bDTWAoK6-->建议</strong><!--pnid:tLmafciXBxT6Rd77HP2xR3-->：新集群入口优先 <strong data-page-node-id="rx6p05qwxH2zLdy5qAzPS6"><!--pnid:eQqiGdOO0jJ7HdxfDwuobV-->Gateway API</strong><!--pnid:J84jq53XgzgqfXHIo2DcHV-->，东西向与高级流量治理仍用 VirtualService/DestinationRule；迁移要按服务逐个验证（<strong data-page-node-id="NQgpb7TfUmstQUh3564MfI"><!--pnid:GUumFxyrLuMh9amvaavJs2-->不要一次性切换</strong><!--pnid:fhAUqdv7rh3pYU2V7ds3ax-->）。</p>
+<h2 data-page-node-id="uWEB7Zfm4EjqJMgc0M1riw" id="b9-ingress-gateway-vs-ingress-controller"><!--pnid:KW2V43JvY55KH0WXmD7ZJH-->B9. 网格内的"入口"选型：Ingress Gateway vs Ingress Controller？</h2>
+<table data-page-node-id="BjCAxqyMAAMIQsmu7fNenJ">
+<thead data-page-node-id="FK51XIG3TRbkPtWKpLNono">
+<tr data-page-node-id="BQWe2uP9iucB1iklYADi0m">
+<th data-page-node-id="tiA0FWtCUDUja46IolyYxm"><!--pnid:eAMBuNon53PnLGBRtDgB0i-->方案</th>
+<th data-page-node-id="7B1Lc4ovSjQdRZc66p85pS"><!--pnid:2MAXzdyVrgVU9DtIiqnqdR-->适用</th>
+</tr>
+</thead>
+<tbody data-page-node-id="0SzGJRJtOrX13F640etOYU">
+<tr data-page-node-id="dIeKPfHUXqh6i9TT0aUEna">
+<td data-page-node-id="Rpkfeivo8jHKAzSh29DL5H"><strong data-page-node-id="00fV9qAnnLLYxys3B8SxW5"><!--pnid:Fo0bvj82OxoglMlkFH7IBq-->Istio Ingress Gateway</strong></td>
+<td data-page-node-id="qjyfxUrFFvEdMhCVzCQcm6"><!--pnid:7Fp7Qof570BnM7jPJjNIx5-->已经用网格、希望入口与网格策略/遥测一致</td>
+</tr>
+<tr data-page-node-id="Pbl0vpG4i7T6YmS20brDgY">
+<td data-page-node-id="wnBdHR97DZuKNSHV2IfoZf"><strong data-page-node-id="dmM3ib7W41UtM0ZSQMNVPK"><!--pnid:ZB6zV6nZ69reu9iYTvaGgK-->独立 Ingress/Nginx + 网格</strong></td>
+<td data-page-node-id="qeRulsM38zqzb87UBnmqrp"><!--pnid:fRRStbzrHhhObGZW5VfvQe-->入口团队与网格团队分离；或入口需要大量 Nginx 特性</td>
+</tr>
+<tr data-page-node-id="sX5dsw0jtVCafTqDzLOKZG">
+<td data-page-node-id="O9QhaWNarLQZJCHc8DYI1i"><strong data-page-node-id="Pp0bC4sqM2FINLgBKP0DEV"><!--pnid:oV3yuj7eCHn0eNcXZxjEts-->Gateway API 实现</strong></td>
+<td data-page-node-id="iSWGPEw86pxtUIh3lroq67"><!--pnid:c87kLFipoHcuS0DX081y2V-->想统一南北向标准</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="2sxW2zdGuoBOtHFzZ4YxJO"><strong data-page-node-id="OuL3X7mIAmIhBrtJV0M43h"><!--pnid:25zumImmvJHq7dhFEbq9ye-->必答</strong><!--pnid:UN5RTm7CMZxzrm6tCmat4X-->：入口是<strong data-page-node-id="c2HhI7NL9DxKKLhWz5HAzY"><!--pnid:YuXwV9psQiazGRrHUbYBal-->单点故障源</strong><!--pnid:iqKQsC2wnG7lmx7d6Muinz-->，不管选哪个都要：多副本跨区 + PDB + 优雅终止 + 容量压测 + 独立告警。</p>
+<h2 data-page-node-id="0Eaa9Z1zaqFHcUQ8diS4Qb" id="b10-sidecar"><!--pnid:On1pZIqgC0fPtonWuNLwPr-->B10. Sidecar 资源与启动顺序调优</h2>
+<pre data-page-node-id="KGJR8Hlt2iJP6n3BlyFIUn"><code data-page-node-id="lnmNNXtUv1PwHriqNIxA8T" data-pnid-children="EmEguxzzpBOX9fmb3YD6fM" class="language-yaml">metadata:
+  annotations:
+    proxy.istio.io/config: |
+      holdApplicationUntilProxyStarts: true
+      concurrency: 2                      # Envoy worker 数（按 CPU 限额实测调整）
+      proxyStatsMatcher:                  # 裁剪统计，降低 CPU/内存
+        inclusionRegexps: [&quot;.*upstream_rq_total.*&quot;, &quot;.*circuit_breakers.*&quot;]
+    sidecar.istio.io/proxyCPU: &quot;500m&quot;
+    sidecar.istio.io/proxyCPULimit: &quot;2&quot;
+    sidecar.istio.io/proxyMemory: &quot;256Mi&quot;
+    sidecar.istio.io/proxyMemoryLimit: &quot;1Gi&quot;
+</code></pre>
+<p data-page-node-id="Xu5UoVZXzoc9ltl4LxLR5L"><strong data-page-node-id="WR4SbgVnnwBhJdCtsTGH37"><!--pnid:U5x1osXXyvl1bRQeBzhmHY-->必答</strong><!--pnid:yG8pNiQbVkzzpfjA1wUgLn-->：
+- <code data-page-node-id="JqgNNSoac7PUxPsv6XWByX" data-pnid-children="mwv3KAh2UeegnY14SF6H3B">holdApplicationUntilProxyStarts</code><!--pnid:dOWpg1m4hGD40KLKqRnmdU--> 让<strong data-page-node-id="K2iqegUO8kehzxLyeQwW9c"><!--pnid:gQNxb0S4yEpXotxTc1Xikp-->应用容器等 sidecar 就绪</strong><!--pnid:37GrF9PbGX5cMbmwSaYO0K-->，避免早期请求丢失；
+- Envoy 的 <strong data-page-node-id="sn9vW2qgeBMhrnptOSddPi"><!--pnid:aYuZsmLAN2ZQgWsxKMsMVE-->CPU/内存随"可见服务数"增长</strong><!--pnid:rJEhSNMHy6kER26kgziZ9x--> ⇒ 资源调优必须配合 A7 的配置收敛，否则加资源只是治标；
+- <code data-page-node-id="ujb3wYg501aCR6PX9Xn4TQ" data-pnid-children="HPJhgemUUPjscawPXD826S">proxyStatsMatcher</code><!--pnid:mFebjOazTYcbuFHoYLxaV6--> 裁剪统计能显著降低 Envoy 内存（<strong data-page-node-id="ue7agsZfTfzXKYHurLcJm6"><!--pnid:UpSfwY7BxAXstxoHeaJQG9-->大规模必备</strong><!--pnid:FWKe96d2HqrsOiaAKowIl4-->）。</p>
+<h2 data-page-node-id="HRQfFCuNVNfz2vbSsvQfph" id="b11-springsdk"><!--pnid:gFAM34wfctZdnAKiXsCXwR-->B11. 与 spring/SDK 治理共存时的注意点</h2>
+<ul data-page-node-id="OOMV2Q1021yWVOWZV92M9e">
+<li data-page-node-id="hjLvLLZwmP8GUdJ7ujdtoV"><strong data-page-node-id="V84BNxLKu5e46F3xdyjkoX"><!--pnid:ybr9HopDW0sk0EFZoVOJor-->重试叠加</strong><!--pnid:frvd4kIga2gaj5aLXBtcFq-->：SDK 重试 × 网格重试 ⇒ 放大倍数相乘 ⇒ 必须统一约定（通常保留网格重试，SDK 关掉或只保留少量）；</li>
+<li data-page-node-id="Xo1CVN9QbTH8FcP7oEbiJu"><strong data-page-node-id="6m2oBDrcEJsvb1VrFyy1VN"><!--pnid:MbcSQbpZz4GrpClKDO3JnT-->超时叠加</strong><!--pnid:KeN0FNrkKHNEA9zvShc9Kf-->：外层超时 &lt; 内层重试总时长 ⇒ 白重试；</li>
+<li data-page-node-id="gqztUCNHAUtZJyto4wT3jk"><strong data-page-node-id="Yp0YUXzvTGOJ7Jqtgqw52x"><!--pnid:A2N5OD1xrxTwxKHASLN3iY-->服务发现冲突</strong><!--pnid:s8qBMkT4BP0GPMFOagbDSu-->：SDK 直连 IP + 网格路由 ⇒ 绕过策略与遥测 ⇒ 应统一走 Service 名。</li>
+</ul>
+<h2 data-page-node-id="AINK7KzvQhdOfCsgAoZ12V" id="b12-cni"><!--pnid:gAaZTrfFzPzVrtLewnSjvH-->B12. 网格与 CNI 的配合（与网络篇联动）</h2>
+<ul data-page-node-id="yNh1juwz46ZnjDmc6DpNzG">
+<li data-page-node-id="HnCp9q7h75ZE93zkNFJ6sI"><!--pnid:Z0kpa48BeDkbpom6T8wP8M-->Istio 依赖 CNI 提供 <strong data-page-node-id="D3n9g0mwrvWlVpVUKuEi2W"><!--pnid:JauZCghLN8mtdOPr2YUUHA-->Pod IP 可达</strong><!--pnid:lNCqr5vLSTn9qanV0zmnuo-->；Cilium 的 eBPF/kube-proxy replacement 与 sidecar 的 iptables 拦截可以共存，但<strong data-page-node-id="5hMSQcClX2EmHhPwEDtE3L"><!--pnid:3lN4h2uEi7HrAwIBaZTX5h-->必须逐项验证</strong><!--pnid:VKT2KVE50I6rO8rr1t35Wf-->；</li>
+<li data-page-node-id="uiD4TpbuMw9IU7vdl8EcOP"><strong data-page-node-id="iFSkIvtkHEVURj0IP7u5ov"><!--pnid:zomieA1JohAEyBdV7Xm9SX-->Ambient/ztunnel 与 CNI 的耦合更紧</strong><!--pnid:U7tNaYrvfXf5QEj6r00B2e-->（依赖节点级转发），选型时要看官方兼容矩阵；</li>
+<li data-page-node-id="h90kEKSHVovdoOYEb1pqsm"><!--pnid:Nb2eYcCjEusjpYNKTMnP1l-->NetworkPolicy 需要放行：<strong data-page-node-id="PQRZznzPCio9BjS47JsR2w"><!--pnid:ogAURmhEGWsBeHkSHaP2Nb-->istiod（15010/15012/15014/15020）、DNS、以及应用端口</strong><!--pnid:8FQb0zxYqABlE6RuxsVp8k-->——<strong data-page-node-id="dC98NzD8k8ZePFGoJegu4v"><!--pnid:Xd3OehjAzhQ51TM8mbJbUr-->忘了放行 istiod 是新 namespace 启用网格后 Pod 起不来的头号原因</strong><!--pnid:GNYrViUiompp2TGpP4k7aO-->。</li>
+</ul>
+<h2 data-page-node-id="cjEKBp6cdbIICN5CQA3iPA" id="b13"><!--pnid:RYetoe03yqYcybszAK6sUS-->B13. 常见"网格引入后变慢/失败"的现象归因</h2>
+<table data-page-node-id="899Z1BZOvyU9MsUsttdU00">
+<thead data-page-node-id="ecdtmsuWEux1Mf0QAXQpLe">
+<tr data-page-node-id="dwHppMcBlmFZ1sdUgwbNvR">
+<th data-page-node-id="Tsp86F87T3qzxsoudUjF3r"><!--pnid:79WTIZG43xeA17qrur7WLG-->现象</th>
+<th data-page-node-id="MRCU9slhtU4dIaO3PXs0DP"><!--pnid:Jq54R6agnEa8G1RmzqbmL6-->原因</th>
+</tr>
+</thead>
+<tbody data-page-node-id="YIsN9aJEoqBKJ2CHC1DtQX">
+<tr data-page-node-id="cQyoZx6m847BkTzazZrqNQ">
+<td data-page-node-id="xdzcwYyTywYwNKTzqkMw5x"><!--pnid:Ag1Yx3j8ElVkbOLz1KZvH4-->Pod 启动变慢</td>
+<td data-page-node-id="IZ1J8wRtq6CRzEym1iR7IS"><!--pnid:wxkZcwGEfPrnhcBVYx4jZR-->sidecar 拉配置 + <code data-page-node-id="ndOAzLoYil1iJTeP8gC8F3" data-pnid-children="pQiqTdL6MqJBaPV8iVKkZB">holdApplicationUntilProxyStarts</code><!--pnid:Xw79wOO1ys9rU3eAxgnB5G-->；或 istiod 压力大</td>
+</tr>
+<tr data-page-node-id="010uAY4nnw7ge0rJxgOLWP">
+<td data-page-node-id="XKnYRXNdjzc7ibYAvEaDNR"><!--pnid:XjtkScdqSbpLQWOh5ImMjQ-->探针失败</td>
+<td data-page-node-id="m5HfODC7NoPoEYrZ3k3le5"><!--pnid:ldrlH62gHwDUvQIRQ85teD-->探针流量被拦截/未放行；或 sidecar 未就绪</td>
+</tr>
+<tr data-page-node-id="MXAq4ARgfMwk0xlLgfnOLU">
+<td data-page-node-id="C3FuHvcrEwNJxmln1p0dgE"><!--pnid:ZUVuqrMo7QmzpHZ8xnGa2q-->P99 增加</td>
+<td data-page-node-id="zDbSxyDGbbHdUNfAmcD6NA"><!--pnid:0rC2bowPtEctcVaz09yn2r-->每跳多两次用户态代理；连接池不足；HTTP/1.1 未升级 HTTP/2</td>
+</tr>
+<tr data-page-node-id="MQLotMhidzdWrqYbRUFj02">
+<td data-page-node-id="7QSKqwLhsXVpfPtg4YsabV"><!--pnid:RFKIBZijtd7jFvXl3354tn-->偶发 503</td>
+<td data-page-node-id="Vl0yE8BBNpH8S40kmOQOPj"><!--pnid:K6SMrNcazGyIAtvnCGqrX0-->mTLS 冲突、熔断摘除、Endpoint 变更瞬时空窗</td>
+</tr>
+<tr data-page-node-id="qOI3Kmyn6YzhbcMct8hpPo">
+<td data-page-node-id="fdJVPRjsT0PRNAQnXveYXC"><!--pnid:nStXzYqugwUT9k97g9q9ZJ-->内存暴涨</td>
+<td data-page-node-id="ovAiEf6y8R1T4qzDAdAH5h"><!--pnid:20CAs59thsd10uAG1We4At-->配置全量下发 + 统计未裁剪</td>
+</tr>
+<tr data-page-node-id="NtEMJdyn2A9N15rz7NoZDq">
+<td data-page-node-id="p1oLxUoCxCPKrIYE7XqB3Y"><!--pnid:5Zv317Orh9A6Mph5uc2Hp5-->控制面 NACK</td>
+<td data-page-node-id="UNxZObfOH0RG8Qyc9dglfq"><!--pnid:6DUTOeAqFEfLZGOgsEerIc-->配置错误（DR/VS 冲突）</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="Lj4xmU2EjpUGZXn8HN8BG1" id="b14"><!--pnid:1Uwnq5Vdtm28I45bq894R0-->B14. 网格的"渐进落地路线"（架构题）</h2>
+<pre data-page-node-id="ts8ljp9UPJt4RAZc00Ppvc"><code data-page-node-id="Qs0ugaDTkUETiE5M5687Pp" data-pnid-children="ApqY2jW5mzPMoHG8ewDu56">阶段 1：只做可观测（注入 + 遥测，不开 mTLS 严格模式）
+阶段 2：mTLS PERMISSIVE → 逐 ns STRICT（拿到身份）
+阶段 3：超时/重试/熔断统一到网格（去掉 SDK 重复实现）
+阶段 4：金丝雀与流量镜像常态化（配合 Flagger/Argo）
+阶段 5：授权（AuthorizationPolicy）按服务逐步开启
+阶段 6：按需引入 Ambient 降低开销 / 或按需 waypoint
+</code></pre>
+<blockquote data-page-node-id="SzrnAt8ES7nD52ZqQz23Zr">
+<p data-page-node-id="yvrJkdsrtcaa0PFQLUChic"><strong data-page-node-id="FZ7DSswWQLMpfk7DAwdhzv"><!--pnid:libei9xLXMTwoG7Verdlv3-->关键原则</strong><!--pnid:NMptjKIsfRpqbfGUs5aPkt-->：<strong data-page-node-id="vOfrP4r5J8f8rXuqoWDFye"><!--pnid:pw6l7qxge8zNtrhxCMFF6q-->每一步都要有可回滚开关</strong><!--pnid:THIiU2livAJWie0A7Xw5Da-->（label 控制注入、CR 控制策略），不要一次性全开。</p>
+</blockquote>
+<hr data-page-node-id="aOCi5sHPHoexVLnKXKBN4R">
+<h1 data-page-node-id="Kv1KyYdkdPZLz7vSdZZAA7" id="part-c-12"><!--pnid:RlJ818vGF833ywzUk418LX-->Part C · 大规模集群网格优化篇（12 题）</h1>
+<h2 data-page-node-id="B3K7elPEnwWPikQwFwbJMp" id="c1-istiod"><!--pnid:M9eAMHKUehQJr7qix3UCBW-->C1. 控制面推送风暴：为什么会"一个变更打满 istiod"</h2>
+<p data-page-node-id="fyU5FQWOIARha8EcZBsgce"><strong data-page-node-id="tw0wvAmD1fKfO6DdsDZ1Us"><!--pnid:mKg1e2v9VthiFhxdL4QAKL-->机制</strong><!--pnid:vlkIfYJrmsz6gE2yb1I0KO-->：Service/Endpoint/VS/DR 变更 ⇒ istiod 重新计算 ⇒ 向<strong data-page-node-id="fsOxBvWWmMoXTpLVHuWYQa"><!--pnid:vTzpfCzjFOa0cadIvrvicQ-->所有相关 proxy</strong><!--pnid:QnHbi2szwrVrkmgROFiRUM--> 推送。服务数与 sidecar 数都很大时，一次"热门服务"变更可能触发成千上万次推送 ⇒ CPU 打满、推送延迟、配置滞后。</p>
+<p data-page-node-id="s1cs1K73Eqv9Du4mv9ikry"><strong data-page-node-id="rXD2ecwrgsIzb9gDufRdeI"><!--pnid:3Lp2DHNwlIYzTKNca6AOyj-->治理</strong><!--pnid:G2c0CAioGY1FnDzX1MR3Yk-->：
+1. <strong data-page-node-id="T8lUZEUyeOb3QAmrNiXOvd"><!--pnid:Fz0ZpILaEaKSypAuEKoWs0-->Sidecar CR 收敛可见性</strong><!--pnid:rmj2J69Jp298H58MNzNJyh-->（最关键，见 A7）；
+2. <strong data-page-node-id="qhkNCYLuwzwuzqnx7vboF8"><code data-page-node-id="uHkY43paVg5kF8n6oqV4yQ" data-pnid-children="Vznfqa65F7uNEJJjzdbQCb">discoverySelectors</code></strong><!--pnid:DPq0Fp4f1IdFo2nFFW6juf--> 缩小发现范围；
+3. <code data-page-node-id="rJykgOkAQZzFvWCyFFPiBS" data-pnid-children="11WHgSlDhg1ckjSH0OrKho">exportTo</code><!--pnid:h0rsvbLR3YX8ftVMewTq6q--> 限制 CR 可见；
+4. 控制 Endpoint 抖动频率（Pod 频繁重建会让 EDS 不断变更）；
+5. 关注推送相关指标与 NACK（见 C10 告警）。</p>
+<pre data-page-node-id="DgvfldWSR7Mh93PLHDDi4b"><code data-page-node-id="oWJ3KAq5ZnTBHo7ojFYzWE" data-pnid-children="9CwWudrdCUpawJYX2I6EpI" class="language-bash"># 直观判断配置规模
+istioctl proxy-config cluster &lt;pod&gt; -o json | jq 'length'
+istioctl proxy-status                # 看有多少 proxy 处于 Stale/Synced
+</code></pre>
+<h2 data-page-node-id="DYGw43i3BA8bNnA2YcZcYI" id="c2-cpu"><!--pnid:rHjFppYQ7E8TG7SMCBM5xh-->C2. 数据面内存与 CPU 的主要来源</h2>
+<table data-page-node-id="MAqINsSjj4dVRTn9o5f2wy">
+<thead data-page-node-id="48TROOeYYmNtm3KDp0ARA2">
+<tr data-page-node-id="I0kvXiihbvAg9qtIVIjs1F">
+<th data-page-node-id="d3foptQav4ykY6IotGnZ4h"><!--pnid:8nrvE1AYb8nD68d7G7SQzS-->来源</th>
+<th data-page-node-id="v7OfCpqwVKR7MfFmo6t4eW"><!--pnid:mtyoWfxZeM5jxVGHB5NrGP-->治理</th>
+</tr>
+</thead>
+<tbody data-page-node-id="TkMSEjRHBf9uZfZoK2fqNL">
+<tr data-page-node-id="1bcjYTiJzl08eXmH8AbRGO">
+<td data-page-node-id="4uvFJ6mRHutASEwckJ7ZtG"><strong data-page-node-id="rLBTY4AZLVi37ik56HnpzL"><!--pnid:NE0y7OYhHgZH86HuSNRsJp-->可见服务/配置数量</strong></td>
+<td data-page-node-id="lpp6sIZ5Lm9wvsPMdVHkRX"><!--pnid:K080QJqefvtBT3un1qCyl2-->Sidecar CR + discoverySelectors</td>
+</tr>
+<tr data-page-node-id="kqLenuUTNRUIVAeEz8ULCa">
+<td data-page-node-id="8aoOlMLmFGNxb7Di4sduI6"><strong data-page-node-id="gRM70VxGa3wNedUm1Ym4Gi"><!--pnid:0WdX6N38Zln5zytAK5sWWs-->统计指标基数</strong></td>
+<td data-page-node-id="9nPmCF57mCSTJJYdQyZCqy"><code data-page-node-id="7oOrafmm8seBQu9iXYxdDu" data-pnid-children="dqQ3UZcuQea06gtZfHOTYj">proxyStatsMatcher</code><!--pnid:wg0kngUWqXOGNqOsbpySS2--> 裁剪</td>
+</tr>
+<tr data-page-node-id="j6aQbNDYGMRlZrgqE7md1g">
+<td data-page-node-id="OwdruS7rI53CbPMxzow3cI"><strong data-page-node-id="rKi61uIqufQQOhGZdeHAxI"><!--pnid:zXtfSZqULU1dYdetWSO0tZ-->连接数</strong><!--pnid:ww2IpqGf3pPV7b5U8oTuPw-->（每个上游连接池）</td>
+<td data-page-node-id="MccqxtyWySWIBlqf9aQz2X"><!--pnid:XM91RhR88sbXI9V7fHxZT2-->调整连接池上限、开启 HTTP/2 复用</td>
+</tr>
+<tr data-page-node-id="J3KEZwnPsSDh8jX5NZBrTH">
+<td data-page-node-id="caQH2lCUtmEW0R75qpcOwY"><strong data-page-node-id="nhrVTaVbfrAXEyLawnFUj8"><!--pnid:GcTorei8N3tgzACqmTULmL-->访问日志</strong></td>
+<td data-page-node-id="QBwYaJSzD4lmaZCH48bLWM"><!--pnid:f9URXv0Y1fBAdLxzRXkQKE-->按需开启 + 采样/裁剪字段</td>
+</tr>
+<tr data-page-node-id="KfI158aaq0uHFZbuxrp4Vb">
+<td data-page-node-id="7wFKgJK9v60D8b6291n4aj"><strong data-page-node-id="TZ8XHSgzcbQHzd1Ilw59xh"><!--pnid:LKadwqXzWDxcyeMKGFkRIZ-->Envoy worker 数</strong></td>
+<td data-page-node-id="3azHM1rR9lWc54zp8CIfAQ"><!--pnid:JYDJ2JfMpLByW6KRQF2wKV-->按 CPU 限额设置 <code data-page-node-id="zz6T1urQja3UCecycWp9v7" data-pnid-children="pAuF0NbWfAyCbirGwR3l0Y">concurrency</code></td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="jei8oamfbU4rQbkGnddON1" id="c3-prometheus"><!--pnid:DKqMMskPFUTVkY5RLkkmve-->C3. 指标基数爆炸：怎么把 Prometheus 救回来</h2>
+<pre data-page-node-id="RpwnwHCrmu4Sfko6uA6Ir0"><code data-page-node-id="3V4ZXnqGI8yMabcYK5ksXV" data-pnid-children="Ngam5SMBn8gv580UXeYKQh" class="language-promql"># 先看基数（最直接的证据）
+topk(10, count by (__name__)({__name__=~&quot;istio_.*&quot;}))
+# 看时间序列总量增长
+sum(scrape_samples_scraped{job=~&quot;.*istio.*&quot;})
+</code></pre>
+<p data-page-node-id="dsyy3N1lCSrKda3oCumKP7"><strong data-page-node-id="fGVbIA2YU98jHL0GB82C2Y"><!--pnid:iLjiLCjEYn0fWackibdsEQ-->治理</strong><!--pnid:vz6iSxSOnfioHS9wCqgHsj-->：
+- <strong data-page-node-id="zKB6YWEKb8nfSrYjUDzlDG"><!--pnid:Paf9oxZVTcIL4U6oJY4vwl-->Telemetry API 删除高基数维度</strong><!--pnid:7hlsy2s5RWgdgd2QEfeNoY-->（<code data-page-node-id="XRnn1sRZiyte8XK8S5SXDX" data-pnid-children="v9czpGzrgEHFUWmp1tUUdz">source_principal</code><!--pnid:umM7G2yDQBuJvDmkIhVj9y-->、<code data-page-node-id="NytrciSfEgYBTUPetQ0nfz" data-pnid-children="UTfsanLfMn2pv5gmmdSrb9">request_host</code><!--pnid:jQxHbzZrA6ocWCzTRCtIia-->、<code data-page-node-id="nc3NJBHXYOzp0lgAvmY9gq" data-pnid-children="MnwImuyt2T7e2YO5JUGW6d">response_flags</code><!--pnid:fMwZilhHhkQezMAOZ7A3fl--> 等按需保留）；
+- Prometheus 侧 <code data-page-node-id="zlUKtvjBwJSxGQ3WD2TTOd" data-pnid-children="ZpxO2LQt8kL6Bk5bh0TnWC">metric_relabel_configs</code><!--pnid:1Veo8MJvjw9h6d78pAUECj--> drop 高基数标签；
+- 关闭不必要的 CLIENT 侧指标（保留 SERVER 侧即可覆盖 RED）；
+- 按命名空间分级（核心服务保留明细，其它聚合）。</p>
+<h2 data-page-node-id="J1QPqZH7LfkN6w2x3jlxr5" id="c4-endpoint-eds"><!--pnid:ofGAIbsKXCwQR9jckMK8cT-->C4. Endpoint 规模与 EDS 更新</h2>
+<ul data-page-node-id="CZw4zy7RLwJbddtcWxKYDI">
+<li data-page-node-id="2L0Br04HbF4URDav6Z8M2t"><!--pnid:xQpPMBILhGSLieQEg31Skk-->大服务（数千 endpoint）的 EDS 更新体积大且频繁；</li>
+<li data-page-node-id="ge6WwqwGs8rgyPoV9oNcgo"><!--pnid:tWSnvuGzdQO3xpvkQ8RQ2Q-->EndpointSlice 已在 K8s 侧降低变更成本（见《控制面篇》A6），网格侧要避免"每次 Pod 重建都引发大面积推送"；</li>
+<li data-page-node-id="Um8DAyrzVQ9SZLw49gRzFK"><!--pnid:ZmdIL6u6N3CszNzANwX0FG-->治理：稳定 Pod（减少不必要的重建）、合理分批、观察 <code data-page-node-id="YZKykV6CnAyN80hxxWhlHH" data-pnid-children="GihTf7lhuocY86h2ybj6C0">pilot_xds_*</code><!--pnid:VyCszHKh9HiKBSvGVgYkSd--> 推送量。</li>
+</ul>
+<h2 data-page-node-id="p5xl9dfiLgLGxhvgSyvOUV" id="c5"><!--pnid:vb3sfHDPIioyGdhvChACMu-->C5. 网格对延迟的影响怎么量化？</h2>
+<pre data-page-node-id="VAbSzlws8BN2ZXb6LKudub"><code data-page-node-id="tois16p8FEj9qvWbQLuKNP" data-pnid-children="hjzHAx4aTi8spazxInHlnz">单跳成本 ≈ 出站 sidecar 处理 + 入站 sidecar 处理（两次用户态转发 + 可能的 mTLS 加解密）
+量化方法（务必实测，不要用别人的数字）：
+  A/B 对比：同一服务在&quot;网格内 vs 直连 PodIP&quot;的 P50/P99
+  指标：istio_request_duration_milliseconds（SERVER 侧）+ 业务侧 P99
+  控制变量：同样 QPS、同样副本、同样连接池
+</code></pre>
+<p data-page-node-id="aSAyvTfFtCjI1N7mBkYB7b"><strong data-page-node-id="cJ8bE6RHx4HI72cX4JT7bd"><!--pnid:MGx1LGiW2sbWbOZaoEZYOl-->结论口径</strong><!--pnid:WXGgU7wtV9umFBMA1EHsIu-->：网格带来的是"<strong data-page-node-id="xXBVBtiTiR4Eqmihk0Z1mr"><!--pnid:RCTM6PQ53NLkBghWvQiMUm-->可控的常数级延迟成本 + 可观测与治理收益</strong><!--pnid:m2XLKQCUT0Q14xjcA4Ixcx-->"，是否划算由业务 SLO 决定；<strong data-page-node-id="HxDBCSxI66hT6WIm45oWyE"><!--pnid:ell3XTWNWSx2sYSnNHYdyj-->延迟极敏感的核心链路要单独压测</strong><!--pnid:m0rEzjBepXzsjFvPUjlQsC-->。</p>
+<h2 data-page-node-id="J27CVX6xJT5sMuzIDA2cCt" id="c6-ambient"><!--pnid:FgygHYqfY7O0LNIL5nHFyt-->C6. Ambient 在大规模下的收益与限制</h2>
+<p data-page-node-id="PeMw2UagddJDneJFi9BQR1"><strong data-page-node-id="MxbV90tgLYmNAZ4uA3Kiaa"><!--pnid:Bv6NL97lZypHeSzqkXRvIb-->收益</strong><!--pnid:XI7h38MUtw2eAxhAXA5Oi6-->：省掉每 Pod sidecar ⇒ 内存/CPU 总量下降明显；升级网格<strong data-page-node-id="9QtR2fVi4YoXch4ORZ5GyO"><!--pnid:lDE4a04Ur0g37uJFkQAx4E-->不需要滚动重启业务 Pod</strong><!--pnid:4zt3fVy28WiUT8vioGxkRC-->（这是运维上最大的收益）。</p>
+<p data-page-node-id="s7kqkFB647A9YGziMKA1Ln"><strong data-page-node-id="ojUOmqiF3s4KZYtB7Ph8y0"><!--pnid:ewqndfs8YesPbT0UrTsU1o-->限制</strong><!--pnid:9xsM7HTMh8wvmVlgy6KV3F-->：L7 能力依赖 waypoint（要按需规划 waypoint 数量与容量）；功能等价性与版本成熟度需逐项验证；<strong data-page-node-id="UgqyTbfYQi9uyfgbjV78tW"><!--pnid:ca5vH9G5I4ckx5bnGxlkUe-->多租户共享 ztunnel 的隔离性要评估</strong><!--pnid:jkrPhYz7mx6BWcwcGhhtR7-->。</p>
+<h2 data-page-node-id="seMhQnxdbsW54tJ7lakh2z" id="c7-istiod-ha"><!--pnid:hJO3ZuoRape3k4q4TJgX7x-->C7. istiod 的 HA 与容量</h2>
+<table data-page-node-id="eV9sSFCABJzo2gwyWn8k3m">
+<thead data-page-node-id="PR3USLtsGPzhyKwdefUea7">
+<tr data-page-node-id="AAitnDLOdM8g94Ykya7LWg">
+<th data-page-node-id="LjrzjttIBn5zn0mq6XkFFF"><!--pnid:bQj22dwNitlGBH5lWSz11L-->项</th>
+<th data-page-node-id="5tUzAWa1DY0sBlcQ3G3HnJ"><!--pnid:vJKIN1JDBF0U9Bq4qcBXjQ-->做法</th>
+</tr>
+</thead>
+<tbody data-page-node-id="3Vlb7HWgSnmyupPES6HXYe">
+<tr data-page-node-id="LZUWb2rUAaLhGor6z64Jr8">
+<td data-page-node-id="3bQyztd68P8BFsuoStQZAQ"><!--pnid:77dDj63A2VqHqFwWfGFcRI-->副本</td>
+<td data-page-node-id="y3dfu1EVnHYm3BPcXMqpJ6"><!--pnid:ISrNEf01s35iwsXhfm1XVy-->通常 2~3，跨可用区</td>
+</tr>
+<tr data-page-node-id="2APlBD9w3dXZGfuaYn6pT6">
+<td data-page-node-id="vDb6RVZVIw5F7T3CSGyJAa"><!--pnid:9sQIFovmxJDzZHNxOxiUIn-->PDB</td>
+<td data-page-node-id="iGXhSQF1V7Xj9Aq2LFN7V8"><!--pnid:My6QcWMIUuQpqt7w5SvDeP-->保证至少 1 可用</td>
+</tr>
+<tr data-page-node-id="Au6dukWjjHYeEkWhfcYbDh">
+<td data-page-node-id="Yp6ocivPIeSuQ3910CY0cp"><!--pnid:IbfhfB24J23Kdt4pr5u2VF-->资源</td>
+<td data-page-node-id="sv3qyLVYIK6ucN03gj71wd"><!--pnid:uR8ekRwvKtNEEjfF2QBEsH-->按"Sidecar 数 × 配置规模"实测给 requests/limits</td>
+</tr>
+<tr data-page-node-id="on6Asul020pQ108o0URUGy">
+<td data-page-node-id="ZX4plOEF0l7xnl5VvHDRxX"><!--pnid:pMS68DkA7e3JraRTzZzicP-->依赖</td>
+<td data-page-node-id="Eyb8cm9mZMtslovAnLl7OC"><!--pnid:64N1LVld3cearsVtxAEucN-->apiserver 的 watch 压力（可用 discoverySelectors 降低）</td>
+</tr>
+<tr data-page-node-id="uRtZvv8W2PKVL7tRGmZOp3">
+<td data-page-node-id="PKqiWgc6EN56prWs6PzOC9"><!--pnid:OmXLyre2mpawdMvB9WCBVM-->监控</td>
+<td data-page-node-id="hf4bVDuwgKc2xGhB6EUeW1"><code data-page-node-id="k71e6Zvg3ubQkpKOV6EGSJ" data-pnid-children="E19aupJqkf9kHNTqBhV63T">up{job="istiod"}</code><!--pnid:Ga53H1D0grsUsLeYAmSQ18-->、推送错误、NACK、proxy Stale 数量、内存增长</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="BwoOTmXsxWiJWTN4DdQU8z" id="c8-gateway"><!--pnid:DeArAEDIhNBUTSwd8QHQhH-->C8. Gateway 的容量与高可用</h2>
+<ul data-page-node-id="ju7PB7UYeYc46IvYTb8kLn">
+<li data-page-node-id="SNUl9hyW7U3AwTsqyLSUuh"><strong data-page-node-id="gnYZejfB0tIL3dhOvfYGaN"><!--pnid:HqDGzBC72f6Dx3wk0gl0xF-->入口/出口 Gateway 是"集中式 Envoy"</strong><!--pnid:gSL6TmAa8at1VLWYvbAiOX--> ⇒ 必须独立压测与容量规划；</li>
+<li data-page-node-id="waE5WVU8sx2CDuW5yRwfWz"><!--pnid:WlxQS8tCKX0qXYIeInFHwo-->多副本跨区 + PDB + 优雅终止（<code data-page-node-id="bISA6Xt6MDzBWIpatuNO6Q" data-pnid-children="FYBU5w9TGTUXkE98q2n99O">terminationGracePeriodSeconds</code><!--pnid:sxYCJZbJ9DJHDNLTFocbTW--> 要够长，Envoy 需要 drain）；</li>
+<li data-page-node-id="H39FHjfuORkn1TJ4kn75AV"><!--pnid:lF8fMRknjK1ldJ1qb6SlPi-->HPA 基于 CPU/QPS 扩容，并预留"突发"余量；</li>
+<li data-page-node-id="zgIQSx9MUyv6ipV2rmM7al"><strong data-page-node-id="DXSXBhdTeRnmue9PhAVtvA"><!--pnid:CzuDA4aeVdPaOPDMejBLiS-->优雅终止是网关事故高发点</strong><!--pnid:MYxfXLQ6NOEr9iKF7q2AcT-->：drain 时间不足会导致连接重置（与《Kubelet 篇》Q11 同源）。</li>
+</ul>
+<h2 data-page-node-id="tKbSXQwo6B6NYWeqEpWYBK" id="c9"><!--pnid:6iwLqtapNtjDvyrkcu7vfZ-->C9. 多集群的运维成本与是否值得</h2>
+<table data-page-node-id="pymHITpyzqeteEvp84s9Ba">
+<thead data-page-node-id="7p31pTk4Jq98ajCCmwzyrQ">
+<tr data-page-node-id="P8RT2GMx6Ao0mlWvDc8pOm">
+<th data-page-node-id="wSvGqRXz4xBoXY8uO0H6Ig"><!--pnid:S1ODMgOLLonAA3ggsP0XVU-->收益</th>
+<th data-page-node-id="BptDsOYzLLXdbZrzpk5FIj"><!--pnid:q9BXJkf79B2wUHDhjeNIRI-->成本</th>
+</tr>
+</thead>
+<tbody data-page-node-id="FqWsLHPDQqkR4n6qC4HKmk">
+<tr data-page-node-id="knXTPV6ikpmtqhlxN4t4Q5">
+<td data-page-node-id="2PHFsJETjsLN7e8Xd9M1bM"><!--pnid:0k3R7oe2RbFricYLufXd4t-->容灾、就近访问、隔离</td>
+<td data-page-node-id="MFaXLPlpYusWh3eK0peZYa"><!--pnid:7ViV3qNC98VbV3gRGixQpv-->控制面部署复杂度、跨集群服务发现、信任域、网关与网络要求</td>
+</tr>
+</tbody>
+</table>
+<p data-page-node-id="9nVP3i6oiqdmcL89TaGiTd"><strong data-page-node-id="RPXkJ2vdq2esZ0YT5OnxIq"><!--pnid:oXUK2qQxrH8CbS4Hcqijxb-->建议</strong><!--pnid:E9qXQ7Y5dxYgOxyAgRKFeC-->：<strong data-page-node-id="UqvzvaGioZUoNK2mbXWvtd"><!--pnid:sFY1UJgzRSEkMcsgtcaWVQ-->先明确是否需要跨集群</strong><!--pnid:zTimnQUUrLXqhOp1xOZ0dW-->。很多场景用"多集群 + 上层 DNS/全局负载均衡切换"即可，不必做全互通的单一网格。</p>
+<h2 data-page-node-id="kZhVd8qqlj9GTtVC78wKE3" id="c10"><!--pnid:oGB8Fb3jZqYbcFoE03k6UG-->C10. 网格的最小告警集</h2>
+<pre data-page-node-id="OElxmnO4EATXBa57NAwUIa"><code data-page-node-id="WUhwCNgiwjPy36ynBAkgYW" data-pnid-children="RGh0CnRUpsrhifZ7lMgRWl" class="language-promql"># ① istiod 存活与推送
+up{job=&quot;istiod&quot;} == 0
+rate(pilot_xds_push_errors[5m]) &gt; 0
+# ② proxy 不同步（Stale）比例（istioctl proxy-status 的指标化版本，指标名以版本为准）
+# ③ 5xx 与 mTLS 混合状态
+sum(rate(istio_requests_total{response_code=~&quot;5..&quot;}[5m]))
+  / clamp_min(sum(rate(istio_requests_total[5m])), 0.001) &gt; 0.01
+# ④ 明文流量（迁移 STRICT 前必须归零）
+sum(rate(istio_requests_total{connection_security_policy!=&quot;mutual_tls&quot;}[5m])) &gt; 0
+# ⑤ 熔断/异常点生效（被摘除的上游）
+sum(rate(envoy_cluster_outlier_detection_ejections_active[5m])) &gt; 0   # 指标名以版本为准
+# ⑥ 网关容量
+sum(rate(istio_requests_total{reporter=&quot;source&quot;}[5m])) by (destination_service_name)
+</code></pre>
+<h2 data-page-node-id="3z8cMI2fnj7Iqz5BlcU4Oa" id="c11"><!--pnid:mPnCFy2Zu2LVHRh0QqUIxg-->C11. 网格变更的灰度与回滚（生产治理）</h2>
+<table data-page-node-id="8VPjkDqQr7uSB1cssuBv1d">
+<thead data-page-node-id="q2bwbksFxethC6RY6vkzlw">
+<tr data-page-node-id="kF4ml9rCT0MXDUsKWShDng">
+<th data-page-node-id="Qz1Xuex3hEP2Awf8SYiIvt"><!--pnid:maykgKM36QfMFmDqtapOd4-->变更</th>
+<th data-page-node-id="b5Bf95qSpNqBGEvim0pGyN"><!--pnid:u6IcJgFRM4f0ZQRzqiRXiK-->灰度</th>
+<th data-page-node-id="GS6Ass9nctaUvXKYsR3aaG"><!--pnid:S2ZYQgPSG1aDZAotJd0peB-->回滚触发</th>
+<th data-page-node-id="0UJwj5F9j8wdpAip5knEcK"><!--pnid:mCLYB1PEBOJ7RT0JafWjyn-->回滚方式</th>
+</tr>
+</thead>
+<tbody data-page-node-id="R28v4Q5znj8durXFYGQydZ">
+<tr data-page-node-id="sSiTYazPi9YFI2MJFNHWeH">
+<td data-page-node-id="hoQnH2DYlMc02eRgcgbhPO"><strong data-page-node-id="EWrTSQCmL7dKRHO6uM7jt9"><!--pnid:LkHi5G42WWsO30MofH8tGl-->控制面升级</strong></td>
+<td data-page-node-id="yCvMcgO3luPruttlm26PoA"><!--pnid:2vO2uvoipn6VTs13xzr213-->新 revision → 单 ns 切换 → 逐步全量</td>
+<td data-page-node-id="ZhT9x7C82dm2Luf8ipjMcM"><!--pnid:eVrLtgIBJIP2MI6BxX1U3f-->NACK 上升、503 上升、istiod 内存异常</td>
+<td data-page-node-id="GOU4Ci9iP04AWNk0mVCT4p"><!--pnid:6UNFdyjUrzNdKM9eUp8E0k-->把 ns label 切回旧 revision + 滚动重启</td>
+</tr>
+<tr data-page-node-id="UILlzghbaZmYCKG3ULGVEz">
+<td data-page-node-id="4xmhOoFJg6gghqPFuqjQQO"><strong data-page-node-id="vITfNhNkJUnq3RpaIaO4wY"><!--pnid:LYAPSI2Pgg35tGPBsVpvMg-->mTLS 收紧</strong></td>
+<td data-page-node-id="ZlnTNa6hxP0RF3j2cSEeLx"><!--pnid:hEfTfmTSaUgHzWFXlvIlqa-->单 ns → 多 ns</td>
+<td data-page-node-id="SZKEeXyqxfCeAEFt1DGZRG"><!--pnid:YREvzunG5dN6msxKgvhoEM-->非 mTLS 流量未归零 / 失败率上升</td>
+<td data-page-node-id="QVoa8AMATob2r5EX4PDPeM"><!--pnid:Cl9W7CSOAswRHDt2x1YaUC-->改回 PERMISSIVE（<strong data-page-node-id="3nIGgsQNVtNladb8AGoitc"><!--pnid:UEqmY1IOZNjy1sAr3oQwEf-->改 CR 即生效，最快</strong><!--pnid:jwu5idmK358Vj11e0xEBnG-->）</td>
+</tr>
+<tr data-page-node-id="961BLLGwFhaEI9AQ1yqEDQ">
+<td data-page-node-id="J8y75CNRyeNnaAhVZpdWKY"><strong data-page-node-id="bB01c6WrVJzEYpTpIfNX37"><!--pnid:Kwnmy8Zzw80DjMof3FRKDN-->授权策略</strong></td>
+<td data-page-node-id="KZDBwNA79NSUtVjPYQDkZI"><!--pnid:NyOTos0UPLFPxGo1XtBgFk-->先 DENY 少量、再 ALLOW 细化</td>
+<td data-page-node-id="03QjAyqI1kPZOnqLdhO2KX"><!--pnid:0RCksHiBGImAzkydurTdQQ-->健康检查失败、业务报错</td>
+<td data-page-node-id="13vzgZNgwZ1Y20T9enyzwr"><!--pnid:vKYGk6o0NrvSoxmtkvwduY-->删除/放宽策略</td>
+</tr>
+<tr data-page-node-id="pi9vuVOS2rkLDON9iwRtnz">
+<td data-page-node-id="hu17xh8Qdr39osEHlg1TUu"><strong data-page-node-id="wmpZuJFmwATN2tANpallQb"><!--pnid:sKz4wqnKXOpyok3WBjlyu3-->Telemetry 裁剪</strong></td>
+<td data-page-node-id="tZ3gTVgMqz6nSq3ikgMEzD"><!--pnid:aUCBtD80FvJ0LxWPyYLXYP-->单 ns</td>
+<td data-page-node-id="zwSccVvVo0jrHVAc3wURsz"><!--pnid:DKoaE3h7QJEsJALev2EO71-->指标缺失</td>
+<td data-page-node-id="2h5Y5WpXJuGEYXzlX9rl3I"><!--pnid:dhloDU5Sw0CFjOYRrg0gu5-->恢复覆盖配置</td>
+</tr>
+<tr data-page-node-id="4JQZLhRvlGm2AK1rDtI0Dz">
+<td data-page-node-id="sc2wGlYa0fjD4y4vkVX20u"><strong data-page-node-id="L4gDUIpHhtNujhESdFZX4J"><!--pnid:4nPMcBfgcF3dXPF3QYKY15-->Ambient 启用</strong></td>
+<td data-page-node-id="PnfP7VOAVnAtGbNUA0UrdO"><!--pnid:HN0eIPC4GXCTIU4lgjHnNa-->单 ns/单服务</td>
+<td data-page-node-id="csaA59VcSQAX1tdGwCX1cN"><!--pnid:mwdOuoFFlVYd34Jski84qA-->连通性或功能缺失</td>
+<td data-page-node-id="mFSOoiPzaOMdE036RJ7lzk"><!--pnid:ZHQEK6t6UJbpXM0hzfueWF-->去掉 ns 标签 + 重建 Pod</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-page-node-id="yFf7bgzeehuEgd7XzrWmtv">
+<p data-page-node-id="ULDyZIz10MlfESDkJXdOsT"><strong data-page-node-id="KF4N2hYwG1Xl4hkgw9zF2n"><!--pnid:rx8GnwlMnXJxrWcgc5dAw7-->黄金规则</strong><!--pnid:j06U50jQj7DYemLfyAG2pU-->：<strong data-page-node-id="2v23HOy1pinWNRQWoyxjUB"><!--pnid:PQiwsiX7dDd56Wp97uc3WT-->所有网格策略都应该"可一键回退"</strong><!--pnid:01r4cUpVTuJrFgExrnCurO-->——优先用 CR/label 表达，而不是改镜像或改注入模板。</p>
+</blockquote>
+<h2 data-page-node-id="AbphQUIt15HFGw2PKmnKEE" id="c12-1000"><!--pnid:N4g4pBWeihm7q2tQWIkUDf-->C12. 给你一个 1000 服务的新集群，怎么设计网格？（综合题）</h2>
+<ol data-page-node-id="QTh60e9xOMX20XaZKj8OvE">
+<li data-page-node-id="2m1dUYYdRVpDrHKqQcrARx"><strong data-page-node-id="mcVelGlq7SVQm3gjMQYxhh"><!--pnid:HOgEBUltv1x4qQ9fm0zHYt-->先问 SLO 与诉求</strong><!--pnid:YYPzeSCvfKxdKmyTa5GRnz-->：要 mTLS？要 L7 授权？要统一金丝雀？能接受多少延迟与资源开销？</li>
+<li data-page-node-id="WobCNtXO11O30JYHgvxNvE"><strong data-page-node-id="kCA2efTvJNVBAF970MYfE6"><!--pnid:xCmX36micf0vmDqAoUBJuF-->形态选择</strong><!--pnid:iLCjljdXDfLgi7M8fQfQQV-->：先 Ambient 还是直接 sidecar（按 L7 需求与版本成熟度定）；</li>
+<li data-page-node-id="YIO6cHdnr6LucCi2Poqxt5"><strong data-page-node-id="oSdUFHtcwgbm3upNl1HLph"><!--pnid:ICM1ZneEQQCPak6bfcHCtw-->边界</strong><!--pnid:Avi9MR0GwAfblB7dhKJfns-->：入口用 Gateway API + Ingress Gateway；出口按合规决定是否 Egress Gateway；</li>
+<li data-page-node-id="mKQxDiUGmyPioAdFH5qxfu"><strong data-page-node-id="IpprKR9wXYKNvAzpGMnjBe"><!--pnid:YcxV3Ib4CvR1GS7sMm3oS4-->规模治理</strong><!--pnid:UYoEIynj5xZrK7PAY5qvwg-->：<strong data-page-node-id="fRrp3RCCUBnsr4Q4dW9Wr8"><!--pnid:bmWneBL7qWkyp6JMGMZusY-->Sidecar CR + discoverySelectors + exportTo</strong><!--pnid:CpQV1J1ZRgP6Yzc7hC5tNd--> 必须在首批服务接入时就落地（事后补很痛）；</li>
+<li data-page-node-id="ZYntJxgmOkLuf0TkTkSUAK"><strong data-page-node-id="HUN0O6sXu5f9zhtRAkKxxC"><!--pnid:BLeB0LQuaVGUNnrCbB2wBl-->可观测</strong><!--pnid:d8n0zbkK1XlQ0ni0KFcJYz-->：Telemetry 裁剪 + 采样 + 指标 relabel + 访问日志按需；</li>
+<li data-page-node-id="Thds2kd6JtjaWhEqrZ0RHZ"><strong data-page-node-id="9IpXc6uoVGp5DvPHjOs3Xi"><!--pnid:3qEv96pzBNmFfD9PmwUx5d-->安全</strong><!--pnid:wp2HJzgY8oPEn5h7SQRo8w-->：mTLS 迁移路线（PERMISSIVE→STRICT）、授权按服务推进、外部 CA 接入；</li>
+<li data-page-node-id="o9wOTu8lug8wGTvpbK6xA5"><strong data-page-node-id="tnQnligkYnOiQKUAmsIlVX"><!--pnid:GoIOCFHyttUxBaqH5MAtB3-->HA</strong><!--pnid:yrTRRRUzDIeKIoPyWvqVJz-->：istiod 多副本跨区 + PDB；Gateway 多副本 + 优雅终止 + 压测；</li>
+<li data-page-node-id="Go32cA0SxeegpyKVMNYSuH"><strong data-page-node-id="KSzBW1ahYOOUVxnzKqUkAO"><!--pnid:H9QFa47d9P6lzPH4PUdkJH-->变更治理</strong><!--pnid:8a0TqgERpWWt4I92vMn0Ih-->：revision 升级、label 灰度、一键回退；</li>
+<li data-page-node-id="2DRsHnEHeM28x2C5HVhdmy"><strong data-page-node-id="cELeezCBDjACGRiexYgQ9T"><!--pnid:FceZ1XpAEACFsPDsg0ZCRr-->演练</strong><!--pnid:4cY9OwDux00OFhmF4Y6xGs-->：istiod 挂、Gateway 挂、误配策略、证书过期、推送风暴。</li>
+</ol>
+<h1 data-page-node-id="zaBGFYWG0ZMUSYbVmL5suM" id="part-d"><!--pnid:7L7L0ggEAaqGEqwN51widn-->Part D · 反模式清单（可直接用于生产巡检）</h1>
+<table data-page-node-id="ioPx4JQaKZ0OYr9MJb0kT6">
+<thead data-page-node-id="OdyHRr7cTsSEA8OzHlcKjD">
+<tr data-page-node-id="q6kUL3rItvKIw5QokgcQvG">
+<th data-page-node-id="G4fjAw9dRK82JhitK2z8DZ"><!--pnid:ggF360SEY6vfLDV4GCRMpb-->#</th>
+<th data-page-node-id="R9CIKzOOMvIjvSwQ0RAsbS"><!--pnid:0n9q625QfppixyfY0R61mT-->反模式</th>
+<th data-page-node-id="k7FOebAuSXAwSsjQWDSuTE"><!--pnid:WFrNsTzCsczhLfACkLqRrZ-->证据</th>
+<th data-page-node-id="zA6TLOmHeRIDOGjmgxSMxY"><!--pnid:Kvr9P4y59N3ncknfRxyn79-->等级</th>
+<th data-page-node-id="IHyFnhWRqolH56PdWXcUCr"><!--pnid:oLHHqWSEyRBLewtBcP5Tri-->修复</th>
+<th data-page-node-id="TQFIJACqCVRNta4wQ5DLuA"><!--pnid:9mZfKUXzE8Nl72zYDrJD7A-->验证</th>
+</tr>
+</thead>
+<tbody data-page-node-id="S6KUGhI66WJtpAys9MV2VX">
+<tr data-page-node-id="cZp4AKO2OTYrjfTmtLuuqZ">
+<td data-page-node-id="OrtJEGtcd10KQuLW3MMIjm"><!--pnid:mlYWUso7wFVbn9qjH2wS2i-->D1</td>
+<td data-page-node-id="coFoRrOwupF8b4wr6LfOep"><!--pnid:Pc4YoQRvIpbglY2quW8K4X-->大规模下不做配置收敛（全量下发）</td>
+<td data-page-node-id="aauP5HawL8ZKjb8IRJXv4e"><!--pnid:QM0mLpjkXZfHLdRY2q9OLS-->Envoy 内存高、istiod 推送量大</td>
+<td data-page-node-id="7hU27YxHKo5OOuJPU0Obkc"><!--pnid:R4gL14vr4cJid8dC7ARfUN-->🔴 高</td>
+<td data-page-node-id="QyBqvMkeS5Efs5kyA8ITE5"><!--pnid:o5oB7zaAyXF7jPP4EEE3M9-->Sidecar CR + discoverySelectors + exportTo</td>
+<td data-page-node-id="rFKpUwtTj2N3w7Yoec8ZVX"><!--pnid:E603pNhId06ixFwlbAbK6X-->cluster 数量与推送量下降（实测）</td>
+</tr>
+<tr data-page-node-id="mT3oMxMiC6EIZugLytvsVI">
+<td data-page-node-id="Dg8OAyCL6kAvy7AzyXtl3D"><!--pnid:kZP6fRGziS7nZnLqzhjOTW-->D2</td>
+<td data-page-node-id="ZUxN2Naixd03OFWhH34TyC"><!--pnid:iV35IXgTG8qIkrGQhZrOSc-->直接全网格 STRICT</td>
+<td data-page-node-id="ALLSod736TP232iO2M2cDw"><!--pnid:6aLbFcxP87fbT8UXApeJxu-->明文探测/外部客户端 503</td>
+<td data-page-node-id="7iVEQTV7PYXKNwOMdy6fiL"><!--pnid:qr2ET566aj6HjNsPQN9xO0-->🔴 高</td>
+<td data-page-node-id="nV2fZyTYM5AwLn2DfBEOQT"><!--pnid:sKX1YJ3ZZGauxF5QVGBA9z-->按 B6 分阶段迁移，先证明明文流量归零</td>
+<td data-page-node-id="e7lItwkwI5AKcegJ69J3f9"><code data-page-node-id="gFKhXEyxcMu1Oc3nRFqYfP" data-pnid-children="8O68XMdSwNQ5Ad9xMX1wWd">connection_security_policy</code><!--pnid:MqbW2jd506byR2AKNWypyv--> 全为 mutual_tls</td>
+</tr>
+<tr data-page-node-id="OpcAY1zOr1UxH5klFgxVfB">
+<td data-page-node-id="35RKyY7xe2EQtBpY4QO7ll"><!--pnid:Qr8d0u9Nu7BrhHdvGYC2z7-->D3</td>
+<td data-page-node-id="AsTW4I1yXEC2IoBOk7RQ2P"><!--pnid:BUIs3mH7r8EYqjPZaHN40d-->只配 RequestAuthentication 以为"加了鉴权"</td>
+<td data-page-node-id="0jBCOieEpNB77ZHvyJr6Sx"><!--pnid:AWdAnR9tgk4CsAGPwK91rV-->无 token 请求仍被放行</td>
+<td data-page-node-id="swWrd8kCYgqHi3WOmdXT26"><!--pnid:cJUs9xYkfpvQwbv5PjekTg-->🔴 高</td>
+<td data-page-node-id="dXDZ88GOHhULkMEoBiYKp0"><!--pnid:RbeaLaGh4hgTugHy6QF9tC-->必须配 AuthorizationPolicy 要求 requestPrincipals</td>
+<td data-page-node-id="RN4yqtdmUWAhCAEHi8daRb"><!--pnid:XzqKH3uJk58Y3smSqshD39-->无 token 请求返回 403</td>
+</tr>
+<tr data-page-node-id="0ZxTWjSMHKxQyEZCH3kMyt">
+<td data-page-node-id="p2IeDnRUgj6g8Vw2RAlJBu"><!--pnid:CiPqecc23GN7Bv6rG5XNGx-->D4</td>
+<td data-page-node-id="bXNm3Jj7jrfoV0Mj97rXSj"><!--pnid:ianmiCLazH4xCNaQ6jHnUq-->大量使用 EnvoyFilter</td>
+<td data-page-node-id="Apil9OtZE0qQTMItOwx1JG"><!--pnid:91i5LLnZuWTS6UUMr6dU4c-->升级后被破坏</td>
+<td data-page-node-id="ol7i3tYc2jVib4n1itFdgl"><!--pnid:kX5UEfeA3sJB79Lzg8cBle-->🔴 高</td>
+<td data-page-node-id="27ee3d498DoEdQ8CLw1NaC"><!--pnid:qiTNyr3tz2IcS7mvrQKzdX-->优先 Telemetry API / 原生 CR；EnvoyFilter 作为最后手段并做升级验证</td>
+<td data-page-node-id="X48ocG85MW8r5pAZTRRQS9"><!--pnid:Gbe1Vl2QSgEaDKqw3J7VD0-->升级演练通过</td>
+</tr>
+<tr data-page-node-id="nKzpun9aDppBOr1e2uApqy">
+<td data-page-node-id="nT81ufaqfcvUJegpwudRKe"><!--pnid:ucUxY1uFYFfBV84yoSxHbd-->D5</td>
+<td data-page-node-id="PMYGTkRkNHef8hre54Srjt"><!--pnid:EALYCuQHSXXvhwekJMargU-->未放行 istiod 端口的 NetworkPolicy</td>
+<td data-page-node-id="3c0yLonJ3Cc0aoN3ehMwP0"><!--pnid:r8FCV3lfrJBRbycvCs95oE-->新 ns 启用网格后 Pod 全挂</td>
+<td data-page-node-id="YY9dtFFKRPkCA2ztb2Esat"><!--pnid:yRItdVdpFQ69hkuiEwkJV8-->🔴 高</td>
+<td data-page-node-id="Rm2AxgLjFDKH3DPpfzTbMQ"><!--pnid:8t6esurHnuAZxI2k0POSa6-->放通 15010/15012/15014/15020 与 DNS</td>
+<td data-page-node-id="zN6zSvF5U8ZHmdetIJLnnb"><!--pnid:dYcDbjzpv5dDkHr1T2mywu-->新 ns 注入后 Pod 正常启动</td>
+</tr>
+<tr data-page-node-id="eHhqLt49hbhWUgIzSRdjlf">
+<td data-page-node-id="qe6mrGdQ4WRT2qPu3GkpdR"><!--pnid:rD1xYHlIqpTeSNCeaMyZpp-->D6</td>
+<td data-page-node-id="HaY2qC1hjp4tQEAPExxXdA"><!--pnid:qopJxnsiTlsRlp22cYh9UA-->指标全量开启不做裁剪</td>
+<td data-page-node-id="eJV5iTdnHJ1OamCQI0DUyO"><!--pnid:SiYBdfrkmjBAfwjz6y2xNw-->Prometheus 基数爆炸、抓取超时</td>
+<td data-page-node-id="oqpnXf2BlgoKsawXCBBqej"><!--pnid:fD0R8RPEtpu5vAe4ZP7Wvt-->🔴 高</td>
+<td data-page-node-id="rGznjP0gHviZYCXStnfxuz"><!--pnid:PfYYk8d3aKf88rTCeV44aQ-->Telemetry 裁剪 + relabel</td>
+<td data-page-node-id="d36tOyTeTfbNxeHZwzQOOZ"><!--pnid:vWYGBIAtXKrwVJmGhDacSu-->时间序列数量与抓取耗时回归</td>
+</tr>
+<tr data-page-node-id="JXzNQH17COQPK8vXGNepmj">
+<td data-page-node-id="EToh0y02vt0DozHUj0W67d"><!--pnid:YtmxknCKgdHxK0Z9LNbj58-->D7</td>
+<td data-page-node-id="TVmUmmW5OVJaKYNE06Qr53"><!--pnid:jOFC6Wh5yza5XONGRxb7Cz-->重试不设 budget、POST 也重试</td>
+<td data-page-node-id="L7NudhtQQRj0NYNQp97ohX"><!--pnid:Ini154bx9ZAnEVneeCqMPh-->雪崩放大</td>
+<td data-page-node-id="TXyqmL5StPMx4gl61WHTRD"><!--pnid:EfUJD50Ip371uaTdYMZkqn-->🔴 高</td>
+<td data-page-node-id="9gDNdmjjsLSw3Vs83wCK4B"><!--pnid:zTzH28orCVMMlgztZolQUi-->retryBudget + 仅幂等接口重试</td>
+<td data-page-node-id="i0fwv4ovSMLpWTBmAMwXjI"><!--pnid:d8DsxlqNnGqBsFwtF74Vhn-->故障注入演练不放大流量</td>
+</tr>
+<tr data-page-node-id="4t0cpbjU3vrBxdqm8YkXQw">
+<td data-page-node-id="wPv8knVZYZkIDjOzshisP9"><!--pnid:Kh9V2yer8ApIzSEKS2ZSfx-->D8</td>
+<td data-page-node-id="1teWu6DDiVia7U6aBO26n8"><!--pnid:g6c3ZGbX3HdsIbv2lpQKRY-->未配超时（依赖 Envoy 默认）</td>
+<td data-page-node-id="RxST5dFE5LPdHxr8cdaQLR"><!--pnid:R8VtVnnHUwo0GS3niWhMdH-->请求无限悬挂</td>
+<td data-page-node-id="sXccpUTV3Ige2XFAaJ7mw9"><!--pnid:QmXYeXiW6BS8O7fgnEtkNc-->🟠 中</td>
+<td data-page-node-id="vUzQfKGYP0o0ayBx9PH54z"><!--pnid:BtD2C1v2c80fpEMtUmLjve-->显式配 timeout/perTryTimeout</td>
+<td data-page-node-id="MtJ3LK8HxVmXs5MjI02Ef8"><!--pnid:knStLl8Q91aPZ0gY7tMFJd-->超时行为符合 SLO</td>
+</tr>
+<tr data-page-node-id="0BOO4xUuweXGAhoJYDkTpL">
+<td data-page-node-id="rdxNOhZrRc1nNrj0zgGsBR"><!--pnid:so2EC7TXVwZtIpjcPL9Tq2-->D9</td>
+<td data-page-node-id="cCiVqLz1byR2ZFJmUxPg7V"><!--pnid:65ZvKtoMOgKjYTqX9sSgpu-->启用 REGISTRY_ONLY 但未注册全部外部依赖</td>
+<td data-page-node-id="2I1wF4S0fQKJYLZ6lh78z2"><!--pnid:iLj9cev0dZhUxJJUESMC2R-->外部调用突然全失败</td>
+<td data-page-node-id="GE8qLqG0sFjF1nzlkwOyXB"><!--pnid:EJJu4OwgEsrDYg8omXQv9y-->🔴 高</td>
+<td data-page-node-id="H0RUNk667RsmBeXVRljxPV"><!--pnid:J3JkFCfpq3NddgjleuvMZa-->先梳理依赖并建 ServiceEntry，再收紧</td>
+<td data-page-node-id="eEuYWHHkynlwPrc69F0Rkp"><!--pnid:bJJWnFUmpRIK5gta0cxgUo-->依赖清单对账完成</td>
+</tr>
+<tr data-page-node-id="SwjUceQB74Nbab0FhkUQdl">
+<td data-page-node-id="2zL7zV6aeZYVaQOoW3KV1G"><!--pnid:zm4QRoON9LXVH45CHHcSA1-->D10</td>
+<td data-page-node-id="jKJNvrz3R2ppNMyBj0PxPX"><!--pnid:BeznJcykESNIAWese3ooUc-->sidecar 资源一刀切（默认不改）</td>
+<td data-page-node-id="WgXcQ4UzUA2O48WYkfcyvg"><!--pnid:UzCdVspAg2jd51M6naMUDq-->大 ns 的 sidecar OOM/CPU 打满</td>
+<td data-page-node-id="mm7se7IZEQcjcec7MrMfLM"><!--pnid:bHhHGWC4GgDSZAsJJLNBhe-->🟠 中</td>
+<td data-page-node-id="vZmsUCuYmeaVSZyFGtKUct"><!--pnid:a5w6Ub7dgIcRMJwPDFh1id-->按可见规模分级设置资源 + 裁剪统计</td>
+<td data-page-node-id="KRRGIDC8RnCt7Ug05AMn4h"><!--pnid:yb3r8JYVXxe4r2ja8727TP-->内存回到基线</td>
+</tr>
+<tr data-page-node-id="fJooi4oM96mkzNLhauMOkY">
+<td data-page-node-id="i4MOwJrnKL8xpp0WtzY842"><!--pnid:tFv9OZSdTKjPrkieSiMpAY-->D11</td>
+<td data-page-node-id="zL4mHVUfFdv8HPO3d5pNAh"><!--pnid:GhT8h36Hzl3pxzn0nD6wGz-->网关 drain 时间不足</td>
+<td data-page-node-id="NfDaiBoQ3shZtBkPzswGAq"><!--pnid:XqzitNhv8kKxj2nFqzSawv-->发布/缩容时连接重置</td>
+<td data-page-node-id="0dm464BJwhuASDDhYW4nTx"><!--pnid:juc7204YtFI2YSV1ZsjUi4-->🟠 中</td>
+<td data-page-node-id="ht1xfCMoFxMV8ypN2qqui5"><!--pnid:AFTy45C24WuryTzd2Gh1Um-->放大 grace + 配置 drain 相关参数（版本相关）</td>
+<td data-page-node-id="oQEy31cGWlPuHJkqTJnk17"><!--pnid:fWIU0iioxoesSuFwQmpimU-->滚动网关期间无连接重置</td>
+</tr>
+<tr data-page-node-id="0tlatgey4BfAL6hy6341K1">
+<td data-page-node-id="khfXWGpL1N4QMWXfLotYLy"><!--pnid:o1UCOMBdA8FGvWF9rniwIh-->D12</td>
+<td data-page-node-id="BUSnYSjnsXswZTIlja3OWD"><!--pnid:oDbSAFhfeCiM95cf19mY21-->网格与 SDK 重试/超时叠加</td>
+<td data-page-node-id="JUGoEn4aWZQ0w0CuhYpdy1"><!--pnid:mgdWuF9OJVpHbemPgnpRYJ-->放大倍数相乘</td>
+<td data-page-node-id="MNaKAOQijqQK964ut7RIuI"><!--pnid:AkCHoAXHtHcoKpaUho13FF-->🟠 中</td>
+<td data-page-node-id="L8CLLI7XcRvS54IQtraqWE"><!--pnid:6HVBg8DbwQTBgf3QhPOodv-->统一约定，关闭一侧</td>
+<td data-page-node-id="qcVgMSo8NUZBskDuQTa4gq"><!--pnid:GTQmOu84Ld3HT8FizyD3kO-->压测确认放大倍数</td>
+</tr>
+<tr data-page-node-id="e7F3pvCVexBFTMJ06wIc5s">
+<td data-page-node-id="kWeTvTY8iAWyONBBrYfP9d"><!--pnid:0mwbdGTWjqQtroP3STltiK-->D13</td>
+<td data-page-node-id="2B75UNTbHyeLdHrzYRYjPJ"><!--pnid:XoMN3Yxn0k9wTjP4jBF23j-->端口协议未显式声明</td>
+<td data-page-node-id="CsSqUKjCbBvhGYmdgNXafz"><!--pnid:rrbeXqx0UyZf3U6tkhdxBv-->L7 规则"配了不生效"</td>
+<td data-page-node-id="ZADs5nWWxLLmMz7N7orbwK"><!--pnid:mVOVgQ0AqOFatxI4OrvKUM-->🟠 中</td>
+<td data-page-node-id="skFbkWSb3lKZ160P5SVdQ2"><!--pnid:SkyquSmddt66m1dlat08Js-->用 <code data-page-node-id="s4XVXKGwOX9WQn1hzstYxP" data-pnid-children="eVMNYB0hxMlWmOAlQgSFPX">appProtocol</code><!--pnid:sg44zEnwUZRDLoUZBQTH3g-->/端口命名</td>
+<td data-page-node-id="LVaxIYeXQs1Y2ikfEoCDxM"><!--pnid:VzRjyO0QgcqwaSQLU3f3qc-->config_dump 中 listener 为 HTTP 类型</td>
+</tr>
+<tr data-page-node-id="T88vfDVqHspiRoSmjwWxX9">
+<td data-page-node-id="3Dn6Or96yq9STRXgBeVzHh"><!--pnid:CQ0wyoCHd4lYGkwDKwii8U-->D14</td>
+<td data-page-node-id="EK9OR9ZHACsEqprMr71yA8"><!--pnid:bHRDspsREp7Bmo9vdzfGJK-->istiod 单副本/无 PDB</td>
+<td data-page-node-id="Re2umBNSIv5SLYpipFI8on"><!--pnid:gkQzRJY2VrzrfAraPwvmVT-->istiod 维护期新 Pod 起不来</td>
+<td data-page-node-id="oi1b3buBe4lyQFjWU4ZOTe"><!--pnid:WvH5OwcmqDmor7HIz6zC0L-->🔴 高</td>
+<td data-page-node-id="zfB08CiL2ppwcYZd7c4wQs"><!--pnid:zzefG8LciQ6j93z8c0iSfC-->多副本跨区 + PDB + 资源保障</td>
+<td data-page-node-id="3NpQsORT9owj0oooUn2pwk"><!--pnid:fnYJtQF24wxBAIMMe4kwSz-->杀一个副本不影响新 Pod 启动</td>
+</tr>
+<tr data-page-node-id="nuIf9VxYV6yAVegO2dpwit">
+<td data-page-node-id="n5r0Qho1EQzW7DgrhaK0en"><!--pnid:t0fp7WNzHbVFxVeAlXfQre-->D15</td>
+<td data-page-node-id="AD8D41mf3wO5Qk6DAdQVwp"><!--pnid:QbgYuWXfa82NQtWTvCXqKO-->一次性把全部服务接入网格</td>
+<td data-page-node-id="Lrl6Bif6qHfRH8fEKm3HAC"><!--pnid:CLxcHweRembUzyTnZ9It0T-->问题集中爆发且难回退</td>
+<td data-page-node-id="0hyMe8iJQMXBQWKVeoS8OU"><!--pnid:kDUzFhh7UVQYIZuWUIafb3-->🟠 中</td>
+<td data-page-node-id="pKsAW0ZvD8dxk5yN7bv1xh"><!--pnid:vkJVWo0qmc6mDp13KpZ4ld-->按 ns/服务分批，label 可回退</td>
+<td data-page-node-id="MYqKHsksICCAonUMrvlKec"><!--pnid:1fNYAlbDvfFzXXMM3tr1MM-->每批次有验证窗口与回滚记录</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="JzV4Y5NDGHJ5N7cofHy1C3">
+<h1 data-page-node-id="Ve6XFX92e0nG4EcowcmmE7" id="part-e-slo"><!--pnid:cr9wh0CwZPIIG2yiKf4jjC-->Part E · 可观测性：指标、SLO 与告警</h1>
+<h2 data-page-node-id="iTuCMAsFt3IR9XLAfCfmI8" id="e1-kubectl-exec-c-istio-proxy-curl-15020statsprometheus"><!--pnid:HIwXVD8uIoM0lldSx6PNzv-->E1. 核心指标清单（<strong data-page-node-id="LPEhXUPMdDZ62ORjfgt002"><!--pnid:ZjM7oZISLIjzhGA6MkWZKG-->请先 <code data-page-node-id="s5selLdpqOZ9gUnaW1d7bx" data-pnid-children="rhHrnwyaCdJszCZlhFoDq9">kubectl exec ... -c istio-proxy -- curl :15020/stats/prometheus</code><!--pnid:lmaky0E1OlUDHPQ88m6aqy--> 核对</strong><!--pnid:lXA5MBqhhj3UxC2gv9u5wr-->）</h2>
+<table data-page-node-id="HOkyWn5yeResnoOpb3TqGm">
+<thead data-page-node-id="QF8EH79l5JRXTiHtZUhnWH">
+<tr data-page-node-id="rIYtNiBXoEYsotPJ6Yels0">
+<th data-page-node-id="RP811UGS9jHfJkzh3fBNAZ"><!--pnid:sez3Y9xJOvEufZ29kFH9em-->指标</th>
+<th data-page-node-id="ycxRjApVzySUOLWN1vNkc1"><!--pnid:DXt0rVKgc1WU03hw1sTuWy-->含义</th>
+<th data-page-node-id="TfTJcyKufSLRvuQpp96D23"><!--pnid:Iv44jfys2x8Kyvy1l6TTwo-->用途</th>
+</tr>
+</thead>
+<tbody data-page-node-id="MXUzIADKtnitsHWMUzaDgE">
+<tr data-page-node-id="Xz2RSmhgvBK7kZpx9jUSVE">
+<td data-page-node-id="mpj1JuCkz208vuJPWLMdx8"><code data-page-node-id="6NvxVnvGr38Kvly2RPpJUh" data-pnid-children="8vuMfzYGV1w3TvBCDlXRiC">istio_requests_total</code></td>
+<td data-page-node-id="MCJFjB7ybF2wJhYgf0CbOO"><!--pnid:4jIqBdOYV6MxCT8wHptkON-->请求数（含 reporter/source/destination/响应码/响应标志/mTLS 状态等标签）</td>
+<td data-page-node-id="sBzhM2GRYrDlBFhruOX5ii"><!--pnid:xGZugQyFhTMFrmbIzti4OU-->RED 的 Rate/Errors</td>
+</tr>
+<tr data-page-node-id="dokWg08iBvqENJSaTu4119">
+<td data-page-node-id="XsIIfaCHU9ekq6ewaqZVRX"><code data-page-node-id="GCCsTAVCcavlQ5OCmSwNYL" data-pnid-children="8QwuWg0apxgtP2XmxvXaBu">istio_request_duration_milliseconds</code></td>
+<td data-page-node-id="PhbTooTMon49QjBiYQyy1w"><!--pnid:c3Ialn0QIOGVPeTeHN8pJx-->请求延迟直方图</td>
+<td data-page-node-id="IgvtwKoWNYLrsp9Fs9vyDr"><!--pnid:eUDf6Uqh1M93VdhNK8oeQV-->RED 的 Duration</td>
+</tr>
+<tr data-page-node-id="dJURVBouszvV2G7Of3Nbsm">
+<td data-page-node-id="JbBKsRAU2OeOCDmtoOd7ID"><code data-page-node-id="sB7MVvTAenH3zGBBrqklpD" data-pnid-children="iPxS2UPq7OEnHoASSd8Kzt">istio_request_bytes</code><!--pnid:miKJUeP68tUDgD5q207TCN--> / <code data-page-node-id="p3h9MWsX4EInUpngzppa86" data-pnid-children="jjYojftQusiuaB6xQpEhXi">istio_response_bytes</code></td>
+<td data-page-node-id="laHlzvWBcZHCFDqvKG4Z2Q"><!--pnid:ZjXGqrFcf6JYkXZo7ORcZV-->流量字节</td>
+<td data-page-node-id="1r3PGsnfIehq2u1sTXe8TE"><!--pnid:GKcRTWJlIZMD58io5HFR0Y-->容量</td>
+</tr>
+<tr data-page-node-id="gFbLkBzdN67L6FVFDQHEL7">
+<td data-page-node-id="T7F2HgiuWaVQen0LJSn4pI"><code data-page-node-id="Tdx2zTo6vVd9yKTBIXy9Om" data-pnid-children="g6cvxGme5aa7UZAKdUe9Im">istio_tcp_*</code></td>
+<td data-page-node-id="yzJhA0zrncSoWvJeJ8GD70"><!--pnid:2BnVLxabY4JasUct1Ry0YD-->TCP 层指标</td>
+<td data-page-node-id="BbYUtGbPTCaJdj9tPBE6ZE"><!--pnid:vXMcHKbtqq0gs6D6TZ0ZF9-->非 HTTP 服务</td>
+</tr>
+<tr data-page-node-id="Zmdb5k93wbbpVZpXpbIA3Z">
+<td data-page-node-id="yPNozki8Y4KY7QtCEAMIgW"><code data-page-node-id="uGZsu9YoRnNva1yxTYYivf" data-pnid-children="0EjvHytdrfN6K6pMNrqBWJ">pilot_xds_pushes</code><!--pnid:sVHpkxmF3R80mpcw45gF09--> / <code data-page-node-id="dw2yBk9CtWDBtfJqZZ9CMs" data-pnid-children="n4nJdUv1qSCBmlT8l1Eue6">_push_errors</code><!--pnid:3OyNvgjwzsAtffWUVSl0T0--> / NACK 系列</td>
+<td data-page-node-id="1g2b3mXzYb92ZrdMlJRNWc"><!--pnid:D0VWzY2X8E6QVCSJkcgCW2-->控制面推送</td>
+<td data-page-node-id="Tzwy7QL1HB7HNPlG1mzmpf"><!--pnid:B2DPLJFd5ItgjYUwKEtuiw-->控制面健康</td>
+</tr>
+<tr data-page-node-id="0owfIdvmQRLysoFe0bDZEI">
+<td data-page-node-id="dBF4y8NdsrqwjIfpNlBidn"><code data-page-node-id="M80tW7qMzM725NvwnwO2AU" data-pnid-children="g2layeLjDWv5FjwvLBe3pR">istio_agent_...</code><!--pnid:JXLmK7JtBHBSz2xJyJ830d--> / <code data-page-node-id="5aqhcCtwIAyqylrJHoIb1e" data-pnid-children="BPotyVFnSlPcrEAIgWGzcU">envoy_*</code></td>
+<td data-page-node-id="sN1zZ7ZWrKe8vfigkSM4FW"><!--pnid:wy2nCS16xrwG9H0CSl349s-->sidecar/Envoy 自身状态</td>
+<td data-page-node-id="C8Myd6p0ngBWnfFDE6vpbk"><!--pnid:RUsn8V4BUohcxGTizMv2dm-->数据面健康</td>
+</tr>
+<tr data-page-node-id="g529UR1qkdgSRgZwxcwrSq">
+<td data-page-node-id="9owMBITpKOrujyMr4WKNNF"><!--pnid:24TKnwsZTK2gt7As2FsdVg-->控制面/数据面进程指标</td>
+<td data-page-node-id="5iwHd96R2ToUmdNEMcmAM2"><code data-page-node-id="WHZwHXYY3gAXe8vadgZlMD" data-pnid-children="eGSdVnAQANuySsY3n8d6B0">process_*</code><!--pnid:DkM4sNBBWpSLjYB0bNP6yi-->、<code data-page-node-id="ZmJ0PLre1e5UBcwSTlXyao" data-pnid-children="8mDdHpAqwWXuIDljLp3eby">container_memory_*</code></td>
+<td data-page-node-id="r49EJPEDtVPEFejyEUsat2"><!--pnid:tAUnTZyFRg0GcxFxe2FaAB-->容量</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="fMho90ma8ADys7diOriAnA" id="e2-slo"><!--pnid:epEy3v3MQrbe1Vapyueo1P-->E2. 建议的 SLO（<strong data-page-node-id="clchGpibFQN3Pnna1gy3mG"><!--pnid:TTx5xGk71BCReSqDM7UbMR-->初始建议值，需实测校准</strong><!--pnid:nuHfL2q2ksLLDQXe3qq51H-->）</h2>
+<table data-page-node-id="IZDKNxRW6EulaacePFK6WZ">
+<thead data-page-node-id="cPbmbZmMc4ynd2MEHcFfBv">
+<tr data-page-node-id="s2Hxnj25lGANWsyFAouxoU">
+<th data-page-node-id="JFKQzqZ0opRWDXTO2QRv8Y"><!--pnid:ixiS2oU0uRr0MYBwtQVNj6-->SLI</th>
+<th data-page-node-id="VlkJyGsLGQ1qLsFANTSFWi"><!--pnid:XLdSY8mWYhaLyIH39PFb5l-->建议目标</th>
+</tr>
+</thead>
+<tbody data-page-node-id="O2uZUbQEcQ64j8XqP9t9kp">
+<tr data-page-node-id="ncHfOy3iznw104AlSiC2mZ">
+<td data-page-node-id="P6f7ICCoDb9Io5SUAI1lBj"><!--pnid:5wT7O7CDwR2CPJvT1y7KHr-->网格内服务成功率（非 5xx）</td>
+<td data-page-node-id="w80GE3lWWtlXvHWzO3GsYX"><!--pnid:SO1yq4gbLqtQrD2Oo12JMH-->≥ 99.9%</td>
+</tr>
+<tr data-page-node-id="PO6UJ5br8iFRvflpTFYOD6">
+<td data-page-node-id="L1yEFpPwF6W5Woa1IPuZ0S"><!--pnid:s0uJW3HjaOkCivVdvo2TwG-->网格引入的延迟增量 P99</td>
+<td data-page-node-id="0gDDABs1tBfs3jvC11mfQt"><!--pnid:p6VNCgTKG3LFpJShLvV2j9-->明确预算（如 ≤ 10ms/跳，<strong data-page-node-id="aiHgtNqTojhwMGjGqcD8GX"><!--pnid:5MOJYqeT1xfPcAo079c00K-->必须 A/B 实测</strong><!--pnid:NMaR6pXdlSPfBuTnOfoQjj-->）</td>
+</tr>
+<tr data-page-node-id="Ng9ry8X6JRYCxcJgvtuEig">
+<td data-page-node-id="slsUD8f7poO3iiHtf9Vw5D"><!--pnid:Fa7mVMWjcoEq2knQ1uUlrw-->mTLS 覆盖率（迁移完成后）</td>
+<td data-page-node-id="lveA3W1SVhm27cc4YzLYKE"><!--pnid:ucUYFziO3mYoowovyyyKWS-->100% <code data-page-node-id="hRi0CI236RNLiLrB3x56Sw" data-pnid-children="2j9kGKe46qZTD4Q22Bix7J">mutual_tls</code></td>
+</tr>
+<tr data-page-node-id="6JHBSv05axSpRLWQFPIsnr">
+<td data-page-node-id="3jJgvb8i0erL5snh28nchy"><!--pnid:PIVcTNqqVpfZ61a09EcycT-->istiod 可用性</td>
+<td data-page-node-id="c6mAYo6vwFrLYJWl9CyAk8"><!--pnid:Gc6Vm9pD34sreUMMxSWsfz-->≥ 99.95%（多副本 + PDB）</td>
+</tr>
+<tr data-page-node-id="mbPKuBFKSLhk2g3LtO1o2f">
+<td data-page-node-id="uG9D4IgCAXK3HmB9nbLiD6"><!--pnid:VlVr58wXP10ovbsUK1DVms-->配置同步延迟（变更 → proxy 生效）P99</td>
+<td data-page-node-id="wv4PwqMP3B6cAVcH4tU8xc"><!--pnid:8vKpRFnmGyongRt0VFW20Z-->≤ 30s（需实测）</td>
+</tr>
+<tr data-page-node-id="slnXJiqeIM4zOqsY8QlyaX">
+<td data-page-node-id="7uWUHVu44YmSUc2dpWGVZU"><!--pnid:e9rjVOnWmUlIDWhINAt8eb-->控制面 NACK</td>
+<td data-page-node-id="5pLEQlIMQFxC3fBDJ26wKq"><!--pnid:SxXUPSNFEgeKi7Fc1gr8Gb-->= 0（&gt;0 即告警）</td>
+</tr>
+</tbody>
+</table>
+<h2 data-page-node-id="6EzXBaENgpXtpjyiQGBD5c" id="e3-prometheus"><!--pnid:MUfkpYdl8Cd1flSGeQRXod-->E3. Prometheus 告警规则（可直接粘贴，阈值需实测校准）</h2>
+<pre data-page-node-id="7e6DhQyJTfsUR1xS9BR31P"><code data-page-node-id="SsrOXZajtepnsUEvzKoniJ" data-pnid-children="ZDDJglxCsWARBiTj1LKsxt" class="language-yaml">groups:
+  - name: istio
+    rules:
+      - alert: IstiodDown
+        expr: up{job=&quot;istiod&quot;} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: &quot;istiod 不可用：新 Pod 无法获取配置与证书&quot;}
+
+      - alert: IstioXdsPushErrors
+        expr: rate(pilot_xds_push_errors[5m]) &gt; 0
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: &quot;istiod 推送出现错误，检查配置合法性&quot;}
+
+      - alert: IstioMeshErrorRateHigh
+        expr: |
+          sum(rate(istio_requests_total{response_code=~&quot;5..&quot;}[5m]))
+            / clamp_min(sum(rate(istio_requests_total[5m])), 0.001) &gt; 0.01
+        for: 10m
+        labels: {severity: critical}
+        annotations: {summary: &quot;网格内 5xx 比例 {{ $value | humanizePercentage }}&quot;}
+
+      - alert: IstioPlaintextTraffic
+        expr: sum(rate(istio_requests_total{connection_security_policy!=&quot;mutual_tls&quot;}[5m])) &gt; 0
+        for: 30m
+        labels: {severity: info}
+        annotations: {summary: &quot;仍存在明文流量，STRICT 迁移前置检查&quot;}
+
+      - alert: IstioResponseFlagAbnormal
+        expr: |
+          sum(rate(istio_requests_total{response_flags!=&quot;-&quot;}[5m])) &gt; 0
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: &quot;出现响应标志异常（UF/URX/DC 等），检查上游连接与熔断&quot;}
+
+      - alert: IstioScrapeSlow
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(scrape_duration_seconds_bucket{job=~&quot;.*istio.*&quot;}[5m]))) &gt; 5
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: &quot;istio 相关抓取耗时过高，通常意味着指标基数需要裁剪&quot;}
+
+      - alert: IstioGatewayHighLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le) (rate(istio_request_duration_milliseconds_bucket{reporter=&quot;destination&quot;}[5m]))) &gt; 1000
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: &quot;网格请求 P99 超过 1s&quot;}
+</code></pre>
+<blockquote data-page-node-id="ytcqYnDqMBmAk2yL2vRGIJ">
+<p data-page-node-id="MzVrMXPcvVt20s6wxSpJjX"><!--pnid:OHZwtsHXCiZJDSSB2fUtsF-->抓取耗时是最实用的"基数爆炸"领先指标：抓取变慢通常先于 Prometheus 内存问题出现。</p>
+</blockquote>
+<h2 data-page-node-id="sE2J5oVhomewDkWn339R47" id="e4"><!--pnid:Qfdpg65Ol2GBrhaQGg6KLI-->E4. 排障工具箱（命令速查）</h2>
+<pre data-page-node-id="9G1wsDzEDp5t5NHUStUnGK"><code data-page-node-id="iffQ1f2wSlcAbPRU4T3gRJ" data-pnid-children="5dgR2cDmaydlEn2ye2oJQ8" class="language-bash">istioctl analyze -n &lt;ns&gt;                       # 配置静态检查（上线前必跑）
+istioctl proxy-status                          # 各 proxy 是否同步（Stale 要查）
+istioctl proxy-config cluster &lt;pod&gt; -o json    # 上游
+istioctl proxy-config route &lt;pod&gt; -o json      # 路由是否包含目标
+istioctl proxy-config listener &lt;pod&gt;           # 端口与协议
+istioctl proxy-config endpoint &lt;pod&gt; --port 8080
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/config_dump
+kubectl exec &lt;pod&gt; -c istio-proxy -- curl -s localhost:15000/stats | grep -E &quot;upstream_rq|outlier|ssl&quot;
+kubectl logs &lt;pod&gt; -c istio-proxy --tail=200
+kubectl logs -n istio-system deploy/istiod --tail=200
+</code></pre>
+<hr data-page-node-id="hzXimN8b6QcS3zQYGrTmgD">
+<h1 data-page-node-id="pU455466oJ5mu6Yqvx6tYc" id="part-f-gameday"><!--pnid:JgdrDETVreEsezzqtk9r3U-->Part F · 演练（GameDay）计划表</h1>
+<table data-page-node-id="xr8eZvStreLLIeE2BkpsAg">
+<thead data-page-node-id="6KRDeJ8L9w3PKzb6tnl94j">
+<tr data-page-node-id="5X3grOOGBgEdVg1RX6H2gj">
+<th data-page-node-id="UABYwAkOFthQpZsHifFogi"><!--pnid:xCKjFSBvUtncsvq0VLOUSW-->场景</th>
+<th data-page-node-id="GMmgL70maWkPssLZoq3YY0"><!--pnid:SwYWpvNQ87IdJkOz3xLf4p-->注入方式</th>
+<th data-page-node-id="dEv4swXXJZNzLfS6jBXDpR"><!--pnid:Y3HyieGUrQkmlJfpGglsNl-->期望表现</th>
+<th data-page-node-id="6uiDQVVVmk7xdpYVH7lJnV"><!--pnid:a0xlu7TsCtQ9gOPbwSzOW3-->验证的 SLO</th>
+</tr>
+</thead>
+<tbody data-page-node-id="RcshMybGRe1Tq2p3xyPpzE">
+<tr data-page-node-id="aPzxg6ngwrQS1MZJUOo9eE">
+<td data-page-node-id="UxcnQJYhqymhYezZAJ2QS0"><!--pnid:fSsABuQ2VmU9FV8NuLjsFE-->istiod 全部挂掉</td>
+<td data-page-node-id="kKcElQyBJg1EVVp6hFtAxH"><!--pnid:eEWJlySvjLkmqK12zEmW7b-->缩到 0 副本</td>
+<td data-page-node-id="MZOvhOAOyEMlhlrslOyMjI"><!--pnid:jdG9RLcYtECHQgSjzavZkt-->存量通信不受影响；<strong data-page-node-id="uoELsrksX7TykvplafMCZI"><!--pnid:9VcQ22q0uS7poX1X80YmaF-->新 Pod 起不来</strong><!--pnid:M1ojfZauU8DbWhBl1oafxW-->且告警及时</td>
+<td data-page-node-id="NSoNxO0E2lneZHxN8NWYdH"><!--pnid:tu31oGbEmLHfPIspLykqil-->控制面可用性 + MTTR</td>
+</tr>
+<tr data-page-node-id="8gRnkqmc5RHYJAPMtI5PdL">
+<td data-page-node-id="RDhJdra4X979UFAvVwqsZ8"><!--pnid:TGEjRQuevvmYU7STnaUlTS-->istiod 单副本挂</td>
+<td data-page-node-id="HQApNOfNRj3ZIIN963OQel"><!--pnid:rt6GBetgTn6V4n0At5c2p3-->杀一个 Pod</td>
+<td data-page-node-id="q9nztAD87VVOtxSMTgXZHW"><!--pnid:OqqnJKys8yxYCc5fyWcfBv-->无感知；新 Pod 仍可获取配置</td>
+<td data-page-node-id="Jwblq6rmdYkCUVIJFPKZWv"><!--pnid:2E4nYoCTmzJ4U7i2IpIOlO-->HA 有效性</td>
+</tr>
+<tr data-page-node-id="KDH7jFRY5l6Z2OH8DRcMi0">
+<td data-page-node-id="CuEfVHEZqSFMUKBjoq937j"><!--pnid:3DBo7mcZn6lV1u2uYu4K7H-->网关副本滚动</td>
+<td data-page-node-id="smUOtCLhdjswcWZqCo1zUG"><!--pnid:etEiqV9skVAwLmnJAEUmO2-->滚动更新 gateway</td>
+<td data-page-node-id="eIdEq6IYgtYoYlOeWyGWC0"><!--pnid:slvvhfpk2kWkQiegbva1Hj-->无连接重置（drain 生效）</td>
+<td data-page-node-id="wqyO2gPpr90JUSmAR29bYQ"><!--pnid:vaNeWPfSnp4misYQMXGsws-->优雅终止</td>
+</tr>
+<tr data-page-node-id="TKEVAXI3BX25HpTqk9YcZG">
+<td data-page-node-id="96DwFcxnaZ2o0L1Hhm6ymA"><!--pnid:2k8m3d890BMBdWnlICUl1k-->误配策略</td>
+<td data-page-node-id="0X7kCnzpXtNmNoJPDlu0og"><!--pnid:Dio2nnJRWjU2kKF6vFE8ny-->下发错误 AuthorizationPolicy</td>
+<td data-page-node-id="d55ysgzREg9lsCsyT4OIoy"><!--pnid:uwyZPR6apppYZOPbm3F0D5-->立刻看到失败 + 可秒级删除恢复</td>
+<td data-page-node-id="SunkNw6We2tEGUbhvzUivG"><!--pnid:7HGcF7PXPwb6uZSk1d7Psc-->变更安全</td>
+</tr>
+<tr data-page-node-id="jQN32QAcKUxE8UIGrImWN7">
+<td data-page-node-id="wb85ZQi1MWE9u2uTFOtYgP"><!--pnid:XRCMa2ROIaDP0GFJ4JK5OH-->mTLS 收紧</td>
+<td data-page-node-id="m2EDkbETDDQfCN0VzAUdoT"><!--pnid:J4YaFouGNiHjTuKrcoASRl-->某 ns 切 STRICT</td>
+<td data-page-node-id="QbddR3E7Zw0IaXXtjm7ZXb"><!--pnid:UZy2vAkzK7j35swVAku6Ap-->明文流量先归零；切换后无 503</td>
+<td data-page-node-id="su10vt6lqOJULCgotKY4VM"><!--pnid:7lWbdFl0F9UgslglSv3u8t-->迁移流程</td>
+</tr>
+<tr data-page-node-id="aiI8W1ek5zrLww4ab4kPCs">
+<td data-page-node-id="Rt60k5VYsig91HSxI9SIjV"><!--pnid:tiBW4Aflxz41nhfu3FdY3v-->配置推送风暴</td>
+<td data-page-node-id="G43WzpCzR8vGkywZiCajwP"><!--pnid:IVSxBcsB09VmSqB40XY912-->批量重建大量 Pod</td>
+<td data-page-node-id="tuZbNyiSzVfmSZTaLpbOhc"><!--pnid:sjBSE5WseZsuorGS6Hoef1-->推送指标可控，无 NACK</td>
+<td data-page-node-id="2OxPJFaKk5AV37L85N4m26"><!--pnid:M8YWjw45ZCe9S2EXgmWWaV-->控制面容量</td>
+</tr>
+<tr data-page-node-id="DKvuNfESuTIf5d6mRgrnJ3">
+<td data-page-node-id="8l7zafug2SKzIYIOOGO2Qi"><!--pnid:XlpAZMyleHrEwnmxq2WaMa-->指标基数爆炸</td>
+<td data-page-node-id="C96JOtDRg7FT4ouVc2ZO92"><!--pnid:FZKmtJWj8RMwvSG1BKREzt-->放开全部维度</td>
+<td data-page-node-id="0PGG7BYWoMbRCmb7L6hmOP"><!--pnid:qFkoDbNftk3BkK16Fs9ZrX-->告警/抓取耗时可发现</td>
+<td data-page-node-id="tFcmzs4htymIs51Ny1nuiR"><!--pnid:bZtjwOVldoJ4CxbOQtKv4C-->可观测治理</td>
+</tr>
+<tr data-page-node-id="W6lwe6nxJlnNuI2R1C8hSG">
+<td data-page-node-id="6m1ZZauMdoxuqChBWX77DU"><!--pnid:qszYeQAUlXF7dKVb1laiQT-->证书异常</td>
+<td data-page-node-id="fKfXVVFQqGXxt4RuGcSofI"><!--pnid:BOFNQGkiYK8HrdKha6DkkJ-->阻断证书轮换</td>
+<td data-page-node-id="U8GFtFD8iE6vb5tiBNHsxt"><!--pnid:aUEVt68EW9gEFfnEiG38LM-->新 Pod 失败可定位到 SDS</td>
+<td data-page-node-id="6WjVBmrx51atKk95idISjA"><!--pnid:1XdDjsx54PHQp8IHUByKFj-->证书链路</td>
+</tr>
+<tr data-page-node-id="lGSYYiGkom2G4eHpUMToZo">
+<td data-page-node-id="86MeN8ioURufAZj50MuVh8"><!--pnid:LbnJ5wOqGAyOw6m4xerr6B-->Envoy OOM</td>
+<td data-page-node-id="01IJGiE06BoW2MClIsEees"><!--pnid:KFYcaIpTUfnFct6Kp0loSy-->压测大配置 ns</td>
+<td data-page-node-id="CXplAAKeWLiO4RMaf67X7e"><!--pnid:xgAU4ETal5Dy4p8AsyVazM-->内存增长有告警与兜底</td>
+<td data-page-node-id="mUc31lYdojAZhfIx6nL6WP"><!--pnid:fcjXkYoupsDhN9zrCv1DA6-->数据面容量</td>
+</tr>
+<tr data-page-node-id="YjxMVKLykdh7mX44eGJCw3">
+<td data-page-node-id="1EpwL1223xumg80CdtaLGM"><!--pnid:msyKFkVy7xXywFN6lnItfb-->网格升级</td>
+<td data-page-node-id="vuCAPSpnxJjEWDlL6bASpm"><!--pnid:ikllMSKIOSUZzy4TnQtrEv-->新 revision + 单 ns 切换</td>
+<td data-page-node-id="PpLDBRRN01O3eO9E143AmJ"><!--pnid:dRjBDXba9w7n0oWVyPnRg8-->逐 ns 验证通过后再放量</td>
+<td data-page-node-id="5dIiU7XmwIvR8rFEkp2klu"><!--pnid:2T61zvRM27vZiGoTInWOPE-->升级安全性</td>
+</tr>
+</tbody>
+</table>
+<hr data-page-node-id="SQPkqUnv8gYxEwkOZL2GwI">
+<h1 data-page-node-id="ZfuiakBp6ZTMbk0tXPMmid" id="part-g-10"><!--pnid:Xs9Dqo13idSCTH77tcJ4QY-->Part G · 10 张面试速记卡</h1>
+<ol data-page-node-id="IM5NgbF2wJNX43HxreC8Py">
+<li data-page-node-id="fC1GLWOfEQJXnau8zdWrZ1"><strong data-page-node-id="7JH5tm22Um38artJIMAVYb"><!--pnid:dDSCT8C0BQnAt7jBBAQwRG-->Istio = 身份为中心的东西向流量与策略平面</strong><!--pnid:UBUXBEtU2VY5WhRJ8F6gTB-->；不负责 Pod 连通性（CNI）、不负责服务发现本身、不替代 NetworkPolicy。</li>
+<li data-page-node-id="EEKtPCAgMkYC7lvZpLTA5X"><strong data-page-node-id="Om0oPS0TkJBgLOn9Pg8OTk"><!--pnid:GLHgQ6YMyqmHcvdzCl2gQQ-->架构</strong><!--pnid:yxoCynMQCyPl9lukqRuE4S-->：istiod（Pilot + CA）+ Envoy 数据面；Mixer 已移除，遥测靠 Envoy 统计 + Telemetry API。</li>
+<li data-page-node-id="UeboQXYYjPlqJd247tqEOw"><strong data-page-node-id="MQ6iJuxSHNuONofa3txLOE"><!--pnid:62obfwqvHIeEnUPfs4TQg7-->端口</strong><!--pnid:jg3wOjxuvwTlXPNAg6dHL5-->：15001 出站 / 15006 入站 / 15000 admin / 15020 聚合监控 / 15021 就绪 / 15012 xDS(mTLS) / 15008 HBONE(Ambient)。</li>
+<li data-page-node-id="REDis5kCllPXlvmFCyPzm5"><strong data-page-node-id="ARkSbQQVR0RdHKD0tzkq0z"><!--pnid:4iS6EVYwOIGQvUxMy1F6Z3-->注入</strong><!--pnid:p3ePYBHe1XEvhwDXrKSgWw-->：mutating webhook 注入 <code data-page-node-id="HwUiWu6zQU8r4DHogaBZ78" data-pnid-children="dJNYvbjFhC09W9YJfHKE15">istio-init</code><!--pnid:tfRrfTuM5gw9lIR1Qh4TZ0-->（iptables，需 NET_ADMIN）或 <strong data-page-node-id="XW7FPUEFT2ZBnhFNy9MJCf"><!--pnid:M0Q1QTBMeai7xoG5NSQ13A-->istio-cni</strong><!--pnid:AcZJmEkSK3l2jnAFW3QI4U-->（免特权）+ <code data-page-node-id="F1bGQGxuX6a3oN3KSAzvux" data-pnid-children="lfNF998piiBjFqL3OP4o0s">istio-proxy</code><!--pnid:Ilpl44LijENibKO8KBuVel-->；<code data-page-node-id="Vm700VjyBM49BjjkNu7cJY" data-pnid-children="SMOdGq1xhvkHdKbifSDnLq">holdApplicationUntilProxyStarts</code><!--pnid:v0ND1W64AUiNG7PYeZEH2P--> 保证顺序。</li>
+<li data-page-node-id="WyVAD3hvrSjGKpd64Jgj2b"><strong data-page-node-id="UCzwNIIhOom9nOSGbDsGxA"><!--pnid:rs5gImLtDHszuEXH9KCESb-->大规模头号成本 = 全量配置下发</strong><!--pnid:0eyX5ukCqdQ76wNOdi8rrG--> ⇒ <strong data-page-node-id="D9dEcBcANk4P2574YCb4Fp"><!--pnid:II69pG3OQqd00mPOoikQL7-->Sidecar CR + discoverySelectors + exportTo</strong><!--pnid:aMF7GnCdVYG0q4v7K02sFA--> 三件套收敛。</li>
+<li data-page-node-id="b6G77wyJ8Dk65qDPM30C9x"><strong data-page-node-id="EuQmjVP83ftxyjf6i9lLCq"><!--pnid:Lh8Q17lFh98loQYRYJ8EFx-->CR 分工</strong><!--pnid:qMUdZdOlxaWU3LshTCRU6W-->：Gateway 开门、VirtualService 路由、DestinationRule 目标策略与 subset、ServiceEntry 网格外服务、Sidecar 收敛可见性、<strong data-page-node-id="YEKxRxZCe30nufXtRtwWJh"><!--pnid:1h5wkuxNEk6XD0ZJSJR2bq-->EnvoyFilter 是最后手段</strong><!--pnid:TugYYHAmXudZ7yFRTXKwzf-->。</li>
+<li data-page-node-id="hfnXk6sEyFll6P6suKDC5g"><strong data-page-node-id="t1mhs8CLINTSaLSbM6IuDG"><!--pnid:PHE5yRibrqqI6Up5wj2urq-->安全三件套</strong><!--pnid:rCQnGgwXJEZ9xtXoArPgo6-->：SPIFFE 身份 + PeerAuthentication(mTLS) + AuthorizationPolicy；<strong data-page-node-id="YaCNbBWVuSSccRaTDG4VH4"><!--pnid:5lnqUaaNnUjnsd49LpABdb-->RequestAuthentication 只验证不强制</strong><!--pnid:Ajfz01VmED7yIRo6Z9A6bp-->，必须配授权才拒绝无 token。</li>
+<li data-page-node-id="zVYSqhsiTaSvrJjpuiqYyg"><strong data-page-node-id="de9e20KPz8SA9FVu1p2fT5"><!--pnid:oe8faZv03x7OYH7DwXI72F-->mTLS 迁移</strong><!--pnid:u0PEhcqZ8KiWd0hPYlCaRM-->：PERMISSIVE → 证明明文归零 → 逐 ns STRICT；保留 portLevel 例外应对明文探测。</li>
+<li data-page-node-id="Cw56h2j8Vrt7rfgYsXgbNb"><strong data-page-node-id="xGyGdBG4OPCZvsSJzX5k8J"><!--pnid:jE4zzhZ0v4aNoqY7TRqeMi-->Ambient</strong><!--pnid:i5tex84rTaQkGZyzjTdCwv-->：ztunnel(L4 节点级) + waypoint(L7 按需) + HBONE；最大收益是<strong data-page-node-id="JPGBpdczOAfT1mDWVxzIXF"><!--pnid:IElFAtBBNMn5NCgiPSgemo-->升级网格不用重启业务 Pod</strong><!--pnid:N3yoNpy5Iv961fYn8myANI-->，限制是功能等价性与成熟度要逐项验证。</li>
+<li data-page-node-id="rf9avauZbFDbJAwMF6tJpX"><strong data-page-node-id="HIOhD0NEVmSWACiW0n8l1S"><!--pnid:i83HIjPKyQ7vEfKGVbUC89-->可观测成本</strong><!--pnid:iwwnmDCbsKQvxtPYVM1XFg-->：<code data-page-node-id="ihVOoqHAW4QbKn7ATcbqYG" data-pnid-children="GAKIhjpEHY2h616nAicFUH">istio_requests_total</code><!--pnid:S0iDFjzrfAw6iVv8zCOJzT--> 基数易爆炸 ⇒ Telemetry 裁剪 + 采样 + Prometheus relabel；<strong data-page-node-id="iZeiRWe4fgMnRMbkOHZVzm"><!--pnid:VTt71Xx2MTHxiVGKFOFCFD-->所有网格策略都要能一键回退</strong><!--pnid:ZsjLv4WIXVfDCCo3pO0Tmz-->（CR/label 表达优先）。</li>
+</ol>
+<hr data-page-node-id="VeiJNXpl2BtZ3RsSN3YvAC">
+<h2 data-page-node-id="3bI4KDei0eztHQacxOkktQ" id="_1"><!--pnid:CyO8iMs7JqMAh015Ar0ndf-->附：文档自查清单</h2>
+<ul data-page-node-id="xOY4iuZe2vpmGGypeQT9uW">
+<li data-page-node-id="sqy2NBfvgQgGvsqG6jV3TJ"><!--pnid:R7UX45X3ArgCftgMrKfpZ6-->[x] 每条建议配了可直接套用的 YAML / 注解 / 命令 / PromQL</li>
+<li data-page-node-id="DfCQ6ln3eGNm9jkMv94fui"><!--pnid:nKgzcdzoWpdxM2BBIZsDHI-->[x] 所有版本号、alpha/beta/GA 状态、默认值（证书 TTL、端口、资源）均标注"以所用版本为准"</li>
+<li data-page-node-id="JEkYqbpvNkqGHnE07z0YAG"><!--pnid:mj2mAcCdaq26EzvNKCXWgI-->[x] 未提供任何未经实测的性能数字（延迟增量等）⇒ 改为<strong data-page-node-id="Npz29T248k5HB53qgYFXfw"><!--pnid:q4QpXcpQBgXcy3Ab4UftMl-->A/B 测量方法</strong></li>
+<li data-page-node-id="HNkySiAnUAL2OkgsIp4RL4"><!--pnid:GiyKE23na3zVEnitVVoLWE-->[x] 反模式清单含：证据 / 等级 / 修复 / 验证</li>
+<li data-page-node-id="2CYKGnjqDUtVgcvQLXOPwW"><!--pnid:eltAFQoMrQE3apOJUI8TH0-->[x] SLO 标为建议初值</li>
+<li data-page-node-id="alROrjo48ZvZLAghetfBmd"><!--pnid:Bp0ikEsf4jeGKduuFLwpk5-->[x] 变更（升级 / 策略收紧 / Ambient 启用）给出灰度步骤、回滚触发与"一键回退"方式</li>
+<li data-page-node-id="52CUAWx4lbwIcXag6TuMqC"><!--pnid:8z8VwVkMxzk0DvsUEXNwes-->[x] 与《网络 / CNI》《控制面》《Kubelet》《排障 60 例》做了显式交叉引用</li>
+</ul></div></body></html>
